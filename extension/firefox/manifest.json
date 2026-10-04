@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Kairos Canvas Submission Status",
+  "version": "0.2.0",
+  "description": "Lets local Kairos read normalized Canvas submission status from an already signed-in Firefox tab.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://canvas.uw.edu/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "scripts": ["dist/background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["dist/kairos-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://canvas.uw.edu/*"],
+      "js": ["dist/canvas-content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Kairos",
+    "default_popup": "popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kairos-local@kairos",
+      "strict_min_version": "128.0"
+    }
+  }
+}
