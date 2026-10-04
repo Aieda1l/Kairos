@@ -1,0 +1,12 @@
+.worktrees/
+node_modules/
+.next/
+.data/
+.env*
+!.env.example
+playwright-report/
+test-results/
+coverage/
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal

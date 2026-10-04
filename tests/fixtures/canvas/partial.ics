@@ -1,0 +1,14 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event-assignment-100
+DTSTART;VALUE=DATE:20261101
+SUMMARY:Problem Set 5 [MATH 308]
+URL:https://canvas.uw.edu/calendar?include_contexts=course_55#assignment_100
+END:VEVENT
+BEGIN:VEVENT
+UID:event-assignment-101
+DTSTART:not-a-date
+SUMMARY:Broken assignment [MATH 308]
+END:VEVENT
+END:VCALENDAR

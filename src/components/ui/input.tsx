@@ -1,0 +1,1 @@
+import * as React from "react";import {cn} from "@/lib/ui";export function Input({className,...props}:React.InputHTMLAttributes<HTMLInputElement>){return <input className={cn("min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--foreground)] placeholder:text-[var(--muted)]",className)} {...props}/>;}
