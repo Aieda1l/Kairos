@@ -63,8 +63,8 @@ describe("Canvas submission status routes",()=>{
     expect(new SubmissionStatusRepository(getDatabase()).getSyncState(connection.id).lastAttemptedAt).not.toBeNull();
   });
 
-  it("rejects mismatched and duplicate result identities and consumes requests once",async()=>{
-    seed();
+  it("rejects mismatched and duplicate result identities and records validation failure",async()=>{
+    const {connection}=seed();
     const started=await (await start()).json();
     const bad=await complete({
       requestId:started.requestId,
@@ -75,6 +75,12 @@ describe("Canvas submission status routes",()=>{
     });
     expect(bad.status).toBe(400);
     expect(await bad.json()).toMatchObject({code:"INVALID_RESULT"});
+    expect(new SubmissionStatusRepository(getDatabase()).getSyncState(connection.id)).toMatchObject({
+      lastSuccessfulAt:null,
+      lastErrorCode:"INVALID_RESULT",
+      updatedCount:0,
+      failedCount:1,
+    });
 
     const consumed=await complete({requestId:started.requestId,results:[]});
     expect(consumed.status).toBe(409);
