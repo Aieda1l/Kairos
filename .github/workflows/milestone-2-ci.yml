@@ -1,0 +1,26 @@
+name: Milestone 2 CI
+
+on:
+  push:
+    branches:
+      - feat/milestone-2-submission-status
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
