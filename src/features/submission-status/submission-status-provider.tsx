@@ -287,8 +287,8 @@ export function SubmissionStatusProvider({
   }, [getExtensionInfo]);
 
   useEffect(() => {
-    if (autoStartedRef.current) return;
-    if (!enabled || !isSubmissionStatusStale(syncState.lastSuccessfulAt)) {
+    if (autoStartedRef.current || !enabled) return;
+    if (!isSubmissionStatusStale(syncState.lastSuccessfulAt)) {
       autoStartedRef.current = true;
       return;
     }
