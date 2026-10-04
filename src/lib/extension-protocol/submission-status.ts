@@ -57,6 +57,7 @@ export const submissionStatusResultV1Schema = z
     extractorVersion: z.string().min(1),
     errorCode: submissionSyncErrorCodeSchema.optional(),
     diagnosticCode: submissionFailureDiagnosticSchema.optional(),
+    httpStatus: z.number().int().min(100).max(599).optional(),
   })
   .strict();
 

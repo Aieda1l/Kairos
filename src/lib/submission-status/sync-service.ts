@@ -42,6 +42,7 @@ export type SubmissionSyncCompleteResponse={
   lastSuccessfulAt:string|null;
   lastErrorCode:SubmissionSyncErrorCode|null;
   failureDiagnostics:Array<{code:SubmissionFailureDiagnostic;count:number}>;
+  failureHttpStatuses:Array<{status:number;count:number}>;
 };
 
 export class SubmissionStatusSyncServiceError extends Error {
@@ -131,6 +132,16 @@ export function completeCanvasSubmissionStatusSync(
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([code,count])=>({code,count}));
 
+  const httpStatusCounts=new Map<number,number>();
+  for(const result of input.results){
+    if(result.httpStatus!==undefined){
+      httpStatusCounts.set(result.httpStatus,(httpStatusCounts.get(result.httpStatus)??0)+1);
+    }
+  }
+  const failureHttpStatuses=Array.from(httpStatusCounts.entries())
+    .sort(([a],[b])=>a-b)
+    .map(([status,count])=>({status,count}));
+
   const completedAt=now.toISOString();
   const applied=statusRepo.applyCompletion(
     registered.connectionId,
@@ -149,5 +160,6 @@ export function completeCanvasSubmissionStatusSync(
     lastSuccessfulAt:state.lastSuccessfulAt,
     lastErrorCode:state.lastErrorCode,
     failureDiagnostics,
+    failureHttpStatuses,
   };
 }

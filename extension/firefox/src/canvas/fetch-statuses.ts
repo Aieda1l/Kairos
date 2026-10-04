@@ -37,6 +37,7 @@ function errorResult(
   checkedAt:string,
   errorCode:SubmissionSyncErrorCode,
   diagnosticCode?:SubmissionFailureDiagnostic,
+  httpStatus?:number,
 ):SubmissionStatusResultV1 {
   return {
     ...assignment,
@@ -48,6 +49,7 @@ function errorResult(
     extractorVersion:CANVAS_EXTRACTOR_VERSION,
     errorCode,
     ...(diagnosticCode?{diagnosticCode}:{}),
+    ...(httpStatus!==undefined?{httpStatus}:{}),
   };
 }
 
@@ -92,6 +94,7 @@ export async function fetchCanvasSubmissionStatuses(
             checkedAt,
             response.status===404?"UNRECOGNIZED_STATUS":"CANVAS_NETWORK_ERROR",
             response.status===404?undefined:diagnosticForStatus(response.status),
+            response.status,
           );
           continue;
         }

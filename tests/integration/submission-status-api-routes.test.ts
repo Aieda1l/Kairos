@@ -101,13 +101,13 @@ describe("Canvas submission status routes",()=>{
       requestId:started.requestId,
       results:[
         {...one,state:"submitted",isLate:true,isMissing:false,submittedAt:"2026-10-04T05:30:00.000Z",checkedAt:"2026-10-04T06:00:00.000Z",extractorVersion:"canvas-html-v1"},
-        {...two,state:"unknown",isLate:false,isMissing:false,submittedAt:null,checkedAt:"2026-10-04T06:00:00.000Z",extractorVersion:"canvas-html-v1",errorCode:"CANVAS_NETWORK_ERROR",diagnosticCode:"HTTP_5XX"},
+        {...two,state:"unknown",isLate:false,isMissing:false,submittedAt:null,checkedAt:"2026-10-04T06:00:00.000Z",extractorVersion:"canvas-html-v1",errorCode:"CANVAS_NETWORK_ERROR",diagnosticCode:"HTTP_OTHER",httpStatus:418},
       ],
       batchErrorCode:"PARTIAL_SYNC",
     });
     expect(response.status).toBe(200);
     const body=await response.json();
-    expect(body).toMatchObject({updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC",failureDiagnostics:[{code:"HTTP_5XX",count:1}]});
+    expect(body).toMatchObject({updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC",failureDiagnostics:[{code:"HTTP_OTHER",count:1}],failureHttpStatuses:[{status:418,count:1}]});
     expect(assignments.list().find(a=>a.id===one.assignmentLocalId)?.submissionStatus).toMatchObject({state:"submitted",isLate:true});
     expect(assignments.list().find(a=>a.id===two.assignmentLocalId)?.submissionStatus).toBeNull();
     expect(new SubmissionStatusRepository(getDatabase()).getSyncState(connection.id).lastSuccessfulAt).not.toBeNull();
