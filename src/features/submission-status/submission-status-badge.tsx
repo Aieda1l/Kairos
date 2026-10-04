@@ -11,7 +11,7 @@ const primaryLabels={
 
 export function getSubmissionStatusLabel(status:AssignmentSubmissionStatus|null):string {
   if(!status) return "Status unavailable";
-  const parts=[primaryLabels[status.state]];
+  const parts:string[]=[primaryLabels[status.state]];
   if(status.isLate) parts.push("Late");
   if(status.isMissing) parts.push("Missing");
   return parts.join(" · ");
