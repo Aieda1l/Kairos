@@ -135,6 +135,28 @@ describe("SubmissionStatusProvider",()=>{
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("runs stale-on-open once when Canvas becomes enabled after the provider mounted",async()=>{
+    const {started,calls}=installFetch(1);
+    syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    const view=render(
+      <SubmissionStatusProvider enabled={false} initialSyncState={initialState}>
+        <Consumer/>
+      </SubmissionStatusProvider>,
+    );
+    await waitFor(()=>expect(pingKairosExtension).toHaveBeenCalledTimes(1));
+    expect(calls.start).toBe(0);
+
+    view.rerender(
+      <SubmissionStatusProvider enabled initialSyncState={initialState}>
+        <Consumer/>
+      </SubmissionStatusProvider>,
+    );
+
+    await waitFor(()=>expect(calls.complete).toBe(1));
+    expect(calls.start).toBe(1);
+    expect(syncExtensionBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("manual sync bypasses freshness",async()=>{
     const user=userEvent.setup();
     const {started,calls}=installFetch(1);
