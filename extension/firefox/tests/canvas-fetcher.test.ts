@@ -21,11 +21,11 @@ const response=(body:string,status=200,url="https://canvas.uw.edu/courses/999/as
 }) as Response;
 
 describe("fetchCanvasSubmissionStatuses",()=>{
-  it("constructs only hard-coded Canvas assignment URLs and includes the signed-in session",async()=>{
+  it("uses a same-origin relative Canvas path and includes the signed-in session",async()=>{
     const fetchImpl=vi.fn(async()=>response(html));
     await fetchCanvasSubmissionStatuses(request(),fetchImpl as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://canvas.uw.edu/courses/999/assignments/4242",
+      "/courses/999/assignments/4242",
       expect.objectContaining({credentials:"include",redirect:"follow"}),
     );
   });
@@ -36,7 +36,7 @@ describe("fetchCanvasSubmissionStatuses",()=>{
       active++;maxActive=Math.max(maxActive,active);
       await new Promise(resolve=>setTimeout(resolve,5));
       active--;
-      return response(html,200,String(input));
+      return response(html,200,new URL(String(input),"https://canvas.uw.edu").href);
     });
     const result=await fetchCanvasSubmissionStatuses(request(9),fetchImpl as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(result.results).toHaveLength(9);
@@ -58,6 +58,16 @@ describe("fetchCanvasSubmissionStatuses",()=>{
     expect(JSON.stringify(result)).not.toContain("<html");
   });
 
+
+  it("distinguishes missing assignment pages from transport failures",async()=>{
+    const missing=await fetchCanvasSubmissionStatuses(
+      request(),
+      (async()=>response("",404,"https://canvas.uw.edu/courses/999/assignments/4242")) as typeof fetch,
+      ()=>new Date("2026-10-04T06:00:00.000Z"),
+    );
+    expect(missing.results[0].errorCode).toBe("UNRECOGNIZED_STATUS");
+  });
+
   it("maps signed-out, login, and network failures without leaking page HTML",async()=>{
     const unauthorized=await fetchCanvasSubmissionStatuses(request(),(async()=>response("",401)) as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(unauthorized.results[0].errorCode).toBe("CANVAS_SIGNED_OUT");
@@ -68,7 +78,7 @@ describe("fetchCanvasSubmissionStatuses",()=>{
 
     const network=await fetchCanvasSubmissionStatuses(request(2),(async(input:RequestInfo|URL)=>{
       if(String(input).endsWith("/4242"))throw new Error("offline");
-      return response(html,200,String(input));
+      return response(html,200,new URL(String(input),"https://canvas.uw.edu").href);
     }) as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(network.results.map(r=>r.errorCode??null)).toContain("CANVAS_NETWORK_ERROR");
     expect(network.results.map(r=>r.state)).toContain("submitted");
