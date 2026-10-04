@@ -1,3 +1,4 @@
+import { connection as waitForRequest } from "next/server";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
@@ -17,7 +18,8 @@ const emptySyncState: SubmissionStatusSyncState = {
   failedCount: 0,
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  await waitForRequest();
   const db = getDatabase();
   migrate(db);
 
