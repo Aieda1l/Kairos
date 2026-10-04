@@ -10,3 +10,4 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite-journal
+extension/firefox/dist/
