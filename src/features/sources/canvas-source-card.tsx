@@ -1,17 +1,18 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SyncSummary } from "@/lib/sync/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
-import { SyncButton } from "@/features/sync/sync-button";
-import { navigateToUpcomingAfterCanvasConnect } from "./navigation";
 import { SourceStatus } from "./source-status";
+import { SyncButton } from "@/features/sync/sync-button";
 import { SyncSummaryView } from "@/features/sync/sync-summary";
 
 export function CanvasSourceCard({connection:initial}:{connection:SourceConnection|null}){
+  const router=useRouter();
   const [connection,setConnection]=useState(initial);
   const [feedUrl,setFeedUrl]=useState("");
   const [busy,setBusy]=useState<"test"|"connect"|null>(null);
@@ -52,7 +53,8 @@ export function CanvasSourceCard({connection:initial}:{connection:SourceConnecti
       setConnection(body.connection);
       setSummary(body.sync);
       setFeedUrl("");
-      navigateToUpcomingAfterCanvasConnect();
+      router.push("/upcoming");
+      router.refresh();
     }catch(e){
       setError(e instanceof Error?e.message:"Canvas could not be connected.");
     }finally{
@@ -83,7 +85,7 @@ export function CanvasSourceCard({connection:initial}:{connection:SourceConnecti
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={test} disabled={!feedUrl||busy!==null}>{busy==="test"?"Testing…":"Test connection"}</Button>
         <Button onClick={connect} disabled={!feedUrl||busy!==null}>{busy==="connect"?"Connecting…":"Connect Canvas"}</Button>
-        {connection&&<SyncButton onComplete={s=>{setSummary(s);}} onError={setError}/>}
+        {connection&&<SyncButton onComplete={s=>{setSummary(s);router.refresh();}} onError={setError}/>}
       </div>
       {message&&<Alert className="mt-4">{message}</Alert>}
       {error&&<Alert className="mt-4 border-[var(--danger)]">{error}</Alert>}

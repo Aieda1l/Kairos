@@ -4,12 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { CanvasSourceCard } from "@/features/sources/canvas-source-card";
 
-const navigate=vi.hoisted(()=>vi.fn());
-vi.mock("@/features/sources/navigation",()=>({
-  navigateToUpcomingAfterCanvasConnect:navigate,
-}));
+const push=vi.fn();
+vi.mock("next/navigation",()=>({useRouter:()=>({push,refresh:vi.fn()})}));
 
-beforeEach(()=>{navigate.mockClear();});
+beforeEach(()=>{push.mockClear();});
 
 it("tests then connects without keeping the feed URL in the rendered UI",async()=>{
   const user=userEvent.setup();
@@ -28,8 +26,7 @@ it("tests then connects without keeping the feed URL in the rendered UI",async()
   await user.click(screen.getByRole("button",{name:"Test connection"}));
   expect(await screen.findByText(/3 assignments/)).toBeInTheDocument();
   await user.click(screen.getByRole("button",{name:"Connect Canvas"}));
-
-  expect(navigate).toHaveBeenCalledTimes(1);
+  expect(push).toHaveBeenCalledWith("/upcoming");
   expect(input).toHaveValue("");
 });
 
