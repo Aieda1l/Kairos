@@ -6,6 +6,10 @@ on:
       - feat/milestone-2-submission-status
   workflow_dispatch:
 
+concurrency:
+  group: milestone-2-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
