@@ -11,7 +11,8 @@ import {
   type SubmissionSyncRequestV1,
 } from "@/lib/extension-protocol/submission-status";
 
-const DEFAULT_TIMEOUT_MS = 4_000;
+const DEFAULT_PING_TIMEOUT_MS = 750;
+const DEFAULT_BATCH_TIMEOUT_MS = 30_000;
 
 export type ExtensionPingResult = {
   extensionVersion: string;
@@ -32,7 +33,7 @@ function bridgeRoundTrip(
   request: KairosBridgeRequestV1,
   timeoutCode: SubmissionSyncErrorCode,
   timeoutMessage: string,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs: number,
 ): Promise<KairosBridgeResponseV1> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -84,7 +85,7 @@ function bridgeRoundTrip(
 }
 
 export async function pingKairosExtension(
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = DEFAULT_PING_TIMEOUT_MS,
 ): Promise<ExtensionPingResult> {
   const requestId = crypto.randomUUID();
   const response = await bridgeRoundTrip(
@@ -111,7 +112,7 @@ export async function pingKairosExtension(
 
 export async function syncExtensionBatch(
   input: SubmissionSyncRequestV1,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutMs = DEFAULT_BATCH_TIMEOUT_MS,
 ): Promise<CanvasBatchResultV1> {
   const payload = submissionSyncRequestV1Schema.parse(input);
   const response = await bridgeRoundTrip(
