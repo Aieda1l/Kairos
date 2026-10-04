@@ -13,6 +13,13 @@ export const submissionSyncErrorCodeSchema = z.enum([
   "INVALID_RESULT",
 ]);
 
+export const submissionFailureDiagnosticSchema = z.enum([
+  "FETCH_EXCEPTION",
+  "HTTP_429",
+  "HTTP_5XX",
+  "HTTP_OTHER",
+]);
+
 export const submissionStateSchema = z.enum([
   "unknown",
   "not_submitted",
@@ -49,6 +56,7 @@ export const submissionStatusResultV1Schema = z
     checkedAt: z.string().datetime(),
     extractorVersion: z.string().min(1),
     errorCode: submissionSyncErrorCodeSchema.optional(),
+    diagnosticCode: submissionFailureDiagnosticSchema.optional(),
   })
   .strict();
 
@@ -129,3 +137,4 @@ export type CanvasBatchResultV1 = z.infer<typeof canvasBatchResultV1Schema>;
 export type KairosBridgeRequestV1 = z.infer<typeof kairosBridgeRequestV1Schema>;
 export type KairosBridgeResponseV1 = z.infer<typeof kairosBridgeResponseV1Schema>;
 export type SubmissionSyncErrorCode = z.infer<typeof submissionSyncErrorCodeSchema>;
+export type SubmissionFailureDiagnostic = z.infer<typeof submissionFailureDiagnosticSchema>;
