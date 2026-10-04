@@ -23,7 +23,26 @@ describe("extractCanvasApiSubmissionStatus",()=>{
 
     expect(extractCanvasApiSubmissionStatus({
       id:4242,course_id:999,
-      submission:{workflow_state:"graded",submitted_at:null,late:false,missing:false,excused:false},
+      submission:{
+        workflow_state:"graded",
+        submitted_at:"2026-10-04T05:00:00.000Z",
+        posted_at:null,
+        late:false,
+        missing:false,
+        excused:false,
+      },
+    },locator,checkedAt)).toMatchObject({state:"submitted"});
+
+    expect(extractCanvasApiSubmissionStatus({
+      id:4242,course_id:999,
+      submission:{
+        workflow_state:"graded",
+        submitted_at:"2026-10-04T05:00:00.000Z",
+        posted_at:"2026-10-04T05:30:00.000Z",
+        late:false,
+        missing:false,
+        excused:false,
+      },
     },locator,checkedAt)).toMatchObject({state:"graded"});
 
     expect(extractCanvasApiSubmissionStatus({
