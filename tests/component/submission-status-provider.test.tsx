@@ -170,6 +170,30 @@ describe("SubmissionStatusProvider",()=>{
     expect(calls.start).toBe(1);
   });
 
+  it("re-detects Canvas on manual retry after the tab was unavailable",async()=>{
+    const user=userEvent.setup();
+    const {started,calls}=installFetch(1);
+    pingKairosExtension
+      .mockReset()
+      .mockResolvedValueOnce({extensionVersion:"0.2.0",canvasTabDetected:false})
+      .mockResolvedValue({extensionVersion:"0.2.0",canvasTabDetected:true});
+    syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+
+    render(
+      <SubmissionStatusProvider enabled={false} initialSyncState={initialState}>
+        <Consumer/>
+      </SubmissionStatusProvider>,
+    );
+
+    await waitFor(()=>expect(pingKairosExtension).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(calls.complete).toBe(1));
+
+    expect(pingKairosExtension).toHaveBeenCalledTimes(2);
+    expect(syncExtensionBatch).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("phase")).toHaveTextContent("success");
+  });
+
   it("sends more than 100 assignments in sequential 100/100/5 chunks",async()=>{
     const user=userEvent.setup();
     const {started}=installFetch(205);

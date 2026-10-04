@@ -7,7 +7,7 @@ describe("parseCanvasAssignmentLocator", () => {
       id: "local-1",
       source: "canvas",
       courseId: "999",
-      sourceUrl: "http://127.0.0.1:3000/courses/999/assignments/4242",
+      sourceUrl: "https://canvas.uw.edu/courses/999/assignments/4242",
     })).toEqual({
       assignmentLocalId: "local-1",
       courseId: "999",
@@ -41,6 +41,20 @@ describe("parseCanvasAssignmentLocator", () => {
       source: "canvas",
       courseId: "999",
       sourceUrl: "https://canvas.uw.edu/courses/1000/assignments/4242",
+    })).toBeNull();
+
+    expect(parseCanvasAssignmentLocator({
+      id: "foreign-host",
+      source: "canvas",
+      courseId: "999",
+      sourceUrl: "https://evil.example/courses/999/assignments/4242",
+    })).toBeNull();
+
+    expect(parseCanvasAssignmentLocator({
+      id: "lookalike-host",
+      source: "canvas",
+      courseId: "999",
+      sourceUrl: "https://canvas.uw.edu.evil.example/courses/999/assignments/4242",
     })).toBeNull();
 
     expect(parseCanvasAssignmentLocator({

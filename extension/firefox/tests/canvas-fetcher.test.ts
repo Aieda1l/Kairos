@@ -43,6 +43,21 @@ describe("fetchCanvasSubmissionStatuses",()=>{
     expect(maxActive).toBeLessThanOrEqual(4);
   });
 
+  it("rejects a successful response redirected to a different Canvas assignment",async()=>{
+    const result=await fetchCanvasSubmissionStatuses(
+      request(),
+      (async()=>response(html,200,"https://canvas.uw.edu/courses/999/assignments/9999")) as typeof fetch,
+      ()=>new Date("2026-10-04T06:00:00.000Z"),
+    );
+
+    expect(result.results[0]).toMatchObject({
+      assignmentLocalId:"local-1",
+      state:"unknown",
+      errorCode:"UNRECOGNIZED_STATUS",
+    });
+    expect(JSON.stringify(result)).not.toContain("<html");
+  });
+
   it("maps signed-out, login, and network failures without leaking page HTML",async()=>{
     const unauthorized=await fetchCanvasSubmissionStatuses(request(),(async()=>response("",401)) as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(unauthorized.results[0].errorCode).toBe("CANVAS_SIGNED_OUT");
