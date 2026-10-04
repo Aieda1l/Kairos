@@ -32,5 +32,6 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e
       - run: npm run build
+      - run: node scripts/verify-dynamic-dashboard-build.mjs
       - name: Review prohibited credential/permission patterns
         run: git grep -nE '(cookies.*permission|<all_urls>|authorization.*:|password.*canvas|canvas\.uw\.edu.*cookie)' -- extension src tests ':!tests/fixtures/**' || true
