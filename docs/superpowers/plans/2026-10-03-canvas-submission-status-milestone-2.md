@@ -300,6 +300,7 @@ git commit -m "feat: persist Canvas submission status"
 **Interfaces:**
 - Produces `SubmissionSyncRequestRegistry` with `register(requestId, connectionId, locators, startedAt)` and `consume(requestId)`; registry entries expire after 10 minutes and are process-local only.
 - Produces `startCanvasSubmissionStatusSync(db, now?: Date): { requestId: string; assignments: CanvasAssignmentLocator[]; maxBatchSize: 100 }`.
+- Produces `SubmissionSyncCompleteInput = { requestId: string; results: SubmissionStatusResultV1[]; batchErrorCode?: SubmissionSyncErrorCode | null }`.
 - Produces `completeCanvasSubmissionStatusSync(db, input: SubmissionSyncCompleteInput, now?: Date): SubmissionSyncCompleteResponse`.
 - `POST /api/sources/canvas/submission-status/start` returns the start response and marks `last_attempted_at`.
 - `POST /api/sources/canvas/submission-status/complete` consumes the request, validates every returned identity against the exact registered locator set, persists valid successful results, records failures/error state, and returns updated counts/sync timestamps.
@@ -388,9 +389,9 @@ git commit -m "feat: add submission status sync API"
 - Produces browser entrypoints bundled to `extension/firefox/dist/background.js`, `kairos-bridge.js`, `canvas-content.js`, and `popup.js`.
 - Adds `npm run build:extension`; changes `npm run build` to run the extension build before `next build`.
 
-- [ ] **Step 1: Add failing Canvas HTML fixtures/extractor tests**
+- [ ] **Step 1: Make extension tests collectible, then add failing Canvas HTML fixtures/extractor tests**
 
-Fixture expectations:
+Extend `vitest.config.ts` test includes with `extension/firefox/tests/**/*.test.ts` before the first extension test run. Then add fixture expectations:
 
 ```text
 submitted.html       -> submitted
@@ -459,7 +460,7 @@ Conflicting explicit signals return `unknown` plus `UNRECOGNIZED_STATUS`. A clea
 
 - [ ] **Step 6: Implement the esbuild script and package scripts**
 
-Add dev dependencies `esbuild` and `@types/firefox-webext-browser`. Update Vitest include globs to collect `extension/firefox/tests/**/*.test.ts`. Ignore `extension/firefox/dist/`.
+Add dev dependencies `esbuild` and `@types/firefox-webext-browser`. Keep the extension-test Vitest include added in Step 1. Ignore `extension/firefox/dist/`.
 
 Run: `npm run build:extension`
 
@@ -666,7 +667,8 @@ Use the existing fixture Canvas iCal onboarding to create the assignment with co
 
 - responds to protocol-v1 ping as the Firefox extension;
 - accepts only valid sync batches;
-- returns `submitted` for the known locator with no credentials/HTML fields.
+- deliberately holds the first batch response until the test has asserted the initial `Status unavailable` state;
+- returns `submitted` for the known locator with no credentials/HTML fields after the test releases that response.
 
 Then assert:
 
