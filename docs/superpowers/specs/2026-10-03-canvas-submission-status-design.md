@@ -19,7 +19,7 @@ Kairos should:
 - distinguish `Not submitted`, `Submitted`, `Graded`, and `Excused`;
 - represent `Late` and `Missing` as independent flags rather than mutually exclusive primary states;
 - use `Status unavailable` when Canvas does not expose a trustworthy signal;
-- automatically refresh submission status by default when Kairos opens and the latest successful status refresh is more than 15 minutes old;
+- automatically refresh submission status by default when Kairos opens and the latest successful status refresh is at least 15 minutes old;
 - provide a manual `Sync submission status` action in the Kairos website;
 - require only that Firefox is running with the Kairos extension installed and at least one signed-in `canvas.uw.edu` tab available;
 - preserve the last known good status when a later refresh fails;
@@ -62,7 +62,7 @@ The web application never receives or handles Canvas authentication material.
 
 ### 4.2 Kairos page bridge
 
-A Firefox content script is injected only for the local Kairos development origins required by this release. It acts as a narrow bridge between the Kairos page and the extension runtime.
+A Firefox content script is registered for local Kairos pages and activates only when `location.origin` is exactly `http://localhost:3000` or `http://127.0.0.1:3000`. It acts as a narrow bridge between the Kairos page and the extension runtime.
 
 The bridge accepts only versioned, schema-valid Kairos messages. It does not expose a generic RPC mechanism.
 
@@ -133,7 +133,7 @@ For Milestone 2 the extension is installed as an unpacked temporary/developer ex
 The extension should request the minimum practical permissions:
 
 - access to `canvas.uw.edu`;
-- access to the local Kairos development origin required by this release;
+- access to local `localhost` / `127.0.0.1` pages needed to inject the bridge, with the bridge itself refusing to activate unless the exact origin is `http://localhost:3000` or `http://127.0.0.1:3000`;
 - only the tab/runtime capabilities required to find and message the Canvas tab.
 
 The extension must not request:
@@ -170,7 +170,7 @@ Constraints:
 - no URL field is accepted;
 - no course or assignment is requested unless it already exists in Kairos;
 - duplicate identifiers are rejected or normalized before dispatch;
-- an upper batch-size bound is enforced.
+- each extension message contains at most 100 assignments; larger logical refreshes are split into sequential chunks by Kairos and reconciled as one user-visible sync.
 
 The extension constructs:
 
@@ -323,15 +323,15 @@ Manual refresh bypasses the 15-minute freshness check but still uses the same ex
 
 ### 10.3 Scope
 
-A refresh checks only assignments already present in Kairos.
+A refresh checks all currently imported Canvas assignments that have valid numeric Canvas course and assignment identifiers.
 
-The initial implementation may constrain the request to assignments relevant to the current dashboard horizon if needed for performance, but it must not independently discover unrelated Canvas coursework.
+The extension does not independently discover unrelated Canvas coursework. Assignments lacking valid identifiers are skipped and remain `Status unavailable`.
 
 ### 10.4 Concurrency
 
-Canvas requests are performed with a small fixed concurrency limit. The implementation plan should choose and document a conservative default.
+Canvas assignment-page requests use a fixed concurrency limit of four requests at a time.
 
-One assignment failure does not abort the batch.
+One assignment failure does not abort the batch. Kairos sends at most 100 assignments per extension message and processes additional chunks sequentially within the same logical refresh.
 
 ### 10.5 Persistence
 
@@ -344,7 +344,7 @@ For an individual assignment:
 - `checked_at` changes only for a result that was actually checked;
 - an unavailable/failed assignment is surfaced as stale or unavailable without deleting its last known state.
 
-The overall synchronization record updates `last_attempted_at` on every attempt and `last_successful_at` only when the synchronization meets the implementation's defined success threshold. Partial runs record updated/failed counts.
+The overall synchronization record updates `last_attempted_at` on every attempt. It updates `last_successful_at` when the extension reaches Canvas and returns at least one successfully checked assignment result; a run may therefore be successful-but-partial. A run that fails before any assignment is checked, including extension-unavailable, no-tab, or signed-out failures, does not advance `last_successful_at`. Partial runs record updated/failed counts and set `last_error_code` to a stable partial-sync code.
 
 ## 11. UI and UX
 
@@ -458,7 +458,7 @@ Milestone 2 must preserve these invariants:
 9. Local persistence contains status metadata, not Canvas page HTML.
 10. Debug/error logs redact or omit private feed URLs and authentication material.
 
-The local Kairos bridge should activate only on the intended local Kairos origin used by this release and should verify `location.origin` before accepting page messages.
+The local Kairos bridge activates only when `location.origin` is exactly `http://localhost:3000` or `http://127.0.0.1:3000`. On any other localhost origin it installs no page-message listener.
 
 ## 14. Testing strategy
 
