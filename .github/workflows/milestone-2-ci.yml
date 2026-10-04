@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/milestone-2-submission-status
+      - feat/status-color-coding
   workflow_dispatch:
 
 concurrency:
