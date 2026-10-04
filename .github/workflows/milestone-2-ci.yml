@@ -29,4 +29,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build:extension
-      - run: npx playwright test tests/e2e/submission-status.spec.ts --project=firefox
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:e2e
+      - run: npm run build
+      - name: Review prohibited credential/permission patterns
+        run: git grep -nE '(cookies.*permission|<all_urls>|authorization.*:|password.*canvas|canvas\.uw\.edu.*cookie)' -- extension src tests ':!tests/fixtures/**' || true
