@@ -1,0 +1,37 @@
+name: Milestone 2 CI
+
+on:
+  push:
+    branches:
+      - feat/milestone-2-submission-status
+  workflow_dispatch:
+
+concurrency:
+  group: milestone-2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build:extension
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:e2e
+      - run: npm run build
+      - run: node scripts/verify-dynamic-dashboard-build.mjs
+      - name: Review prohibited credential/permission patterns
+        run: git grep -nE '(cookies.*permission|<all_urls>|authorization.*:|password.*canvas|canvas\.uw\.edu.*cookie)' -- extension src tests ':!tests/fixtures/**' || true

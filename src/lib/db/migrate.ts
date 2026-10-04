@@ -44,6 +44,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS assignments_source_external_unique
 CREATE INDEX IF NOT EXISTS assignments_due_at_idx ON assignments(due_at);
 CREATE INDEX IF NOT EXISTS assignments_course_name_idx ON assignments(course_name);
 
+CREATE TABLE IF NOT EXISTS assignment_submission_status (
+  assignment_id TEXT PRIMARY KEY REFERENCES assignments(id) ON DELETE CASCADE,
+  state TEXT NOT NULL CHECK(state IN ('unknown','not_submitted','submitted','graded','excused')),
+  is_late INTEGER NOT NULL CHECK(is_late IN (0,1)),
+  is_missing INTEGER NOT NULL CHECK(is_missing IN (0,1)),
+  submitted_at TEXT,
+  checked_at TEXT NOT NULL,
+  extractor_version TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS submission_status_sync (
+  source_connection_id TEXT PRIMARY KEY REFERENCES source_connections(id) ON DELETE CASCADE,
+  last_attempted_at TEXT,
+  last_successful_at TEXT,
+  last_error_code TEXT,
+  updated_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS assignment_links (
   id TEXT PRIMARY KEY,
   assignment_a_id TEXT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,

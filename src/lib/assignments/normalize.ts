@@ -1,7 +1,7 @@
 import type { Assignment } from "./types";
 import type { SourceAssignment, SourceKind } from "@/lib/sources/types";
 
-export type NormalizedAssignment = Omit<Assignment, "id" | "firstSeenAt" | "lastSeenAt">;
+export type NormalizedAssignment = Omit<Assignment, "id" | "firstSeenAt" | "lastSeenAt" | "submissionStatus">;
 
 export function normalizeSourceAssignment(source: SourceKind, input: SourceAssignment): NormalizedAssignment {
   return {

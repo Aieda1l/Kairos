@@ -1,4 +1,5 @@
 import type { SourceKind } from "@/lib/sources/types";
+import type { AssignmentSubmissionStatus } from "@/lib/submission-status/types";
 
 export type AssignmentStatus = "pending" | "submitted" | "graded" | "overdue" | "unknown";
 
@@ -15,6 +16,7 @@ export type Assignment = {
   sourceUpdatedAt: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
+  submissionStatus: AssignmentSubmissionStatus | null;
 };
 
 export type SourceConnection = {
