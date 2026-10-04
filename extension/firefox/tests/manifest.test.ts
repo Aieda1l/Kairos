@@ -10,7 +10,7 @@ describe("Firefox manifest",()=>{
       content_scripts?:Array<{matches?:string[]}>;
       version?:string;
     };
-    expect(manifest.version).toBe("0.2.3");
+    expect(manifest.version).toBe("0.2.4");
     expect(manifest.permissions??[]).toEqual(expect.arrayContaining(["tabs"]));
     expect(manifest.permissions??[]).not.toEqual(expect.arrayContaining(["cookies","history","downloads","<all_urls>"]));
     expect(manifest.host_permissions).toEqual([

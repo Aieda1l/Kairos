@@ -6,9 +6,32 @@ import {
   type SubmissionSyncRequestV1,
 } from "@/lib/extension-protocol/submission-status";
 import type { CanvasAssignmentLocator, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
+import { CANVAS_API_EXTRACTOR_VERSION, extractCanvasApiSubmissionStatus } from "./extract-api-status";
 import { CANVAS_EXTRACTOR_VERSION, extractCanvasSubmissionStatus } from "./extract-status";
 
 const CONCURRENCY=4;
+
+function classifyFinalCanvasApiUrl(
+  finalUrl:string,
+  assignment:CanvasAssignmentLocator,
+):"assignment"|"signed_out"|"unexpected" {
+  let parsed:URL;
+  try{
+    parsed=new URL(finalUrl);
+  }catch{
+    return "unexpected";
+  }
+
+  if(parsed.origin!=="https://canvas.uw.edu"||/\/login(?:\/|$)/i.test(parsed.pathname)){
+    return "signed_out";
+  }
+
+  const match=parsed.pathname.match(/^\/api\/v1\/courses\/(\d+)\/assignments\/(\d+)\/?$/);
+  if(!match||match[1]!==assignment.courseId||match[2]!==assignment.assignmentId){
+    return "unexpected";
+  }
+  return "assignment";
+}
 
 function classifyFinalCanvasUrl(
   finalUrl:string,
@@ -38,6 +61,7 @@ function errorResult(
   errorCode:SubmissionSyncErrorCode,
   diagnosticCode?:SubmissionFailureDiagnostic,
   httpStatus?:number,
+  extractorVersion:string=CANVAS_EXTRACTOR_VERSION,
 ):SubmissionStatusResultV1 {
   return {
     ...assignment,
@@ -46,7 +70,7 @@ function errorResult(
     isMissing:false,
     submittedAt:null,
     checkedAt,
-    extractorVersion:CANVAS_EXTRACTOR_VERSION,
+    extractorVersion,
     errorCode,
     ...(diagnosticCode?{diagnosticCode}:{}),
     ...(httpStatus!==undefined?{httpStatus}:{}),
@@ -81,9 +105,44 @@ export async function fetchCanvasSubmissionStatuses(
       if(index>=request.assignments.length)return;
       const assignment=request.assignments[index];
       const checkedAt=now().toISOString();
-      const path=`/courses/${assignment.courseId}/assignments/${assignment.assignmentId}`;
+      const apiPath=`/api/v1/courses/${assignment.courseId}/assignments/${assignment.assignmentId}?include%5B%5D=submission`;
+      const htmlPath=`/courses/${assignment.courseId}/assignments/${assignment.assignmentId}`;
+
       try{
-        const response=await fetchImpl(path,{credentials:"include",redirect:"follow"});
+        const apiResponse=await fetchImpl(apiPath,{credentials:"include",redirect:"follow"});
+        if(apiResponse.status===401||apiResponse.status===403){
+          results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
+          continue;
+        }
+
+        if(apiResponse.ok){
+          const apiFinalUrl=apiResponse.url||`https://canvas.uw.edu${apiPath}`;
+          const apiFinalUrlKind=classifyFinalCanvasApiUrl(apiFinalUrl,assignment);
+          if(apiFinalUrlKind==="signed_out"){
+            results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
+            continue;
+          }
+          if(apiFinalUrlKind==="unexpected"){
+            results[index]=errorResult(assignment,checkedAt,"UNRECOGNIZED_STATUS");
+            continue;
+          }
+
+          try{
+            const payload=await apiResponse.json();
+            results[index]=extractCanvasApiSubmissionStatus(payload,assignment,checkedAt);
+            continue;
+          }catch{
+            // Fall back to the normal Canvas assignment page when a deployment
+            // does not return the documented JSON shape for this session.
+          }
+        }
+      }catch{
+        // Fall back to the normal assignment page before reporting a transport
+        // failure. Some Canvas deployments may treat the API route differently.
+      }
+
+      try{
+        const response=await fetchImpl(htmlPath,{credentials:"include",redirect:"follow"});
         if(response.status===401||response.status===403){
           results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
           continue;
@@ -98,7 +157,7 @@ export async function fetchCanvasSubmissionStatuses(
           );
           continue;
         }
-        const finalUrl=response.url||`https://canvas.uw.edu${path}`;
+        const finalUrl=response.url||`https://canvas.uw.edu${htmlPath}`;
         const finalUrlKind=classifyFinalCanvasUrl(finalUrl,assignment);
         if(finalUrlKind==="signed_out"){
           results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
@@ -122,7 +181,14 @@ export async function fetchCanvasSubmissionStatuses(
           ...(extracted.errorCode?{errorCode:extracted.errorCode}:{}),
         };
       }catch{
-        results[index]=errorResult(assignment,checkedAt,"CANVAS_NETWORK_ERROR","FETCH_EXCEPTION");
+        results[index]=errorResult(
+          assignment,
+          checkedAt,
+          "CANVAS_NETWORK_ERROR",
+          "FETCH_EXCEPTION",
+          undefined,
+          CANVAS_API_EXTRACTOR_VERSION,
+        );
       }
     }
   }

@@ -17,17 +17,36 @@ const request=(count=1):SubmissionSyncRequestV1=>({
   })),
 });
 const response=(body:string,status=200,url="https://canvas.uw.edu/courses/999/assignments/4242")=>({
-  ok:status>=200&&status<300,status,url,text:async()=>body,
+  ok:status>=200&&status<300,status,url,text:async()=>body,json:async()=>JSON.parse(body),
+}) as Response;
+const apiResponse=(payload:unknown,status=200,url="https://canvas.uw.edu/api/v1/courses/999/assignments/4242?include%5B%5D=submission")=>({
+  ok:status>=200&&status<300,status,url,text:async()=>JSON.stringify(payload),json:async()=>payload,
 }) as Response;
 
 describe("fetchCanvasSubmissionStatuses",()=>{
-  it("uses a same-origin relative Canvas path and includes the signed-in session",async()=>{
-    const fetchImpl=vi.fn(async()=>response(html));
-    await fetchCanvasSubmissionStatuses(request(),fetchImpl as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
+  it("uses the same-origin Canvas assignment API first and includes the signed-in session",async()=>{
+    const fetchImpl=vi.fn(async()=>apiResponse({
+      id:4242,
+      course_id:999,
+      submission:{
+        workflow_state:"submitted",
+        submitted_at:"2026-10-04T05:00:00.000Z",
+        late:false,
+        missing:false,
+        excused:false,
+      },
+    }));
+    const result=await fetchCanvasSubmissionStatuses(request(),fetchImpl as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledWith(
-      "/courses/999/assignments/4242",
+      "/api/v1/courses/999/assignments/4242?include%5B%5D=submission",
       expect.objectContaining({credentials:"include",redirect:"follow"}),
     );
+    expect(result.results[0]).toMatchObject({
+      state:"submitted",
+      submittedAt:"2026-10-04T05:00:00.000Z",
+      extractorVersion:"canvas-api-v1",
+    });
   });
 
   it("limits concurrent Canvas requests to four",async()=>{
