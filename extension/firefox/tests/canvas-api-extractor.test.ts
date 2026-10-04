@@ -33,12 +33,11 @@ describe("extractCanvasApiSubmissionStatus",()=>{
   });
 
   it("does not invent not-submitted state when Canvas omits the current-user submission",()=>{
-    expect(extractCanvasApiSubmissionStatus({
+    const result=extractCanvasApiSubmissionStatus({
       id:4242,course_id:999,
-    },locator,checkedAt)).toMatchObject({
-      state:"unknown",
-      errorCode:undefined,
-    });
+    },locator,checkedAt);
+    expect(result).toMatchObject({state:"unknown"});
+    expect(result).not.toHaveProperty("errorCode");
   });
 
   it("rejects mismatched assignment identity and unknown workflow states",()=>{
