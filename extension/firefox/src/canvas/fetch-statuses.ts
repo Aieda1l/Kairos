@@ -1,6 +1,7 @@
 import {
   PROTOCOL_VERSION,
   type CanvasBatchResultV1,
+  type SubmissionFailureDiagnostic,
   type SubmissionStatusResultV1,
   type SubmissionSyncRequestV1,
 } from "@/lib/extension-protocol/submission-status";
@@ -35,6 +36,7 @@ function errorResult(
   assignment:CanvasAssignmentLocator,
   checkedAt:string,
   errorCode:SubmissionSyncErrorCode,
+  diagnosticCode?:SubmissionFailureDiagnostic,
 ):SubmissionStatusResultV1 {
   return {
     ...assignment,
@@ -45,7 +47,14 @@ function errorResult(
     checkedAt,
     extractorVersion:CANVAS_EXTRACTOR_VERSION,
     errorCode,
+    ...(diagnosticCode?{diagnosticCode}:{}),
   };
+}
+
+function diagnosticForStatus(status:number):SubmissionFailureDiagnostic {
+  if(status===429)return "HTTP_429";
+  if(status>=500&&status<=599)return "HTTP_5XX";
+  return "HTTP_OTHER";
 }
 
 function summarizeError(results:SubmissionStatusResultV1[]):SubmissionSyncErrorCode|null {
@@ -82,6 +91,7 @@ export async function fetchCanvasSubmissionStatuses(
             assignment,
             checkedAt,
             response.status===404?"UNRECOGNIZED_STATUS":"CANVAS_NETWORK_ERROR",
+            response.status===404?undefined:diagnosticForStatus(response.status),
           );
           continue;
         }
@@ -109,7 +119,7 @@ export async function fetchCanvasSubmissionStatuses(
           ...(extracted.errorCode?{errorCode:extracted.errorCode}:{}),
         };
       }catch{
-        results[index]=errorResult(assignment,checkedAt,"CANVAS_NETWORK_ERROR");
+        results[index]=errorResult(assignment,checkedAt,"CANVAS_NETWORK_ERROR","FETCH_EXCEPTION");
       }
     }
   }

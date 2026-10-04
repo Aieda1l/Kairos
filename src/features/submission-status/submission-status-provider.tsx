@@ -14,6 +14,7 @@ import { z } from "zod";
 import {
   PROTOCOL_VERSION,
   canvasAssignmentLocatorSchema,
+  submissionFailureDiagnosticSchema,
   submissionStatusResultV1Schema,
   submissionSyncErrorCodeSchema,
   type SubmissionStatusResultV1,
@@ -46,6 +47,7 @@ const completeResponseSchema = z
     lastAttemptedAt: z.string().datetime().nullable(),
     lastSuccessfulAt: z.string().datetime().nullable(),
     lastErrorCode: submissionSyncErrorCodeSchema.nullable(),
+    failureDiagnostics: z.array(z.object({code: submissionFailureDiagnosticSchema, count: z.number().int().positive()}).strict()),
   })
   .strict();
 
@@ -92,6 +94,19 @@ function messageForError(code: SubmissionSyncErrorCode | null): string {
       return "Some submission statuses could not be updated.";
     default:
       return "";
+  }
+}
+
+function messageForFailureDiagnostic(code: z.infer<typeof submissionFailureDiagnosticSchema>): string {
+  switch (code) {
+    case "FETCH_EXCEPTION":
+      return "Firefox could not complete the Canvas request. Reload the Canvas tab and try again.";
+    case "HTTP_429":
+      return "Canvas is rate-limiting submission status requests. Wait a minute and retry.";
+    case "HTTP_5XX":
+      return "Canvas returned a server error. Try again shortly.";
+    case "HTTP_OTHER":
+      return "Canvas returned an unexpected HTTP response.";
   }
 }
 
@@ -262,7 +277,7 @@ export function SubmissionStatusProvider({
         );
       } else if (completed.lastErrorCode) {
         setPhase("error");
-        setMessage(bridgeFailureMessage || messageForError(completed.lastErrorCode));
+        setMessage(bridgeFailureMessage || (completed.failureDiagnostics[0] ? messageForFailureDiagnostic(completed.failureDiagnostics[0].code) : messageForError(completed.lastErrorCode)));
       } else {
         setPhase("success");
         setMessage("");

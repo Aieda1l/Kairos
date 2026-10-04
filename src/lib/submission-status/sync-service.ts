@@ -6,8 +6,10 @@ import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
 import {
+  submissionFailureDiagnosticSchema,
   submissionStatusResultV1Schema,
   submissionSyncErrorCodeSchema,
+  type SubmissionFailureDiagnostic,
   type SubmissionStatusResultV1,
 } from "@/lib/extension-protocol/submission-status";
 import { parseCanvasAssignmentLocator } from "@/lib/submission-status/canvas-locator";
@@ -39,6 +41,7 @@ export type SubmissionSyncCompleteResponse={
   lastAttemptedAt:string|null;
   lastSuccessfulAt:string|null;
   lastErrorCode:SubmissionSyncErrorCode|null;
+  failureDiagnostics:Array<{code:SubmissionFailureDiagnostic;count:number}>;
 };
 
 export class SubmissionStatusSyncServiceError extends Error {
@@ -117,6 +120,17 @@ export function completeCanvasSubmissionStatusSync(
       ?? "INVALID_RESULT";
   }
 
+  const diagnosticCounts=new Map<SubmissionFailureDiagnostic,number>();
+  for(const result of input.results){
+    if(result.diagnosticCode){
+      submissionFailureDiagnosticSchema.parse(result.diagnosticCode);
+      diagnosticCounts.set(result.diagnosticCode,(diagnosticCounts.get(result.diagnosticCode)??0)+1);
+    }
+  }
+  const failureDiagnostics=Array.from(diagnosticCounts.entries())
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([code,count])=>({code,count}));
+
   const completedAt=now.toISOString();
   const applied=statusRepo.applyCompletion(
     registered.connectionId,
@@ -134,5 +148,6 @@ export function completeCanvasSubmissionStatusSync(
     lastAttemptedAt:state.lastAttemptedAt,
     lastSuccessfulAt:state.lastSuccessfulAt,
     lastErrorCode:state.lastErrorCode,
+    failureDiagnostics,
   };
 }
