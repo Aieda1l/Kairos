@@ -8,7 +8,9 @@ describe("Firefox manifest",()=>{
       permissions?:string[];
       host_permissions?:string[];
       content_scripts?:Array<{matches?:string[]}>;
+      version?:string;
     };
+    expect(manifest.version).toBe("0.2.1");
     expect(manifest.permissions??[]).toEqual(expect.arrayContaining(["tabs"]));
     expect(manifest.permissions??[]).not.toEqual(expect.arrayContaining(["cookies","history","downloads","<all_urls>"]));
     expect(manifest.host_permissions).toEqual([

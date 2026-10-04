@@ -70,18 +70,22 @@ export async function fetchCanvasSubmissionStatuses(
       if(index>=request.assignments.length)return;
       const assignment=request.assignments[index];
       const checkedAt=now().toISOString();
-      const url=`https://canvas.uw.edu/courses/${assignment.courseId}/assignments/${assignment.assignmentId}`;
+      const path=`/courses/${assignment.courseId}/assignments/${assignment.assignmentId}`;
       try{
-        const response=await fetchImpl(url,{credentials:"include",redirect:"follow"});
+        const response=await fetchImpl(path,{credentials:"include",redirect:"follow"});
         if(response.status===401||response.status===403){
           results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
           continue;
         }
         if(!response.ok){
-          results[index]=errorResult(assignment,checkedAt,"CANVAS_NETWORK_ERROR");
+          results[index]=errorResult(
+            assignment,
+            checkedAt,
+            response.status===404?"UNRECOGNIZED_STATUS":"CANVAS_NETWORK_ERROR",
+          );
           continue;
         }
-        const finalUrl=response.url||url;
+        const finalUrl=response.url||`https://canvas.uw.edu${path}`;
         const finalUrlKind=classifyFinalCanvasUrl(finalUrl,assignment);
         if(finalUrlKind==="signed_out"){
           results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
