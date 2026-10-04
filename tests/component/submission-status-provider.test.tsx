@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanvasBatchResultV1 } from "@/lib/extension-protocol/submission-status";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 
-const refresh=vi.fn();
-const pingKairosExtension=vi.fn();
-const syncExtensionBatch=vi.fn();
+const {refresh,pingKairosExtension,syncExtensionBatch}=vi.hoisted(()=>({
+  refresh:vi.fn(),
+  pingKairosExtension:vi.fn(),
+  syncExtensionBatch:vi.fn(),
+}));
 
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh})}));
 vi.mock("@/features/submission-status/extension-bridge",async()=>{
