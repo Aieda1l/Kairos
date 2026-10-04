@@ -29,3 +29,4 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build:extension
+      - run: npx playwright test tests/e2e/submission-status.spec.ts --project=firefox
