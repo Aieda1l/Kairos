@@ -6,7 +6,9 @@ type BridgeCapture = {
   releaseFirstSync: () => void;
 };
 
-test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page})=>{
+test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,request})=>{
+  const reset=await request.post("/api/test-fixtures/reset");
+  expect(reset.ok()).toBe(true);
   const apiBodies:string[]=[];
   let startRequests=0;
 
@@ -103,8 +105,6 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
   await page.getByRole("button",{name:"Connect Canvas"}).click();
   await page.waitForURL("**/upcoming");
 
-  // Mount a fresh dashboard provider after the connection exists so stale-on-open applies.
-  await page.reload();
   await expect(page.getByText("Fixture Homework").first()).toBeVisible();
   await expect(page.getByText("Status unavailable").first()).toBeVisible();
   await expect.poll(()=>startRequests).toBe(1);
