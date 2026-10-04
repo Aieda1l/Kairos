@@ -48,6 +48,7 @@ const completeResponseSchema = z
     lastSuccessfulAt: z.string().datetime().nullable(),
     lastErrorCode: submissionSyncErrorCodeSchema.nullable(),
     failureDiagnostics: z.array(z.object({code: submissionFailureDiagnosticSchema, count: z.number().int().positive()}).strict()).default([]),
+    failureHttpStatuses: z.array(z.object({status: z.number().int().min(100).max(599), count: z.number().int().positive()}).strict()).default([]),
   })
   .strict();
 
@@ -97,7 +98,7 @@ function messageForError(code: SubmissionSyncErrorCode | null): string {
   }
 }
 
-function messageForFailureDiagnostic(code: z.infer<typeof submissionFailureDiagnosticSchema>): string {
+function messageForFailureDiagnostic(code: z.infer<typeof submissionFailureDiagnosticSchema>, httpStatus?: number): string {
   switch (code) {
     case "FETCH_EXCEPTION":
       return "Firefox could not complete the Canvas request. Reload the Canvas tab and try again.";
@@ -106,7 +107,7 @@ function messageForFailureDiagnostic(code: z.infer<typeof submissionFailureDiagn
     case "HTTP_5XX":
       return "Canvas returned a server error. Try again shortly.";
     case "HTTP_OTHER":
-      return "Canvas returned an unexpected HTTP response.";
+      return httpStatus ? `Canvas returned HTTP ${httpStatus}.` : "Canvas returned an unexpected HTTP response.";
   }
 }
 
@@ -277,7 +278,7 @@ export function SubmissionStatusProvider({
         );
       } else if (completed.lastErrorCode) {
         setPhase("error");
-        setMessage(bridgeFailureMessage || (completed.failureDiagnostics[0] ? messageForFailureDiagnostic(completed.failureDiagnostics[0].code) : messageForError(completed.lastErrorCode)));
+        setMessage(bridgeFailureMessage || (completed.failureDiagnostics[0] ? messageForFailureDiagnostic(completed.failureDiagnostics[0].code, completed.failureHttpStatuses[0]?.status) : messageForError(completed.lastErrorCode)));
       } else {
         setPhase("success");
         setMessage("");
