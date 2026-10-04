@@ -86,11 +86,19 @@ export function completeCanvasSubmissionStatusSync(
     throw new SubmissionStatusSyncServiceError("SYNC_REQUEST_NOT_FOUND","This submission-status sync request is no longer active.");
   }
 
+  const statusRepo=new SubmissionStatusRepository(db);
   const requestedByLocalId=new Map(registered.assignments.map(item=>[item.assignmentLocalId,item]));
   const seen=new Set<string>();
   for(const result of input.results){
     const requested=requestedByLocalId.get(result.assignmentLocalId);
     if(!requested||seen.has(result.assignmentLocalId)||!sameIdentity(requested,result)){
+      statusRepo.applyCompletion(
+        registered.connectionId,
+        [],
+        registered.assignments.length,
+        "INVALID_RESULT",
+        now.toISOString(),
+      );
       throw new SubmissionStatusSyncServiceError("INVALID_RESULT","The extension returned an unexpected assignment result.");
     }
     seen.add(result.assignmentLocalId);
@@ -110,7 +118,6 @@ export function completeCanvasSubmissionStatusSync(
   }
 
   const completedAt=now.toISOString();
-  const statusRepo=new SubmissionStatusRepository(db);
   const applied=statusRepo.applyCompletion(
     registered.connectionId,
     input.results,
