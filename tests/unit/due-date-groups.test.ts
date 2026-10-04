@@ -1,0 +1,2 @@
+import { expect,it } from "vitest";import { classifyDueDate } from "@/lib/dates/classify-due-date";
+it("classifies Pacific date boundaries without machine-local drift",()=>{const now=new Date("2026-10-03T19:00:00Z");expect(classifyDueDate("2026-10-04T05:00:00Z",now)).toBe("today");expect(classifyDueDate("2026-10-04T19:00:00Z",now)).toBe("tomorrow");expect(classifyDueDate(null,now)).toBe("no-due-date");});

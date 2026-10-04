@@ -1,0 +1,1 @@
+import {Badge} from "@/components/ui/badge";import type {SourceKind} from "@/lib/sources/types";const labels:Record<SourceKind,string>={canvas:"Canvas",gradescope:"Gradescope",ed:"Ed"};export function SourceBadge({source}:{source:SourceKind}){return <Badge>{labels[source]}</Badge>;}

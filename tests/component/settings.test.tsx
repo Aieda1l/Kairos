@@ -1,0 +1,2 @@
+// @vitest-environment jsdom
+import {render,screen} from "@testing-library/react";import {expect,it,vi} from "vitest";import SettingsPage from "@/app/(dashboard)/settings/page";it("offers timezone persistence",async()=>{vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({timeZone:"America/Los_Angeles"}))));render(<SettingsPage/>);expect(screen.getByLabelText("Display timezone")).toBeInTheDocument();expect(screen.getByRole("button",{name:"Save timezone"})).toBeInTheDocument();});

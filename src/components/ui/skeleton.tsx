@@ -1,0 +1,1 @@
+import {cn} from "@/lib/ui";export function Skeleton({className=""}:{className?:string}){return <div aria-hidden="true" className={cn("animate-pulse rounded-lg bg-[var(--surface-muted)]",className)}/>;}

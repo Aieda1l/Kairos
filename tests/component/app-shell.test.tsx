@@ -1,0 +1,3 @@
+// @vitest-environment jsdom
+import {render,screen} from "@testing-library/react";import userEvent from "@testing-library/user-event";import {expect,it} from "vitest";import {AppSidebar} from "@/components/app-sidebar";
+it("brands the dashboard as Kairos and exposes all primary destinations",async()=>{const user=userEvent.setup();render(<AppSidebar/>);expect(screen.getByText("Kairos")).toBeInTheDocument();for(const label of ["Upcoming","Calendar","All Assignments","Sources","Settings"])expect(screen.getByRole("link",{name:label})).toBeInTheDocument();const toggle=screen.getByRole("button",{name:"Collapse sidebar"});await user.click(toggle);expect(screen.getByRole("button",{name:"Expand sidebar"})).toBeInTheDocument();});

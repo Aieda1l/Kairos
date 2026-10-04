@@ -1,0 +1,1 @@
+export function validateTimeZone(value:string):string{const trimmed=value.trim();try{new Intl.DateTimeFormat("en-US",{timeZone:trimmed}).format(new Date());return trimmed;}catch{throw new Error("INVALID_TIMEZONE: Enter a valid IANA timezone.");}}

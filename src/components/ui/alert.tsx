@@ -1,0 +1,1 @@
+import * as React from "react";import {cn} from "@/lib/ui";export function Alert({className,...props}:React.HTMLAttributes<HTMLDivElement>){return <div role="status" className={cn("rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm",className)} {...props}/>;}

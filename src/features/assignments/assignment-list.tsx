@@ -1,0 +1,1 @@
+import type {Assignment} from "@/lib/assignments/types";import {AssignmentRow} from "./assignment-row";export function AssignmentList({assignments,timeZone}:{assignments:Assignment[];timeZone:string}){return <div className="grid gap-2">{assignments.map(a=><AssignmentRow key={a.id} assignment={a} timeZone={timeZone}/>)}</div>;}

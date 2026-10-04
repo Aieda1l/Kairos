@@ -1,0 +1,10 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event-assignment-987
+DTSTAMP:20261002T190000Z
+DTSTART:20261009T065900Z
+SUMMARY:Homework 3 [CSE 331]
+URL:https://canvas.uw.edu/calendar?include_contexts=course_123#assignment_987
+END:VEVENT
+END:VCALENDAR
