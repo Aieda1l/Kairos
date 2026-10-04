@@ -22,6 +22,8 @@ export function parseCanvasAssignmentLocator(
     return null;
   }
 
+  if (url.origin !== "https://canvas.uw.edu") return null;
+
   const pathMatch = url.pathname.match(/^\/courses\/(\d+)\/assignments\/(\d+)\/?$/);
   if (pathMatch) {
     const [, pathCourseId, assignmentId] = pathMatch;
@@ -35,6 +37,8 @@ export function parseCanvasAssignmentLocator(
 
   const fragmentMatch = url.hash.match(/^#assignment_(\d+)$/);
   if (!fragmentMatch) return null;
+  const contextCourseId = url.searchParams.get("include_contexts")?.match(/^course_(\d+)$/)?.[1];
+  if (contextCourseId && contextCourseId !== assignment.courseId) return null;
 
   return {
     assignmentLocalId: assignment.id,

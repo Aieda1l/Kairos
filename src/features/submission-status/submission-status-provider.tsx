@@ -160,31 +160,37 @@ export function SubmissionStatusProvider({
   const syncInFlightRef = useRef(false);
 
   const getExtensionInfo = useCallback(() => {
-    if (!pingPromiseRef.current) {
-      pingPromiseRef.current = pingKairosExtension()
-        .then((info) => {
-          setExtensionDetected(true);
-          setExtensionVersion(info.extensionVersion);
-          setCanvasTabDetected(info.canvasTabDetected);
-          return info;
-        })
-        .catch((error: unknown) => {
-          setExtensionDetected(false);
-          setExtensionVersion(null);
-          setCanvasTabDetected(null);
-          if (error instanceof ExtensionBridgeError) {
-            setMessage(error.message);
-            throw error;
-          }
-          const unavailable = new ExtensionBridgeError(
-            "EXTENSION_UNAVAILABLE",
-            "Firefox extension not detected",
-          );
-          setMessage(unavailable.message);
-          throw unavailable;
-        });
-    }
-    return pingPromiseRef.current;
+    if (pingPromiseRef.current) return pingPromiseRef.current;
+
+    const promise = pingKairosExtension()
+      .then((info) => {
+        setExtensionDetected(true);
+        setExtensionVersion(info.extensionVersion);
+        setCanvasTabDetected(info.canvasTabDetected);
+        return info;
+      })
+      .catch((error: unknown) => {
+        setExtensionDetected(false);
+        setExtensionVersion(null);
+        setCanvasTabDetected(null);
+        if (error instanceof ExtensionBridgeError) {
+          setMessage(error.message);
+          throw error;
+        }
+        const unavailable = new ExtensionBridgeError(
+          "EXTENSION_UNAVAILABLE",
+          "Firefox extension not detected",
+        );
+        setMessage(unavailable.message);
+        throw unavailable;
+      });
+
+    pingPromiseRef.current = promise;
+    const clear = () => {
+      if (pingPromiseRef.current === promise) pingPromiseRef.current = null;
+    };
+    void promise.then(clear, clear);
+    return promise;
   }, []);
 
   const syncNow = useCallback(async () => {

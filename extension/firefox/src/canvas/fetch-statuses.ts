@@ -9,6 +9,28 @@ import { CANVAS_EXTRACTOR_VERSION, extractCanvasSubmissionStatus } from "./extra
 
 const CONCURRENCY=4;
 
+function classifyFinalCanvasUrl(
+  finalUrl:string,
+  assignment:CanvasAssignmentLocator,
+):"assignment"|"signed_out"|"unexpected" {
+  let parsed:URL;
+  try{
+    parsed=new URL(finalUrl);
+  }catch{
+    return "unexpected";
+  }
+
+  if(parsed.origin!=="https://canvas.uw.edu"||/\/login(?:\/|$)/i.test(parsed.pathname)){
+    return "signed_out";
+  }
+
+  const match=parsed.pathname.match(/^\/courses\/(\d+)\/assignments\/(\d+)\/?$/);
+  if(!match||match[1]!==assignment.courseId||match[2]!==assignment.assignmentId){
+    return "unexpected";
+  }
+  return "assignment";
+}
+
 function errorResult(
   assignment:CanvasAssignmentLocator,
   checkedAt:string,
@@ -59,8 +81,19 @@ export async function fetchCanvasSubmissionStatuses(
           results[index]=errorResult(assignment,checkedAt,"CANVAS_NETWORK_ERROR");
           continue;
         }
+        const finalUrl=response.url||url;
+        const finalUrlKind=classifyFinalCanvasUrl(finalUrl,assignment);
+        if(finalUrlKind==="signed_out"){
+          results[index]=errorResult(assignment,checkedAt,"CANVAS_SIGNED_OUT");
+          continue;
+        }
+        if(finalUrlKind==="unexpected"){
+          results[index]=errorResult(assignment,checkedAt,"UNRECOGNIZED_STATUS");
+          continue;
+        }
+
         const html=await response.text();
-        const extracted=extractCanvasSubmissionStatus(html,response.url||url,checkedAt);
+        const extracted=extractCanvasSubmissionStatus(html,finalUrl,checkedAt);
         results[index]={
           ...assignment,
           state:extracted.state,
