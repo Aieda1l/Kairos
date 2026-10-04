@@ -111,19 +111,17 @@ beforeEach(()=>{
   pingKairosExtension.mockReset().mockResolvedValue({extensionVersion:"0.2.0",canvasTabDetected:true});
   syncExtensionBatch.mockReset();
   vi.unstubAllGlobals();
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-10-04T06:00:00.000Z"));
+  vi.useRealTimers();
 });
 
 describe("SubmissionStatusProvider",()=>{
   it("pings the Firefox extension and does not auto-sync fresh status",async()=>{
     installFetch(1);
     render(<SubmissionStatusProvider enabled initialSyncState={{
-      ...initialState,lastSuccessfulAt:"2026-10-04T05:50:00.000Z",
+      ...initialState,lastSuccessfulAt:new Date(Date.now()-10*60*1000).toISOString(),
     }}><Consumer/></SubmissionStatusProvider>);
-    await vi.runAllTimersAsync();
-    expect(pingKairosExtension).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("detected")).toHaveTextContent("true");
+    await waitFor(()=>expect(pingKairosExtension).toHaveBeenCalledTimes(1));
+    await waitFor(()=>expect(screen.getByTestId("detected")).toHaveTextContent("true"));
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -131,7 +129,6 @@ describe("SubmissionStatusProvider",()=>{
     const {started,calls}=installFetch(1);
     syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
     render(<StrictMode><SubmissionStatusProvider enabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider></StrictMode>);
-    await vi.runAllTimersAsync();
     await waitFor(()=>expect(calls.complete).toBe(1));
     expect(calls.start).toBe(1);
     expect(syncExtensionBatch).toHaveBeenCalledTimes(1);
@@ -139,21 +136,20 @@ describe("SubmissionStatusProvider",()=>{
   });
 
   it("manual sync bypasses freshness",async()=>{
-    const user=userEvent.setup({advanceTimers:vi.advanceTimersByTime});
+    const user=userEvent.setup();
     const {started,calls}=installFetch(1);
     syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
     render(<SubmissionStatusProvider enabled initialSyncState={{
-      ...initialState,lastSuccessfulAt:"2026-10-04T05:59:00.000Z",
+      ...initialState,lastSuccessfulAt:new Date(Date.now()-60*1000).toISOString(),
     }}><Consumer/></SubmissionStatusProvider>);
-    await vi.runAllTimersAsync();
+    await waitFor(()=>expect(pingKairosExtension).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button",{name:"Manual status sync"}));
-    await vi.runAllTimersAsync();
+    await waitFor(()=>expect(calls.complete).toBe(1));
     expect(calls.start).toBe(1);
-    expect(calls.complete).toBe(1);
   });
 
   it("sends more than 100 assignments in sequential 100/100/5 chunks",async()=>{
-    const user=userEvent.setup({advanceTimers:vi.advanceTimersByTime});
+    const user=userEvent.setup();
     const {started}=installFetch(205);
     let active=0,maxActive=0;
     syncExtensionBatch.mockImplementation(async(request)=>{
@@ -164,7 +160,7 @@ describe("SubmissionStatusProvider",()=>{
     });
     render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
     await user.click(screen.getByRole("button",{name:"Manual status sync"}));
-    await vi.runAllTimersAsync();
+    await waitFor(()=>expect(syncExtensionBatch).toHaveBeenCalledTimes(3));
     expect(syncExtensionBatch.mock.calls.map(([request])=>request.assignments.length)).toEqual([100,100,5]);
     expect(maxActive).toBe(1);
     expect(started.assignments).toHaveLength(205);
@@ -176,7 +172,7 @@ describe("SubmissionStatusProvider",()=>{
     ["CANVAS_TAB_UNAVAILABLE","Open Canvas in Firefox, then try again."],
     ["CANVAS_SIGNED_OUT","Sign in to Canvas, then retry."],
   ] as const)("records %s through completion without erasing prior success",async(code,message)=>{
-    const user=userEvent.setup({advanceTimers:vi.advanceTimersByTime});
+    const user=userEvent.setup();
     const {calls}=installFetch(2,{
       updatedCount:0,
       failedCount:2,
@@ -188,8 +184,7 @@ describe("SubmissionStatusProvider",()=>{
       ...initialState,lastSuccessfulAt:"2026-10-04T05:00:00.000Z",
     }}><Consumer/></SubmissionStatusProvider>);
     await user.click(screen.getByRole("button",{name:"Manual status sync"}));
-    await vi.runAllTimersAsync();
-    expect(calls.complete).toBe(1);
+    await waitFor(()=>expect(calls.complete).toBe(1));
     expect(calls.completeBody[0]).toMatchObject({batchErrorCode:code,results:[]});
     expect(screen.getByTestId("last-success")).toHaveTextContent("2026-10-04T05:00:00.000Z");
     expect(screen.getByTestId("message")).toHaveTextContent(message);
@@ -197,7 +192,7 @@ describe("SubmissionStatusProvider",()=>{
   });
 
   it("refreshes server-rendered data after a partial completion that advances last success",async()=>{
-    const user=userEvent.setup({advanceTimers:vi.advanceTimersByTime});
+    const user=userEvent.setup();
     const {started}=installFetch(2,{updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC"});
     syncExtensionBatch.mockResolvedValue({
       ...batchResult(started.assignments),
@@ -209,8 +204,7 @@ describe("SubmissionStatusProvider",()=>{
     });
     render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
     await user.click(screen.getByRole("button",{name:"Manual status sync"}));
-    await vi.runAllTimersAsync();
-    expect(screen.getByTestId("phase")).toHaveTextContent("partial");
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
