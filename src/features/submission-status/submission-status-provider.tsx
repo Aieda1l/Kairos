@@ -288,9 +288,18 @@ export function SubmissionStatusProvider({
 
   useEffect(() => {
     if (autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    if (!enabled || !isSubmissionStatusStale(syncState.lastSuccessfulAt)) return;
-    void syncNow();
+    if (!enabled || !isSubmissionStatusStale(syncState.lastSuccessfulAt)) {
+      autoStartedRef.current = true;
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (autoStartedRef.current) return;
+      autoStartedRef.current = true;
+      void syncNow();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [enabled, syncNow, syncState.lastSuccessfulAt]);
 
   return (
