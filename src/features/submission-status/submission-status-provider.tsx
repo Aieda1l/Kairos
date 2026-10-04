@@ -47,7 +47,7 @@ const completeResponseSchema = z
     lastAttemptedAt: z.string().datetime().nullable(),
     lastSuccessfulAt: z.string().datetime().nullable(),
     lastErrorCode: submissionSyncErrorCodeSchema.nullable(),
-    failureDiagnostics: z.array(z.object({code: submissionFailureDiagnosticSchema, count: z.number().int().positive()}).strict()),
+    failureDiagnostics: z.array(z.object({code: submissionFailureDiagnosticSchema, count: z.number().int().positive()}).strict()).default([]),
   })
   .strict();
 
