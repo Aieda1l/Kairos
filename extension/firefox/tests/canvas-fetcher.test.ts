@@ -86,6 +86,20 @@ describe("fetchCanvasSubmissionStatuses",()=>{
     expect(JSON.stringify(serverError)).not.toContain("private body");
   });
 
+  it("reports the exact safe HTTP status for unexpected HTTP failures",async()=>{
+    const unexpected=await fetchCanvasSubmissionStatuses(
+      request(),
+      (async()=>response("private body",418,"https://canvas.uw.edu/courses/999/assignments/4242")) as typeof fetch,
+      ()=>new Date("2026-10-04T06:00:00.000Z"),
+    );
+    expect(unexpected.results[0]).toMatchObject({
+      errorCode:"CANVAS_NETWORK_ERROR",
+      diagnosticCode:"HTTP_OTHER",
+      httpStatus:418,
+    });
+    expect(JSON.stringify(unexpected)).not.toContain("private body");
+  });
+
   it("maps signed-out, login, and network failures without leaking page HTML",async()=>{
     const unauthorized=await fetchCanvasSubmissionStatuses(request(),(async()=>response("",401)) as typeof fetch,()=>new Date("2026-10-04T06:00:00.000Z"));
     expect(unauthorized.results[0].errorCode).toBe("CANVAS_SIGNED_OUT");
