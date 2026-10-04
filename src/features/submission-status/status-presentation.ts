@@ -10,6 +10,14 @@ export const submissionStatusLabels={
 
 export type SubmissionVisualState=keyof typeof submissionStatusLabels;
 
+const statusClasses:Record<SubmissionVisualState,string>={
+  unknown:"border-[var(--status-unavailable-border)] bg-[var(--status-unavailable-bg)] text-[var(--status-unavailable-fg)]",
+  not_submitted:"border-[var(--status-not-submitted-border)] bg-[var(--status-not-submitted-bg)] text-[var(--status-not-submitted-fg)]",
+  submitted:"border-[var(--status-submitted-border)] bg-[var(--status-submitted-bg)] text-[var(--status-submitted-fg)]",
+  graded:"border-[var(--status-graded-border)] bg-[var(--status-graded-bg)] text-[var(--status-graded-fg)]",
+  excused:"border-[var(--status-excused-border)] bg-[var(--status-excused-bg)] text-[var(--status-excused-fg)]",
+};
+
 export function submissionVisualState(
   status:AssignmentSubmissionStatus|null,
 ):SubmissionVisualState{
@@ -29,12 +37,7 @@ export function getSubmissionStatusLabel(
 export function submissionStatusClasses(
   status:AssignmentSubmissionStatus|null,
 ):string{
-  const state=submissionVisualState(status);
-  return [
-    "border-[var(--status-"+state.replace("_","-")+"-border)]",
-    "bg-[var(--status-"+state.replace("_","-")+"-bg)]",
-    "text-[var(--status-"+state.replace("_","-")+"-fg)]",
-  ].join(" ");
+  return statusClasses[submissionVisualState(status)];
 }
 
 export function isResolvedSubmissionStatus(
