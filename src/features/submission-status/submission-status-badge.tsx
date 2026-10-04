@@ -1,27 +1,19 @@
 import { Badge } from "@/components/ui/badge";
 import type { AssignmentSubmissionStatus } from "@/lib/submission-status/types";
+import {
+  getSubmissionStatusLabel,
+  submissionStatusClasses,
+  submissionVisualState,
+} from "./status-presentation";
 
-const primaryLabels={
-  unknown:"Status unavailable",
-  not_submitted:"Not submitted",
-  submitted:"Submitted",
-  graded:"Graded",
-  excused:"Excused",
-} as const;
-
-export function getSubmissionStatusLabel(status:AssignmentSubmissionStatus|null):string {
-  if(!status) return "Status unavailable";
-  const parts:string[]=[primaryLabels[status.state]];
-  if(status.isLate) parts.push("Late");
-  if(status.isMissing) parts.push("Missing");
-  return parts.join(" · ");
-}
+export { getSubmissionStatusLabel } from "./status-presentation";
 
 export function SubmissionStatusBadge({status}:{status:AssignmentSubmissionStatus|null}){
-  const unavailable=!status||status.state==="unknown";
+  const state=submissionVisualState(status);
   return (
     <Badge
-      className={unavailable?"text-[var(--muted)]":undefined}
+      data-submission-state={state}
+      className={submissionStatusClasses(status)}
       title={status?.checkedAt?"Checked "+new Date(status.checkedAt).toLocaleString():undefined}
     >
       {getSubmissionStatusLabel(status)}

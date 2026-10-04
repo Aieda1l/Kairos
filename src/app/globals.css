@@ -12,6 +12,21 @@
   --accent-foreground: #ffffff;
   --danger: #b42318;
   --success: #28764a;
+  --status-not-submitted-bg: #fef2f2;
+  --status-not-submitted-border: #fecaca;
+  --status-not-submitted-fg: #991b1b;
+  --status-submitted-bg: #eff6ff;
+  --status-submitted-border: #bfdbfe;
+  --status-submitted-fg: #1d4ed8;
+  --status-graded-bg: #f0fdf4;
+  --status-graded-border: #bbf7d0;
+  --status-graded-fg: #166534;
+  --status-excused-bg: #f5f3ff;
+  --status-excused-border: #ddd6fe;
+  --status-excused-fg: #6d28d9;
+  --status-unavailable-bg: #f4f4f5;
+  --status-unavailable-border: #d4d4d8;
+  --status-unavailable-fg: #52525b;
   --radius: 0.75rem;
 }
 
@@ -27,6 +42,21 @@
   --accent-foreground: #ffffff;
   --danger: #ff8a80;
   --success: #72c69a;
+  --status-not-submitted-bg: #3f1515;
+  --status-not-submitted-border: #7f1d1d;
+  --status-not-submitted-fg: #fecaca;
+  --status-submitted-bg: #172554;
+  --status-submitted-border: #1d4ed8;
+  --status-submitted-fg: #bfdbfe;
+  --status-graded-bg: #052e16;
+  --status-graded-border: #166534;
+  --status-graded-fg: #bbf7d0;
+  --status-excused-bg: #2e1065;
+  --status-excused-border: #6d28d9;
+  --status-excused-fg: #ddd6fe;
+  --status-unavailable-bg: #27272a;
+  --status-unavailable-border: #52525b;
+  --status-unavailable-fg: #d4d4d8;
 }
 
 * { box-sizing: border-box; }
