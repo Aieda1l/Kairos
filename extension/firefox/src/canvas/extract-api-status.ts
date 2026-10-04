@@ -59,12 +59,26 @@ export function extractCanvasApiSubmissionStatus(
     ? submission.workflow_state
     : null;
   const excused=submission.excused===true;
+  const submittedValue=typeof submission.submitted_at==="string"
+    ? submission.submitted_at
+    : null;
+  const submittedAt=submittedValue&&Number.isFinite(Date.parse(submittedValue))
+    ? new Date(submittedValue).toISOString()
+    : null;
+  const postedValue=typeof submission.posted_at==="string"
+    ? submission.posted_at
+    : null;
+  const gradePublished=Boolean(postedValue&&Number.isFinite(Date.parse(postedValue)));
 
   let state:SubmissionStatusResultV1["state"];
   if(excused){
     state="excused";
-  }else if(workflowState==="graded"){
+  }else if(workflowState==="graded"&&gradePublished){
     state="graded";
+  }else if(workflowState==="graded"&&submittedAt){
+    state="submitted";
+  }else if(workflowState==="graded"){
+    return unavailable(assignment,checkedAt);
   }else if(workflowState==="submitted"||workflowState==="pending_review"){
     state="submitted";
   }else if(workflowState==="unsubmitted"){
@@ -72,13 +86,6 @@ export function extractCanvasApiSubmissionStatus(
   }else{
     return unavailable(assignment,checkedAt,"UNRECOGNIZED_STATUS");
   }
-
-  const submittedValue=typeof submission.submitted_at==="string"
-    ? submission.submitted_at
-    : null;
-  const submittedAt=submittedValue&&Number.isFinite(Date.parse(submittedValue))
-    ? new Date(submittedValue).toISOString()
-    : null;
 
   return {
     ...assignment,
