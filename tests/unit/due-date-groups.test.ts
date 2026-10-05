@@ -56,3 +56,41 @@ it("keeps resolved Canvas work out of Upcoming regardless of due date",()=>{
   expect(visible).not.toContain("graded");
   expect(visible).not.toContain("excused");
 });
+
+
+it("keeps undated Ed lessons out of Upcoming without changing Canvas no-due-date behavior",()=>{
+  const checkedAt="2026-10-05T12:00:00.000Z";
+  const edDated:Assignment={
+    ...assignment("ed-dated","unknown"),
+    source:"ed",
+    dueAt:"2026-10-08T05:00:00.000Z",
+    submissionStatus:{state:"unknown",isLate:false,isMissing:false,submittedAt:null,checkedAt,extractorVersion:"ed-api-v1"},
+  };
+  const edUndated:Assignment={
+    ...edDated,
+    id:"ed-undated",
+    externalId:"ed-undated",
+    dueAt:null,
+  };
+  const edCompleted:Assignment={
+    ...edDated,
+    id:"ed-completed",
+    externalId:"ed-completed",
+    submissionStatus:{...edDated.submissionStatus!,state:"submitted"},
+  };
+  const canvasUndated:Assignment={
+    ...assignment("canvas-undated","unknown"),
+    dueAt:null,
+  };
+
+  const groups=groupUpcoming(
+    [edDated,edUndated,edCompleted,canvasUndated],
+    new Date("2026-10-05T12:00:00.000Z"),
+    "America/Los_Angeles",
+  );
+  const visible=Object.values(groups).flat().map(item=>item.id);
+  expect(visible).toContain("ed-dated");
+  expect(visible).not.toContain("ed-undated");
+  expect(visible).not.toContain("ed-completed");
+  expect(groups["no-due-date"].map(item=>item.id)).toEqual(["canvas-undated"]);
+});
