@@ -38,11 +38,40 @@ describe("Gradescope protocol",()=>{
   it("accepts strict normalized course discovery and enforces the 50-course limit",()=>{
     expect(gradescopeDiscoverResultV1Schema.safeParse({
       protocolVersion:1,requestId,courses:[course],errorCode:null,
+      discoveryDiagnostics:{
+        accountRootDetected:true,
+        createCourseControlDetected:false,
+        headings:{courses:1,studentCourses:0,instructorCourses:0,other:0},
+        courseListDescendantCount:1,
+        courseListDirectCount:1,
+        termDescendantCount:1,
+        courseAnchorDescendantCount:1,
+        shortNameNodeCount:1,
+        fullNameNodeCount:1,
+      },
     }).success).toBe(true);
     expect(gradescopeDiscoverResultV1Schema.safeParse({
       protocolVersion:1,requestId,
       courses:Array.from({length:51},(_,i)=>({...course,courseId:String(i+1)})),
       errorCode:null,
+    }).success).toBe(false);
+  });
+
+  it("rejects identifying text inside discovery diagnostics",()=>{
+    expect(gradescopeDiscoverResultV1Schema.safeParse({
+      protocolVersion:1,requestId,courses:[],errorCode:null,
+      discoveryDiagnostics:{
+        accountRootDetected:true,
+        createCourseControlDetected:false,
+        headings:{courses:1,studentCourses:0,instructorCourses:0,other:0},
+        courseListDescendantCount:1,
+        courseListDirectCount:1,
+        termDescendantCount:1,
+        courseAnchorDescendantCount:1,
+        shortNameNodeCount:1,
+        fullNameNodeCount:1,
+        headingText:"My private course",
+      },
     }).success).toBe(false);
   });
 
