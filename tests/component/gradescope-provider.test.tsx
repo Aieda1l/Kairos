@@ -80,7 +80,13 @@ function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
 
-function installFetch({initialCourse=course(false)}:{initialCourse?:SourceCourse}={}){
+function installFetch({
+  initialCourse=course(false),
+  syncErrorCode=null,
+}:{
+  initialCourse?:SourceCourse;
+  syncErrorCode?:GradescopeSyncErrorCode|null;
+}={}){
   const calls={discoverStart:0,discoverComplete:0,selection:0,syncStart:0,syncComplete:0};
   vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
     const url=String(input);
@@ -107,11 +113,11 @@ function installFetch({initialCourse=course(false)}:{initialCourse?:SourceCourse
         insertedCount:1,
         updatedCount:0,
         statusUpdatedCount:1,
-        failedCourseCount:0,
+        failedCourseCount:syncErrorCode?1:0,
         ignoredStale:0,
         lastAttemptedAt:"2026-10-05T05:00:00.000Z",
-        lastSuccessfulAt:"2026-10-05T05:00:01.000Z",
-        lastErrorCode:null,
+        lastSuccessfulAt:syncErrorCode?null:"2026-10-05T05:00:01.000Z",
+        lastErrorCode:syncErrorCode,
         failureDiagnostics:[],
         failureHttpStatuses:[],
       });
@@ -206,6 +212,33 @@ describe("GradescopeProvider",()=>{
     </GradescopeProvider>);
     await new Promise(resolve=>setTimeout(resolve,0));
     expect(calls.syncStart).toBe(0);
+  });
+
+  it("shows an actionable signed-out message when Gradescope reports an authenticated-session failure",async()=>{
+    const user=userEvent.setup();
+    const calls=installFetch({initialCourse:course(true),syncErrorCode:"GRADESCOPE_SIGNED_OUT"});
+    syncGradescopeExtensionBatch.mockResolvedValue({
+      protocolVersion:1,
+      requestId,
+      courses:[{
+        courseId:"123",
+        checkedAt:"2026-10-05T05:00:00.000Z",
+        assignments:[],
+        errorCode:"GRADESCOPE_SIGNED_OUT",
+        parseDiagnosticCounts:[],
+      }],
+      errorCode:"GRADESCOPE_SIGNED_OUT",
+    });
+
+    render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={{
+      ...emptyState,lastSuccessfulAt:new Date().toISOString(),
+    }}>
+      <Consumer/>
+    </GradescopeProvider>);
+
+    await user.click(screen.getByRole("button",{name:"Sync"}));
+    await waitFor(()=>expect(calls.syncComplete).toBe(1));
+    expect(screen.getByTestId("message")).toHaveTextContent("Sign in to Gradescope, then retry.");
   });
 
   it("re-pings and succeeds on manual retry after Gradescope tab was missing",async()=>{
