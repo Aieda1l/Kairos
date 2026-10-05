@@ -238,6 +238,67 @@ describe("GradescopeProvider",()=>{
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("splits a variable number of enabled courses into 20-course sync batches",async()=>{
+    const user=userEvent.setup();
+    const courseIds=Array.from({length:21},(_,index)=>String(index+1));
+    const manyCourses=courseIds.map((externalCourseId,index)=>({
+      ...course(true),
+      id:`course-local-${externalCourseId}`,
+      externalCourseId,
+      shortName:`Course ${index+1}`,
+      fullName:`Course ${index+1}`,
+    }));
+    vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>{
+      const url=String(input);
+      if(url.endsWith("/sync/start")){
+        return json({protocolVersion:1,requestId,courseIds,maxCourseBatchSize:20});
+      }
+      if(url.endsWith("/sync/complete")){
+        return json({
+          requestId,
+          insertedCount:0,
+          updatedCount:0,
+          statusUpdatedCount:0,
+          failedCourseCount:0,
+          ignoredStale:0,
+          lastAttemptedAt:"2026-10-05T05:00:00.000Z",
+          lastSuccessfulAt:"2026-10-05T05:00:01.000Z",
+          lastErrorCode:null,
+          failureDiagnostics:[],
+          failureHttpStatuses:[],
+          failureErrorCodes:[],
+          failureStructures:[],
+        });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+    syncGradescopeExtensionBatch.mockImplementation(async input=>({
+      protocolVersion:1,
+      requestId:input.requestId,
+      courses:input.courseIds.map(courseId=>({
+        courseId,
+        checkedAt:"2026-10-05T05:00:00.000Z",
+        assignments:[],
+        errorCode:null,
+        parseDiagnosticCounts:[],
+      })),
+      errorCode:null,
+    }));
+
+    render(<GradescopeProvider
+      connection={connection}
+      initialCourses={manyCourses}
+      initialSyncState={{...emptyState,lastSuccessfulAt:new Date().toISOString()}}
+    >
+      <Consumer/>
+    </GradescopeProvider>);
+
+    await user.click(screen.getByRole("button",{name:"Sync"}));
+    await waitFor(()=>expect(syncGradescopeExtensionBatch).toHaveBeenCalledTimes(2));
+    expect(syncGradescopeExtensionBatch.mock.calls[0]?.[0].courseIds).toHaveLength(20);
+    expect(syncGradescopeExtensionBatch.mock.calls[1]?.[0].courseIds).toHaveLength(1);
+  });
+
   it("does not auto-sync when fresh or when no course is enabled",async()=>{
     const calls=installFetch();
     const fresh={...emptyState,lastSuccessfulAt:new Date(Date.now()-5*60*1000).toISOString()};
