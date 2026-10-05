@@ -174,6 +174,44 @@ describe("GradescopeProvider",()=>{
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("surfaces privacy-safe structure diagnostics when discovery finds zero courses",async()=>{
+    const user=userEvent.setup();
+    discoverGradescopeExtension.mockResolvedValueOnce({
+      protocolVersion:1,
+      requestId,
+      courses:[],
+      errorCode:null,
+      discoveryDiagnostics:{
+        accountRootDetected:true,
+        createCourseControlDetected:false,
+        headings:{courses:0,studentCourses:0,instructorCourses:0,other:1},
+        courseListDescendantCount:0,
+        courseListDirectCount:0,
+        termDescendantCount:0,
+        courseAnchorDescendantCount:0,
+        courseHrefContainsCount:0,
+        shortNameNodeCount:0,
+        fullNameNodeCount:0,
+        reactPropsNodeCount:3,
+      },
+    });
+    vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>{
+      const url=String(input);
+      if(url.endsWith("/discover/start"))return json({requestId,protocolVersion:1});
+      if(url.endsWith("/discover/complete"))return json({connection,courses:[]});
+      throw new Error(`Unexpected fetch ${url}`);
+    }));
+
+    render(<GradescopeProvider connection={connection} initialCourses={[]} initialSyncState={emptyState}>
+      <Consumer/>
+    </GradescopeProvider>);
+
+    await user.click(screen.getByRole("button",{name:"Discover"}));
+    await waitFor(()=>expect(screen.getByTestId("message")).toHaveTextContent("Discovery diagnostics:"));
+    expect(screen.getByTestId("message")).toHaveTextContent("root=yes");
+    expect(screen.getByTestId("message")).toHaveTextContent("reactProps=3");
+  });
+
   it("saves enabled course selection locally",async()=>{
     const user=userEvent.setup();
     const calls=installFetch();
