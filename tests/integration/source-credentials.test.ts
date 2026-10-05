@@ -11,3 +11,17 @@ it("stores a Canvas credential outside public source models", () => {
   expect(repo.getCanvasFeedUrl("canvas-1")).toBe("https://canvas.example.edu/private.ics");
   db.close();
 });
+
+
+it("stores an Ed credential outside public source models", () => {
+  const db = openDatabase(":memory:"); migrate(db);
+  const connection = new SourceConnectionRepository(db).upsertEd("Ed");
+  const repo = new SourceCredentialRepository(db);
+  const token = "fixture-ed-token-never-echo";
+  repo.setEdApiToken(connection.id, token);
+  expect(repo.getEdApiToken(connection.id)).toBe(token);
+  expect(connection.kind).toBe("ed");
+  expect(JSON.stringify(connection)).not.toContain(token);
+  expect(connection).not.toHaveProperty("edApiToken");
+  db.close();
+});
