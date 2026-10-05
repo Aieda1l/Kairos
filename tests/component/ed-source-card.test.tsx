@@ -22,11 +22,13 @@ const course:SourceCourse={
   id:"local-123",sourceConnectionId:"ed-connection",externalCourseId:"123",shortName:"CSE 331",
   fullName:"Software Design",term:"Autumn",year:"2026",enabled:false,firstSeenAt:"",lastSeenAt:"",
 };
+const connectedCourses=[course];
+const emptyCourses:SourceCourse[]=[];
 
 vi.mock("@/features/ed/ed-provider",()=>({
   useEd:()=>({
     connection:state.connected?connection:null,
-    courses:state.connected?[course]:[],
+    courses:state.connected?connectedCourses:emptyCourses,
     phase:"idle",
     message:"",
     lastAttemptedAt:null,
