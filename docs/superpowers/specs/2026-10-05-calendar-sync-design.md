@@ -139,7 +139,9 @@ Apple does not expose an equivalent public Google- or Graph-style Calendar REST 
 The iCloud card requests only:
 
 - Apple Account email / CalDAV username;
-- an Apple-supported app authorization or app-specific password, depending on the account/app flow available to the user.
+- an Apple app-specific password.
+
+Milestone 5 uses the app-specific-password path because Apple documents it for third-party apps that do not implement Apple's direct account-data authorization flow. Kairos does not assume an undocumented Apple OAuth flow.
 
 The credential is stored only in local SQLite and is never rendered back after save.
 
@@ -412,7 +414,7 @@ Milestone 5 keeps the existing Kairos privacy posture:
 - no password collection for Google or Microsoft;
 - OAuth browser sign-in happens directly with the provider;
 - OAuth refresh tokens stay in local server-side SQLite;
-- iCloud app authorization/app-specific credentials stay in local server-side SQLite;
+- iCloud app-specific passwords stay in local server-side SQLite;
 - credentials are **not encrypted at rest** by Kairos in this milestone;
 - credentials never appear in rendered connection payloads;
 - provider access tokens, refresh tokens, app passwords, authorization codes, cookie values, request headers, or raw authenticated response bodies must not appear in logs, errors, fixtures, tests, screenshots, or committed files;
@@ -422,7 +424,9 @@ Milestone 5 keeps the existing Kairos privacy posture:
 
 Disconnect removes the local credential and disables/removes the local destination connection.
 
-The UI should give the user a separate explicit choice to remove the remote **Kairos** calendar. Disconnecting should not silently delete remote events/calendar data.
+Disconnecting must not silently delete remote events/calendar data.
+
+Kairos offers a provider-safe **Remove generated events** action before disconnecting. It does not broaden Google OAuth permissions merely to delete the secondary calendar object. With the narrow Google app-created-calendar scope, an empty secondary **Kairos** calendar may remain for the user to delete in Google Calendar settings.
 
 ## 12. Failure behavior
 
@@ -476,7 +480,7 @@ The Google card explains that Kairos requests access to the calendar it creates.
 
 The Microsoft card warns that Microsoft exposes calendar write access through the broader `Calendars.ReadWrite` delegated permission.
 
-The Apple card explains the app-specific authorization/password requirement and that the secret stays on this computer.
+The Apple card explains the app-specific-password requirement and that the secret stays on this computer.
 
 The cards never render stored refresh tokens or CalDAV secrets.
 
@@ -502,7 +506,7 @@ GET  /api/calendars
 POST /api/calendars/:id/sync
 POST /api/calendars/sync-all
 POST /api/calendars/:id/disconnect
-POST /api/calendars/:id/remove-remote-calendar
+POST /api/calendars/:id/remove-events
 ```
 
 OAuth `start` endpoints return/perform a provider authorization redirect and do not expose PKCE verifier material.
@@ -600,7 +604,7 @@ Verify the same behavior against Outlook/Microsoft 365 and confirm the consent s
 
 Verify:
 
-- supported Apple authorization/app-specific credential flow;
+- Apple Account email + app-specific-password flow;
 - DAV discovery;
 - writable Kairos calendar;
 - create/update/delete/recreate behavior;
@@ -615,11 +619,11 @@ README/provider setup docs must explain:
 - which local OAuth app registrations/config values are needed;
 - that Google/Microsoft sign-in happens at the provider;
 - the exact permission rationale;
-- how iCloud authorization/app-specific credentials work;
+- how to create and revoke an iCloud app-specific password;
 - that local SQLite credential storage is not encrypted at rest;
 - that Kairos must be running to publish new upstream changes;
 - how to disconnect without deleting remote data;
-- how to explicitly remove the remote Kairos calendar.
+- how to remove generated events and, where needed, delete the empty calendar in the provider UI.
 
 No real client secret, refresh token, app password, or user credential is committed.
 
@@ -649,7 +653,7 @@ These can be separate future milestones if the local-first assignment-to-calenda
 - **Calendars:** dedicated Kairos calendar per destination.
 - **Google:** native Calendar API + PKCE + app-created-calendar scope.
 - **Microsoft:** Graph + PKCE public client + delegated `Calendars.ReadWrite`.
-- **Apple:** CalDAV preset with fixed Apple origin and app-specific authorization/credential flow.
+- **Apple:** CalDAV preset with fixed Apple origin and an app-specific password.
 - **Idempotency:** provider-specific stable create keys plus persistent event links.
 - **Deadline event:** exact due timestamp, 15-minute transparent marker.
 - **Undated assignment:** no external event; remove an existing generated event when the assignment explicitly becomes undated.
