@@ -25,6 +25,25 @@ export const gradescopeDiagnosticCodeSchema=z.enum([
   "MISSING_STABLE_ID",
 ]);
 
+export const gradescopeDiscoveryDiagnosticsV1Schema=z.object({
+  accountRootDetected:z.boolean(),
+  createCourseControlDetected:z.boolean(),
+  headings:z.object({
+    courses:z.number().int().nonnegative(),
+    studentCourses:z.number().int().nonnegative(),
+    instructorCourses:z.number().int().nonnegative(),
+    other:z.number().int().nonnegative(),
+  }).strict(),
+  courseListDescendantCount:z.number().int().nonnegative(),
+  courseListDirectCount:z.number().int().nonnegative(),
+  termDescendantCount:z.number().int().nonnegative(),
+  courseAnchorDescendantCount:z.number().int().nonnegative(),
+  courseHrefContainsCount:z.number().int().nonnegative(),
+  shortNameNodeCount:z.number().int().nonnegative(),
+  fullNameNodeCount:z.number().int().nonnegative(),
+  reactPropsNodeCount:z.number().int().nonnegative(),
+}).strict();
+
 export const gradescopeCourseV1Schema=z.object({
   courseId:decimalIdSchema,
   shortName:z.string().trim().min(1).max(160).nullable(),
@@ -64,6 +83,7 @@ export const gradescopeDiscoverResultV1Schema=z.object({
   errorCode:gradescopeSyncErrorCodeSchema.nullable().optional(),
   diagnosticCode:gradescopeDiagnosticCodeSchema.optional(),
   httpStatus:z.number().int().min(100).max(599).optional(),
+  discoveryDiagnostics:gradescopeDiscoveryDiagnosticsV1Schema.optional(),
 }).strict();
 
 export const gradescopeSyncRequestV1Schema=z.object({
@@ -156,6 +176,7 @@ export const gradescopeBridgeResponseV1Schema=z.discriminatedUnion("type",[
   gradescopeErrorBridgeResponseV1Schema,
 ]);
 
+export type GradescopeDiscoveryDiagnosticsV1=z.infer<typeof gradescopeDiscoveryDiagnosticsV1Schema>;
 export type GradescopeCourseV1=z.infer<typeof gradescopeCourseV1Schema>;
 export type GradescopeAssignmentV1=z.infer<typeof gradescopeAssignmentV1Schema>;
 export type GradescopeDiscoverRequestV1=z.infer<typeof gradescopeDiscoverRequestV1Schema>;
