@@ -43,10 +43,11 @@ export class SubmissionStatusRepository {
     failedCount:number,
     errorCode:SubmissionSyncErrorCode|null,
     completedAt:string,
+    successfulChecksOverride?:number,
   ):{updated:number;ignoredStale:number}{
     let updated=0;
     let ignoredStale=0;
-    let successfulChecks=0;
+    let successfulChecks=successfulChecksOverride??0;
     const belongs=this.db.prepare("SELECT id FROM assignments WHERE id=? AND source_connection_id=?");
     const existing=this.db.prepare("SELECT checked_at FROM assignment_submission_status WHERE assignment_id=?");
     const upsert=this.db.prepare(`
@@ -67,7 +68,7 @@ export class SubmissionStatusRepository {
       for(const result of results){
         if(result.errorCode) continue;
         if(!belongs.get(result.assignmentLocalId,sourceConnectionId)) continue;
-        successfulChecks++;
+        if(successfulChecksOverride===undefined) successfulChecks++;
         const current=existing.get(result.assignmentLocalId) as {checked_at:string}|undefined;
         if(current && current.checked_at>=result.checkedAt){
           ignoredStale++;
