@@ -16,6 +16,8 @@ describe("database schema", () => {
       "assignment_submission_status",
       "submission_status_sync",
     ]));
+    const credentialColumns = db.prepare("PRAGMA table_info(source_credentials)").all() as Array<{ name: string }>;
+    expect(credentialColumns.map((column) => column.name)).toContain("ed_api_token");
     const indexes = db.prepare("PRAGMA index_list(assignments)").all() as Array<{ name: string; unique: number }>;
     expect(indexes.some((index) => index.unique === 1 && index.name.includes("source_external"))).toBe(true);
     const timezone = db.prepare("SELECT value FROM app_settings WHERE key='timezone'").get() as { value: string };
