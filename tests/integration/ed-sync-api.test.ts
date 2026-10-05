@@ -13,6 +13,7 @@ let dbPath:string;
 beforeEach(()=>{
   dbPath=path.join(os.tmpdir(),`kairos-ed-sync-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
+  process.env.E2E_FIXTURES="0";
   resetDatabaseSingletonForTests();
 });
 afterEach(()=>{
