@@ -41,8 +41,8 @@ vi.mock("@/features/gradescope/gradescope-provider",()=>({
     extensionVersion:"0.3.0",
     gradescopeTabDetected:true,
     message:"",
-    lastAttemptedAt:null,
-    lastSuccessfulAt:null,
+    lastAttemptedAt:"2026-10-05T05:00:00.000Z",
+    lastSuccessfulAt:"2026-10-05T05:00:01.000Z",
     lastErrorCode:null,
     updatedCount:0,
     failedCount:0,
@@ -70,5 +70,7 @@ describe("GradescopeSourceCard",()=>{
 
     await user.click(screen.getByRole("button",{name:"Sync Gradescope"}));
     expect(syncNow).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Last attempted/i)).toBeVisible();
+    expect(screen.getByText(/Last successful/i)).toBeVisible();
   });
 });
