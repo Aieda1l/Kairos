@@ -1,7 +1,7 @@
 "use client";
 
+import { PROTOCOL_VERSION } from "@/lib/extension-protocol/submission-status";
 import {
-  PROTOCOL_VERSION,
   gradescopeBridgeResponseV1Schema,
   gradescopeDiscoverRequestV1Schema,
   gradescopeSyncRequestV1Schema,
