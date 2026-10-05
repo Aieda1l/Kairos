@@ -14,6 +14,7 @@ import { z } from "zod";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 import {
+  gradescopeAssignmentStructureDiagnosticsV1Schema,
   gradescopeSyncErrorCodeSchema,
   type GradescopeDiscoveryDiagnosticsV1,
   type GradescopeSyncErrorCode,
@@ -90,6 +91,14 @@ const syncCompleteSchema=z.object({
     status:z.number().int().min(100).max(599),
     count:z.number().int().positive(),
   }).strict()),
+  failureErrorCodes:z.array(z.object({
+    code:gradescopeSyncErrorCodeSchema,
+    count:z.number().int().positive(),
+  }).strict()).default([]),
+  failureStructures:z.array(z.object({
+    errorCode:gradescopeSyncErrorCodeSchema,
+    diagnostics:gradescopeAssignmentStructureDiagnosticsV1Schema,
+  }).strict()).default([]),
 }).strict();
 
 type Phase="idle"|"discovering"|"syncing"|"success"|"partial"|"error";
