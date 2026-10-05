@@ -71,7 +71,7 @@ export function extractGradescopeStudentCourses(html:string):GradescopeCourseV1[
 
     for(const term of Array.from(child.querySelectorAll(".courseList--term"))){
       const metadata=termMetadata(term);
-      for(const anchor of directChildren(term,"A")){
+      for(const anchor of Array.from(term.querySelectorAll('a[href^="/courses/"]'))){
         const href=anchor.getAttribute("href")??"";
         const match=href.match(/^\/courses\/(\d+)(?:[/?#]|$)/);
         if(!match)continue;
