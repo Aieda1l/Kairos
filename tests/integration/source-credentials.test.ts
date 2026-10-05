@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { openDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
 import { SourceCredentialRepository } from "@/lib/db/repositories/source-credentials";
+import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 it("stores a Canvas credential outside public source models", () => {
   const db = openDatabase(":memory:"); migrate(db);
   const now = new Date().toISOString();
