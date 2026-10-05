@@ -569,9 +569,9 @@ Live-account smoke showed that Ed Lessons were correctly imported but the generi
 
 - [x] Display Ed `completed`, `attempted`, and `unattempted` as **Completed**, **In progress**, and **Not started**.
 - [x] Keep generic submission-state handling for resolved-work logic and as a fallback only.
-- [x] Show Upcoming sync controls for every connected source: Canvas deadlines, Canvas submissions, Gradescope, and Ed.
-- [x] Hide controls for disconnected sources and disable course-based source sync until a course is enabled.
-- [x] Preserve Canvas deadline refresh feedback and per-source error messages.
+- [x] Replace the temporary per-source Upcoming sync cards with one primary purple **Sync All** button.
+- [x] Sync Canvas deadlines, Canvas submissions, Gradescope, and Ed from that one action when each source is connected/eligible.
+- [x] Keep source-specific failures isolated and surface only compact warning text below the button.
 
 ---
 
