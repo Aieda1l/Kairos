@@ -46,9 +46,15 @@ import { EdSourceCard } from "@/features/sources/ed-source-card";
 
 beforeEach(()=>{
   state.connected=false;
-  for(const fn of [testToken,connect,refreshCourses,saveEnabledCourses,syncNow])fn.mockClear();
+  connectedCourses[0]!.enabled=false;
+  for(const fn of [testToken,connect,refreshCourses,saveEnabledCourses,syncNow])fn.mockReset();
   testToken.mockResolvedValue(true);
   connect.mockResolvedValue(true);
+  refreshCourses.mockResolvedValue(undefined);
+  saveEnabledCourses.mockImplementation(async(ids:string[])=>{
+    connectedCourses[0]!.enabled=ids.includes("123");
+  });
+  syncNow.mockResolvedValue(undefined);
 });
 
 describe("EdSourceCard",()=>{
