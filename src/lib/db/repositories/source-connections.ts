@@ -55,6 +55,7 @@ export class SourceConnectionRepository{
 
   upsertCanvas(label:string):SourceConnection{return this.upsert("canvas",label);}
   upsertGradescope(label:string):SourceConnection{return this.upsert("gradescope",label);}
+  upsertEd(label:string):SourceConnection{return this.upsert("ed",label);}
 
   markSyncStarted(id:string,at:string){
     this.db.prepare("UPDATE source_connections SET last_sync_started_at=?,updated_at=? WHERE id=?").run(at,at,id);
