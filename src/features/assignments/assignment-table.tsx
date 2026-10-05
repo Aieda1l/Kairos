@@ -4,7 +4,7 @@ import type { Assignment } from "@/lib/assignments/types";
 import { AssignmentFilterBar, type FilterState } from "./assignment-filter-bar";
 import { SourceBadge } from "./source-badge";
 import { AssignmentDetailDialog } from "./assignment-detail-dialog";
-import { SubmissionStatusBadge } from "@/features/submission-status/submission-status-badge";
+import { AssignmentStatusBadge, assignmentStatusLabel } from "./assignment-status-badge";
 import { formatDueDate } from "@/lib/dates/format";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Select } from "@/components/ui/select";
@@ -24,8 +24,8 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
     )
     .sort((a,b)=>{
       if(sort==="status"){
-        const left=a.submissionStatus?.state??"unknown";
-        const right=b.submissionStatus?.state??"unknown";
+        const left=assignmentStatusLabel(a);
+        const right=assignmentStatusLabel(b);
         const comparison=left.localeCompare(right);
         if(comparison) return comparison;
       }
@@ -61,7 +61,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
                 <Td>{a.courseName}</Td>
                 <Td>{formatDueDate(a.dueAt,timeZone)}</Td>
                 <Td><SourceBadge source={a.source}/></Td>
-                <Td><SubmissionStatusBadge status={a.submissionStatus}/></Td>
+                <Td><AssignmentStatusBadge assignment={a}/></Td>
                 <Td>{a.gradeDisplay??"—"}</Td>
               </tr>
             ))}
