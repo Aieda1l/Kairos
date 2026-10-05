@@ -1,5 +1,5 @@
+import { PROTOCOL_VERSION } from "@/lib/extension-protocol/submission-status";
 import {
-  PROTOCOL_VERSION,
   gradescopeDiscoverResultV1Schema,
   gradescopeSyncResultV1Schema,
   type GradescopeCourseSyncResultV1,
