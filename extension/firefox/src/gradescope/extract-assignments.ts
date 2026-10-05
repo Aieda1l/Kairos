@@ -24,6 +24,19 @@ function directCells(row:Element):Element[]{
   return Array.from(row.children).filter(child=>child.tagName==="TH"||child.tagName==="TD");
 }
 
+function findAssignmentTable(document:Document,courseId:string):Element|null{
+  const tables=Array.from(document.querySelectorAll("table"));
+  return tables.find(table=>{
+    if(table.querySelector(
+      `a[href^="/courses/${courseId}/assignments/"], button.js-submitAssignment[data-assignment-id]`,
+    ))return true;
+    const header=normalizeText(
+      Array.from(table.querySelectorAll("thead th")).map(cell=>cell.textContent??"").join(" "),
+    );
+    return /\bassignment\b/i.test(header)&&/\b(status|points|grade)\b/i.test(header);
+  })??null;
+}
+
 function assignmentIdFromCell(cell:Element,courseId:string):string|null{
   const anchor=cell.querySelector("a[href]");
   if(anchor){
@@ -73,7 +86,7 @@ export function extractGradescopeStudentAssignments(
   checkedAt:string,
 ):{assignments:GradescopeAssignmentV1[];diagnostics:GradescopeParseDiagnostic[]}{
   const document=new DOMParser().parseFromString(html,"text/html");
-  const table=document.querySelector("main#course-show table, table");
+  const table=findAssignmentTable(document,courseId);
   if(!table)throw new GradescopeParseError("Gradescope course page structure was not recognized.");
 
   const assignments:GradescopeAssignmentV1[]=[];
