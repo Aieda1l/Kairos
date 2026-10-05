@@ -16,7 +16,7 @@ import {
 } from "@/lib/extension-protocol/gradescope";
 import type { AssignmentStatus } from "@/lib/assignments/types";
 import type { NormalizedAssignment } from "@/lib/assignments/normalize";
-import type { SubmissionStatusWrite, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
+import type { SubmissionStatusWrite } from "@/lib/submission-status/types";
 import {
   consumeGradescopeRequest,
   registerGradescopeRequest,
@@ -51,7 +51,7 @@ export type GradescopeSyncCompleteResponse={
   ignoredStale:number;
   lastAttemptedAt:string|null;
   lastSuccessfulAt:string|null;
-  lastErrorCode:SubmissionSyncErrorCode|null;
+  lastErrorCode:GradescopeSyncErrorCode|null;
   failureDiagnostics:Array<{code:GradescopeDiagnosticCode;count:number}>;
   failureHttpStatuses:Array<{status:number;count:number}>;
 };
@@ -134,7 +134,7 @@ function aggregateDiagnostics(courses:GradescopeSyncResultV1["courses"]){
 function overallErrorCode(
   courses:GradescopeSyncResultV1["courses"],
   batchErrorCode:GradescopeSyncErrorCode|null|undefined,
-):SubmissionSyncErrorCode|null{
+):GradescopeSyncErrorCode|null{
   const failed=courses.filter(course=>Boolean(course.errorCode));
   const successful=courses.length-failed.length;
   if(failed.length===0)return null;
@@ -150,7 +150,7 @@ function recordInvalid(
   now:Date,
 ):never{
   new SubmissionStatusRepository(db).applyCompletion(
-    registered.connectionId!,
+    connectionId,
     [],
     registered.courseIds.length,
     "INVALID_RESULT",
@@ -169,6 +169,7 @@ export function completeGradescopeSync(
   if(!registered||registered.kind!=="sync"||!registered.connectionId){
     throw new GradescopeSyncServiceError("SYNC_REQUEST_NOT_FOUND","This Gradescope sync request is no longer active.");
   }
+  const connectionId=registered.connectionId;
 
   if(input.batches.some(batch=>batch.requestId!==input.requestId)){
     return recordInvalid(db,registered,now);
@@ -179,14 +180,14 @@ export function completeGradescopeSync(
     const completedAt=now.toISOString();
     const statusRepo=new SubmissionStatusRepository(db);
     statusRepo.applyCompletion(
-      registered.connectionId,
+      connectionId,
       [],
       registered.courseIds.length,
       errorCode,
       completedAt,
       0,
     );
-    const state=statusRepo.getSyncState(registered.connectionId);
+    const state=statusRepo.getSyncState<GradescopeSyncErrorCode>(connectionId);
     return {
       requestId:input.requestId,
       insertedCount:0,
@@ -224,7 +225,7 @@ export function completeGradescopeSync(
   const completedAt=now.toISOString();
   const assignmentRepo=new AssignmentRepository(db);
   const statusRepo=new SubmissionStatusRepository(db);
-  const sourceCourses=new SourceCourseRepository(db).list(registered.connectionId);
+  const sourceCourses=new SourceCourseRepository(db).list(connectionId);
   const courseById=new Map(sourceCourses.map(course=>[course.externalCourseId,course]));
   const currentByExternalId=new Map(
     assignmentRepo.list({source:"gradescope"}).map(item=>[item.externalId,item]),
@@ -272,7 +273,7 @@ export function completeGradescopeSync(
   let ignoredStale=0;
 
   db.transaction(()=>{
-    const upserted=assignmentRepo.upsertMany(registered.connectionId,normalized,completedAt);
+    const upserted=assignmentRepo.upsertMany(connectionId,normalized,completedAt);
     insertedCount=upserted.inserted;
     updatedCount=upserted.updated;
 
@@ -294,7 +295,7 @@ export function completeGradescopeSync(
     });
 
     const applied=statusRepo.applyCompletion(
-      registered.connectionId!,
+      connectionId,
       writes,
       failedCourseCount,
       errorCode,
