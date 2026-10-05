@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -55,8 +57,10 @@ export function ConnectedSourceSyncControls({
   canvasConnected:boolean;
   canvasLastSyncCompletedAt:string|null;
 }){
+  const router=useRouter();
   const gradescope=useGradescope();
   const ed=useEd();
+  const [canvasMessage,setCanvasMessage]=useState("");
   const gradescopeHasEnabledCourse=gradescope.courses.some(course=>course.enabled);
   const edHasEnabledCourse=ed.courses.some(course=>course.enabled);
 
@@ -71,7 +75,11 @@ export function ConnectedSourceSyncControls({
             ?"Canvas deadlines · Synced "+new Date(canvasLastSyncCompletedAt).toLocaleString()
             :"Canvas deadlines · Not synced yet"}
         </p>
-        <SyncButton/>
+        <SyncButton
+          onComplete={()=>{setCanvasMessage("Canvas sync complete.");router.refresh();}}
+          onError={setCanvasMessage}
+        />
+        {canvasMessage&&<Alert className="basis-full">{canvasMessage}</Alert>}
       </div>
       <SubmissionStatusControl/>
     </>}
