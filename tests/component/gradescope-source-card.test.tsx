@@ -25,6 +25,16 @@ const courses:SourceCourse[]=[{
 
 vi.mock("@/features/gradescope/gradescope-provider",()=>({
   useGradescope:()=>({
+    connection:{
+      id:"connection-1",
+      kind:"gradescope",
+      label:"Gradescope",
+      enabled:true,
+      lastSyncStartedAt:null,
+      lastSyncCompletedAt:null,
+      lastSyncStatus:"never",
+      lastErrorCode:null,
+    },
     courses,
     phase:"idle",
     extensionDetected:true,
