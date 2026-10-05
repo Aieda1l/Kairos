@@ -6,8 +6,8 @@ import {AssignmentTable} from "@/features/assignments/assignment-table";
 import type {Assignment} from "@/lib/assignments/types";
 
 const items:Assignment[]=[
-  {id:"2",source:"canvas",externalId:"2",courseId:null,courseName:"MATH",title:"Later",dueAt:"2026-10-10T07:00:00Z",status:"unknown",sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"graded",isLate:false,isMissing:false,submittedAt:"2026-10-02T18:00:00Z",checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
-  {id:"1",source:"canvas",externalId:"1",courseId:null,courseName:"CSE",title:"Soon",dueAt:"2026-10-05T07:00:00Z",status:"pending",sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:false,isMissing:false,submittedAt:"2026-10-03T18:00:00Z",checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
+  {id:"2",source:"canvas",externalId:"2",courseId:null,courseName:"MATH",title:"Later",releaseAt:null,dueAt:"2026-10-10T07:00:00Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"graded",isLate:false,isMissing:false,submittedAt:"2026-10-02T18:00:00Z",checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
+  {id:"1",source:"canvas",externalId:"1",courseId:null,courseName:"CSE",title:"Soon",releaseAt:null,dueAt:"2026-10-05T07:00:00Z",lateDueAt:null,status:"pending",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:false,isMissing:false,submittedAt:"2026-10-03T18:00:00Z",checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
 ];
 
 it("renders submission status and sorts the status column by the nested Canvas state",async()=>{
