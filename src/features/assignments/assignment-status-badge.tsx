@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { Assignment } from "@/lib/assignments/types";
 import { SubmissionStatusBadge } from "@/features/submission-status/submission-status-badge";
-import { submissionStatusClassesForState, type SubmissionVisualState } from "@/features/submission-status/status-presentation";
+import { isResolvedSubmissionStatus, submissionStatusClassesForState, submissionVisualState, type SubmissionVisualState } from "@/features/submission-status/status-presentation";
 
 function edProgressLabel(value:string):string{
   switch(value.trim().toLowerCase()){
@@ -49,4 +49,23 @@ export function assignmentStatusLabel(assignment:Assignment):string{
     case "excused": return "Excused";
     default: return "Status unavailable";
   }
+}
+
+
+export function assignmentVisualState(assignment:Assignment):SubmissionVisualState{
+  if(assignment.source==="ed"&&assignment.sourceStatusText){
+    return edVisualState(assignment);
+  }
+  return submissionVisualState(assignment.submissionStatus);
+}
+
+export function assignmentStatusClasses(assignment:Assignment):string{
+  return submissionStatusClassesForState(assignmentVisualState(assignment));
+}
+
+export function isAssignmentResolved(assignment:Assignment):boolean{
+  if(assignment.source==="ed"&&assignment.sourceStatusText){
+    return assignment.status==="submitted";
+  }
+  return isResolvedSubmissionStatus(assignment.submissionStatus);
 }
