@@ -20,18 +20,19 @@ test("connects Ed, selects courses, and syncs dated and undated lessons without 
   });
 
   await page.goto("/sources");
-  const tokenInput=page.getByLabel("Ed API token");
+  const edCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Ed",exact:true})});
+  const tokenInput=edCard.getByLabel("Ed API token");
   await tokenInput.fill(token);
-  await page.getByRole("button",{name:"Test connection"}).click();
+  await edCard.getByRole("button",{name:"Test connection"}).click();
   await expect(page.getByText(/1 course found/i)).toBeVisible();
 
-  await page.getByRole("button",{name:"Connect Ed"}).click();
-  await expect(page.getByRole("checkbox",{name:/CSE 331/i})).toBeVisible();
+  await edCard.getByRole("button",{name:"Connect Ed"}).click();
+  await expect(edCard.getByRole("checkbox",{name:/CSE 331/i})).toBeVisible();
   await expect(tokenInput).toHaveValue("");
 
-  await page.getByRole("checkbox",{name:/CSE 331/i}).check();
-  await page.getByRole("button",{name:"Save selection"}).click();
-  await page.getByRole("button",{name:"Sync Ed"}).click();
+  await edCard.getByRole("checkbox",{name:/CSE 331/i}).check();
+  await edCard.getByRole("button",{name:"Save selection"}).click();
+  await edCard.getByRole("button",{name:"Sync Ed"}).click();
   await expect(page.getByText(/Ed sync complete/i)).toBeVisible();
 
   await page.getByRole("link",{name:"All Assignments"}).click();
