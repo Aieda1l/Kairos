@@ -147,26 +147,26 @@ describe("Gradescope sync service",()=>{
     completeGradescopeSync(db,{
       requestId:first.requestId,
       batches:[{protocolVersion:1,requestId:first.requestId,courses:[{
-        courseId:"123",checkedAt:"2026-10-05T06:00:00.000Z",assignments:[assignment({title:"Newer",checkedAt:"2026-10-05T06:00:00.000Z"})],errorCode:null,parseDiagnosticCounts:[],
+        courseId:"123",checkedAt:"2026-10-05T05:05:00.000Z",assignments:[assignment({title:"Newer",checkedAt:"2026-10-05T05:05:00.000Z"})],errorCode:null,parseDiagnosticCounts:[],
       }],errorCode:null}],
-    },new Date("2026-10-05T06:00:01.000Z"));
+    },new Date("2026-10-05T05:05:01.000Z"));
 
-    const second=startGradescopeSync(db,new Date("2026-10-05T07:00:00.000Z"));
+    const second=startGradescopeSync(db,new Date("2026-10-05T05:06:00.000Z"));
     completeGradescopeSync(db,{
       requestId:second.requestId,
       batches:[{protocolVersion:1,requestId:second.requestId,courses:[{
-        courseId:"123",checkedAt:"2026-10-05T05:00:00.000Z",assignments:[assignment({
+        courseId:"123",checkedAt:"2026-10-05T05:04:00.000Z",assignments:[assignment({
           title:"Older",state:"not_submitted",sourceStatusText:"Not Submitted",gradeScore:null,gradeMax:null,gradeDisplay:null,
-          checkedAt:"2026-10-05T05:00:00.000Z",
+          checkedAt:"2026-10-05T05:04:00.000Z",
         })],errorCode:null,parseDiagnosticCounts:[],
       }],errorCode:null}],
-    },new Date("2026-10-05T07:00:01.000Z"));
+    },new Date("2026-10-05T05:06:01.000Z"));
 
     const stored=assignments.list({source:"gradescope"}).find(item=>item.externalId==="9001")!;
     expect(stored.title).toBe("Newer");
     expect(stored.gradeScore).toBe("8.50");
     expect(stored.submissionStatus?.state).toBe("graded");
-    expect(stored.submissionStatus?.checkedAt).toBe("2026-10-05T06:00:00.000Z");
+    expect(stored.submissionStatus?.checkedAt).toBe("2026-10-05T05:05:00.000Z");
     db.close();
   });
 });
