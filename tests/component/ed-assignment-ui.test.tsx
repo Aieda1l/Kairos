@@ -45,6 +45,8 @@ describe("Ed assignment presentation",()=>{
     expect(row).toHaveTextContent("Ed Lesson");
     expect(row).toHaveTextContent("No due date");
     expect(row).toHaveTextContent("Ed");
+    expect(row).toHaveTextContent("In progress");
+    expect(row).not.toHaveTextContent("Status unavailable");
   });
 
   it("shows release and Ed progress in detail without inventing a source link",async()=>{
@@ -54,6 +56,7 @@ describe("Ed assignment presentation",()=>{
     const dialog=screen.getByRole("dialog");
     expect(within(dialog).getByText("Released")).toBeInTheDocument();
     expect(within(dialog).getByText("No due date")).toBeInTheDocument();
+    expect(within(dialog).getByText("Progress").parentElement).toHaveTextContent("In progress");
     const sourceStatus=within(dialog).getByText("Source status");
     expect(sourceStatus.parentElement).toHaveTextContent("attempted");
     expect(within(dialog).queryByRole("link",{name:/Open in Ed/i})).not.toBeInTheDocument();
