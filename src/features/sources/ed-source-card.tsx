@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { SourceConnection } from "@/lib/assignments/types";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -10,13 +10,10 @@ import { SourceStatus } from "./source-status";
 export function EdSourceCard(){
   const ed=useEd();
   const [token,setToken]=useState("");
-  const [selected,setSelected]=useState<string[]>(
-    ed.courses.filter(course=>course.enabled).map(course=>course.externalCourseId),
-  );
-
-  useEffect(()=>{
-    setSelected(ed.courses.filter(course=>course.enabled).map(course=>course.externalCourseId));
-  },[ed.courses]);
+  const [selectionOverrides,setSelectionOverrides]=useState<Record<string,boolean>>({});
+  const selected=ed.courses
+    .filter(course=>selectionOverrides[course.externalCourseId]??course.enabled)
+    .map(course=>course.externalCourseId);
 
   const busy=["testing","connecting","refreshing","syncing"].includes(ed.phase);
   const statusConnection:SourceConnection|null=ed.connection?{
@@ -30,9 +27,17 @@ export function EdSourceCard(){
   }:null;
 
   function toggle(courseId:string,checked:boolean){
-    setSelected(current=>checked
-      ?Array.from(new Set([...current,courseId]))
-      :current.filter(id=>id!==courseId));
+    setSelectionOverrides(current=>({...current,[courseId]:checked}));
+  }
+
+  async function refreshCourses(){
+    await ed.refreshCourses();
+    setSelectionOverrides({});
+  }
+
+  async function saveSelection(){
+    await ed.saveEnabledCourses(selected);
+    setSelectionOverrides({});
   }
 
   async function saveToken(){
@@ -74,10 +79,10 @@ export function EdSourceCard(){
         {ed.phase==="connecting"?"Connecting…":ed.connection?"Update token":"Connect Ed"}
       </Button>
       {ed.connection&&<>
-        <Button variant="secondary" disabled={busy} onClick={()=>void ed.refreshCourses()}>
+        <Button variant="secondary" disabled={busy} onClick={()=>void refreshCourses()}>
           {ed.phase==="refreshing"?"Refreshing…":"Refresh courses"}
         </Button>
-        <Button variant="secondary" disabled={busy||ed.courses.length===0} onClick={()=>void ed.saveEnabledCourses(selected)}>
+        <Button variant="secondary" disabled={busy||ed.courses.length===0} onClick={()=>void saveSelection()}>
           Save selection
         </Button>
         <Button disabled={busy||selected.length===0} onClick={()=>void ed.syncNow()}>
