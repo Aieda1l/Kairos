@@ -25,7 +25,7 @@ Milestone 4 is strictly read-only. Ed Discussion threads, Resources, Workspaces,
 
 ## 2. Discovery basis
 
-The Ed web application exposes a JSON API under `https://edstem.org/api`. Current community clients, including:
+The Ed web application exposes a JSON API under `https://us.edstem.org/api`. Current community clients, including:
 
 - `r1ckyIn/canvas-ed-mcp`; and
 - `bunizao/edstem-cli`
@@ -48,6 +48,10 @@ The Ed API is not treated as a stable public contract. Existing clients describe
 
 The user confirmed that their Ed account exposes the API-token settings page, so a direct API connector is feasible for Kairos and avoids requiring the Firefox extension.
 
+## 2.1 Regional-host correction
+
+Live-account smoke on 2026-10-05 showed that the generic `https://edstem.org/api` origin returns an upstream error for the target UW account. Current Ed clients for US accounts use `https://us.edstem.org/api`, and the user's token is created from the US-region settings path. Kairos therefore pins Milestone 4 to the US Ed origin rather than accepting an arbitrary region/base URL.
+
 ## 3. Chosen architecture
 
 Implement Ed as a normal server-side source adapter behind Kairos's existing `AssignmentSource` contract.
@@ -66,7 +70,7 @@ Kairos API routes
             |
             | Authorization: Bearer <PAT>
             v
-      https://edstem.org/api
+      https://us.edstem.org/api
             |
             +--> /user
             +--> /courses/{id}/lessons
@@ -190,7 +194,7 @@ Create a focused Ed API client under the Ed source module.
 
 Responsibilities:
 
-- fixed base URL: `https://edstem.org/api/`;
+- fixed base URL: `https://us.edstem.org/api/`;
 - bearer-token authentication;
 - `Accept: application/json`;
 - bounded request timeout;
