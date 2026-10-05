@@ -6,7 +6,7 @@ import { SourceCredentialRepository } from "@/lib/db/repositories/source-credent
 import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
-import { syncEdConnection, EdSyncServiceError } from "@/lib/ed/sync-service";
+import { syncEdConnection } from "@/lib/ed/sync-service";
 
 function setup(courseIds=["123"]){
   const db=openDatabase(":memory:"); migrate(db);
@@ -112,11 +112,11 @@ describe("syncEdConnection",()=>{
 
   it("rejects missing configuration and zero enabled courses",async()=>{
     const db=openDatabase(":memory:"); migrate(db);
-    await expect(syncEdConnection(db)).rejects.toMatchObject<Partial<EdSyncServiceError>>({code:"ED_NOT_CONNECTED"});
+    await expect(syncEdConnection(db)).rejects.toMatchObject({code:"ED_NOT_CONNECTED"});
 
     const connection=new SourceConnectionRepository(db).upsertEd("Ed");
     new SourceCredentialRepository(db).setEdApiToken(connection.id,"token");
-    await expect(syncEdConnection(db)).rejects.toMatchObject<Partial<EdSyncServiceError>>({code:"ED_NO_COURSES_ENABLED"});
+    await expect(syncEdConnection(db)).rejects.toMatchObject({code:"ED_NO_COURSES_ENABLED"});
     db.close();
   });
 });
