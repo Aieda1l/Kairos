@@ -3,6 +3,7 @@ import { getDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
 import { connectEd } from "@/lib/ed/discovery-service";
 import { EdSourceError } from "@/lib/sources/ed/errors";
+import { getEdRouteFetch } from "@/lib/ed/e2e-fixture-fetch";
 
 const schema=z.object({token:z.string().trim().min(1).max(4096)}).strict();
 
@@ -18,7 +19,7 @@ export async function POST(request:Request){
   const db=getDatabase();
   migrate(db);
   try{
-    return Response.json(await connectEd(db,parsed.data.token));
+    return Response.json(await connectEd(db,parsed.data.token,getEdRouteFetch()));
   }catch(error){
     if(error instanceof EdSourceError){
       return Response.json({code:error.code,message:error.message},{status:error.code==="ED_AUTH_INVALID"?401:502});
