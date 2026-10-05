@@ -17,6 +17,7 @@ const DEFAULT_BATCH_TIMEOUT_MS = 30_000;
 export type ExtensionPingResult = {
   extensionVersion: string;
   canvasTabDetected: boolean;
+  gradescopeTabDetected: boolean;
 };
 
 export class ExtensionBridgeError extends Error {
@@ -107,6 +108,7 @@ export async function pingKairosExtension(
   return {
     extensionVersion: response.extensionVersion,
     canvasTabDetected: response.canvasTabDetected,
+    gradescopeTabDetected: response.gradescopeTabDetected ?? false,
   };
 }
 
