@@ -12,7 +12,7 @@ describe("Firefox manifest",()=>{
       icons?:Record<string,string>;
       action?:{default_icon?:string|Record<string,string>};
     };
-    expect(manifest.version).toBe("0.2.5");
+    expect(manifest.version).toBe("0.2.6");
     expect(manifest.icons).toEqual({"48":"icon.svg","96":"icon.svg"});
     expect(manifest.action?.default_icon).toBe("icon.svg");
     expect(fs.existsSync(path.join(process.cwd(),"extension/firefox/icon.svg"))).toBe(true);

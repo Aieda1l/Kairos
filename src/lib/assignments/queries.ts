@@ -26,9 +26,8 @@ export function groupUpcoming(
   };
 
   for(const assignment of assignments){
-    const group=classifyDueDate(assignment.dueAt,now,timeZone);
-    if(group==="overdue"&&isResolvedSubmission(assignment))continue;
-    groups[group].push(assignment);
+    if(isResolvedSubmission(assignment))continue;
+    groups[classifyDueDate(assignment.dueAt,now,timeZone)].push(assignment);
   }
   return groups;
 }
