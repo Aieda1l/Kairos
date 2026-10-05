@@ -55,5 +55,5 @@ it("refreshes server-rendered assignments after a successful deadline sync",asyn
   render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} canvasConnected/>);
   await user.click(screen.getByRole("button",{name:"Sync All"}));
   await waitFor(()=>expect(refresh).toHaveBeenCalledTimes(1));
-  expect(screen.getByText("Canvas sync complete.")).toBeInTheDocument();
+  expect(statusSyncNow).toHaveBeenCalledTimes(1);
 });
