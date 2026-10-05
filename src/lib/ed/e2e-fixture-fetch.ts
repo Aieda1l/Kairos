@@ -11,7 +11,7 @@ function json(body:unknown,status=200):Response{
 
 const fixtureFetch:typeof fetch=async(input,init)=>{
   const url=new URL(typeof input==="string"?input:input instanceof URL?input.toString():input.url);
-  if(url.origin!=="https://edstem.org"||!url.pathname.startsWith("/api/")){
+  if(url.origin!=="https://us.edstem.org"||!url.pathname.startsWith("/api/")){
     return json({error:"not found"},404);
   }
   if((init?.method??"GET").toUpperCase()!=="GET"){
