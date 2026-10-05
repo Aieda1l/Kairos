@@ -37,9 +37,9 @@ export class SubmissionStatusRepository {
     `).run(sourceConnectionId,attemptedAt,attemptedAt);
   }
 
-  applyCompletion(
+  applyCompletion<T extends SubmissionStatusWrite>(
     sourceConnectionId:string,
-    results:SubmissionStatusWrite[],
+    results:T[],
     failedCount:number,
     errorCode:SubmissionSyncErrorCode|null,
     completedAt:string,
