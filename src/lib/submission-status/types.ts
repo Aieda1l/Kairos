@@ -21,11 +21,6 @@ export type SubmissionSyncErrorCode =
   | "CANVAS_SIGNED_OUT"
   | "CANVAS_NETWORK_ERROR"
   | "UNRECOGNIZED_STATUS"
-  | "GRADESCOPE_TAB_UNAVAILABLE"
-  | "GRADESCOPE_SIGNED_OUT"
-  | "GRADESCOPE_NETWORK_ERROR"
-  | "GRADESCOPE_COURSE_UNAVAILABLE"
-  | "GRADESCOPE_PARSE_ERROR"
   | "PARTIAL_SYNC"
   | "INVALID_RESULT";
 
@@ -34,10 +29,10 @@ export type SubmissionStatusWrite = AssignmentSubmissionStatus & {
   errorCode?: SubmissionSyncErrorCode;
 };
 
-export type SubmissionStatusSyncState = {
+export type SubmissionStatusSyncState<TError extends string = SubmissionSyncErrorCode> = {
   lastAttemptedAt: string | null;
   lastSuccessfulAt: string | null;
-  lastErrorCode: SubmissionSyncErrorCode | null;
+  lastErrorCode: TError | null;
   updatedCount: number;
   failedCount: number;
 };
