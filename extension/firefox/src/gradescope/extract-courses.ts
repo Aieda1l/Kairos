@@ -69,23 +69,28 @@ export function extractGradescopeStudentCourses(html:string):GradescopeCourseV1[
     sawCourseSection=true;
     if(!studentSection)continue;
 
-    for(const term of Array.from(child.querySelectorAll(".courseList--term"))){
-      const metadata=termMetadata(term);
-      for(const anchor of Array.from(term.querySelectorAll('a[href^="/courses/"]'))){
-        const href=anchor.getAttribute("href")??"";
-        const match=href.match(/^\/courses\/(\d+)(?:[/?#]|$)/);
-        if(!match)continue;
-        const shortName=anchor.querySelector(".courseBox--shortname")?.textContent?.trim()||null;
-        const fullName=anchor.querySelector(".courseBox--name")?.textContent?.trim();
-        if(!fullName)continue;
-        courses.push({
-          courseId:match[1],
-          shortName,
-          fullName,
-          term:metadata.term,
-          year:metadata.year,
-        });
+    let metadata:{term:string|null;year:string|null}|null=null;
+    for(const node of Array.from(
+      child.querySelectorAll('.courseList--term, a[href^="/courses/"]'),
+    )){
+      if(node.classList.contains("courseList--term")){
+        metadata=termMetadata(node);
+        continue;
       }
+      if(!metadata||node.tagName!=="A")continue;
+      const href=node.getAttribute("href")??"";
+      const match=href.match(/^\/courses\/(\d+)(?:[/?#]|$)/);
+      if(!match)continue;
+      const shortName=node.querySelector(".courseBox--shortname")?.textContent?.trim()||null;
+      const fullName=node.querySelector(".courseBox--name")?.textContent?.trim();
+      if(!fullName)continue;
+      courses.push({
+        courseId:match[1],
+        shortName,
+        fullName,
+        term:metadata.term,
+        year:metadata.year,
+      });
     }
   }
 
