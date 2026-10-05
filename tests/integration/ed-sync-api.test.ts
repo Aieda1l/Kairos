@@ -55,7 +55,7 @@ it("returns 409 before connection or when no courses are enabled",async()=>{
   expect((await route.POST()).status).toBe(409);
 });
 
-it("uses 401 for total auth failure but 200 for partial success",async()=>{
+it("uses 401 for total auth failure",async()=>{
   seed();
   vi.stubGlobal("fetch",vi.fn(async()=>new Response("",{status:401})));
   const route=await import("@/app/api/sources/ed/sync/route");
