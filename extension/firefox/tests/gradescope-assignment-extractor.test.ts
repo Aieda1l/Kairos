@@ -100,4 +100,12 @@ describe("extractGradescopeStudentAssignments",()=>{
       checkedAt,
     )).toThrow(GradescopeParseError);
   });
+
+  it("does not accept an unrelated table outside the Gradescope course root",()=>{
+    expect(()=>extractGradescopeStudentAssignments(
+      "<html><body><table><tbody><tr role=\"row\"><th>Unrelated</th><td>Submitted</td></tr></tbody></table></body></html>",
+      "123",
+      checkedAt,
+    )).toThrow(GradescopeParseError);
+  });
 });
