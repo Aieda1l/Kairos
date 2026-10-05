@@ -110,6 +110,14 @@ describe("Gradescope same-origin fetching",()=>{
       ()=>new Date("2026-10-04T20:00:00.000Z"),
     );
     expect(malformed.courses[0].errorCode).toBe("GRADESCOPE_PARSE_ERROR");
+    expect(malformed.courses[0].assignmentDiagnostics).toMatchObject({
+      courseRootDetected:false,
+      tableCount:0,
+      roleRowCount:0,
+      assignmentLinkCount:0,
+      submitButtonCount:0,
+      assignmentTableDetected:false,
+    });
 
     const missing=await fetchGradescopeAssignments(
       syncRequest(),
