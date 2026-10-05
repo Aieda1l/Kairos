@@ -5,7 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
-import type { GradescopeSyncErrorCode, GradescopeSyncResultV1 } from "@/lib/extension-protocol/gradescope";
+import type {
+  GradescopeSyncErrorCode,
+  GradescopeSyncRequestV1,
+  GradescopeSyncResultV1,
+} from "@/lib/extension-protocol/gradescope";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 
 const {refresh,pingKairosExtension,discoverGradescopeExtension,syncGradescopeExtensionBatch}=vi.hoisted(()=>({
@@ -272,7 +276,7 @@ describe("GradescopeProvider",()=>{
       }
       throw new Error(`Unexpected fetch ${url}`);
     }));
-    syncGradescopeExtensionBatch.mockImplementation(async input=>({
+    syncGradescopeExtensionBatch.mockImplementation(async (input:GradescopeSyncRequestV1)=>({
       protocolVersion:1,
       requestId:input.requestId,
       courses:input.courseIds.map(courseId=>({
