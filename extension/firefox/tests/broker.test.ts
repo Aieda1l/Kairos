@@ -80,6 +80,22 @@ describe("handleBridgeRequest",()=>{
     expect(result).toMatchObject({type:"GRADESCOPE_DISCOVER_COURSES_RESULT",payload:{requestId}});
   });
 
+  it("distinguishes a detected Gradescope tab whose content script is unavailable",async()=>{
+    const result=await handleBridgeRequest(
+      gradescopeDiscoverMessage,
+      adapter({
+        findGradescopeTab:async()=>({id:9}),
+        sendToGradescopeTab:async()=>{throw new Error("Receiving end does not exist.");},
+      }),
+    );
+    expect(result).toMatchObject({
+      source:"kairos-extension",
+      type:"ERROR",
+      errorCode:"INVALID_RESULT",
+      message:"Refresh the Gradescope tab after reloading the Kairos extension, then try again.",
+    });
+  });
+
   it("returns a stable Gradescope no-tab error",async()=>{
     await expect(handleBridgeRequest(gradescopeDiscoverMessage,adapter())).resolves.toMatchObject({
       source:"kairos-extension",type:"ERROR",errorCode:"GRADESCOPE_TAB_UNAVAILABLE",
