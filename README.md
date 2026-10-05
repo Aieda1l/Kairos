@@ -8,7 +8,8 @@ This is a personal tool, not an official University of Washington product. It do
 
 - Node.js 22 or newer
 - npm 10 or newer
-- Firefox for Canvas submission-status and Gradescope browser-local sync\n- An Ed personal API token if you want to connect Ed
+- Firefox for Canvas submission-status and Gradescope browser-local sync
+- An Ed personal API token if you want to connect Ed
 
 ## Install and run
 
