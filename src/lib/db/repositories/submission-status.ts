@@ -5,7 +5,7 @@ import type { SubmissionStatusSyncState, SubmissionStatusWrite, SubmissionSyncEr
 type SyncRow={
   last_attempted_at:string|null;
   last_successful_at:string|null;
-  last_error_code:SubmissionSyncErrorCode|null;
+  last_error_code:string|null;
   updated_count:number;
   failed_count:number;
 };
@@ -13,7 +13,7 @@ type SyncRow={
 export class SubmissionStatusRepository {
   constructor(private db:Database.Database){}
 
-  getSyncState(sourceConnectionId:string):SubmissionStatusSyncState {
+  getSyncState<TError extends string = SubmissionSyncErrorCode>(sourceConnectionId:string):SubmissionStatusSyncState<TError> {
     const row=this.db.prepare(`
       SELECT last_attempted_at,last_successful_at,last_error_code,updated_count,failed_count
       FROM submission_status_sync WHERE source_connection_id=?
@@ -21,7 +21,7 @@ export class SubmissionStatusRepository {
     return {
       lastAttemptedAt:row?.last_attempted_at??null,
       lastSuccessfulAt:row?.last_successful_at??null,
-      lastErrorCode:row?.last_error_code??null,
+      lastErrorCode:(row?.last_error_code as TError|null|undefined)??null,
       updatedCount:row?.updated_count??0,
       failedCount:row?.failed_count??0,
     };
@@ -37,11 +37,11 @@ export class SubmissionStatusRepository {
     `).run(sourceConnectionId,attemptedAt,attemptedAt);
   }
 
-  applyCompletion<T extends SubmissionStatusWrite>(
+  applyCompletion<T extends SubmissionStatusWrite,TError extends string = SubmissionSyncErrorCode>(
     sourceConnectionId:string,
     results:T[],
     failedCount:number,
-    errorCode:SubmissionSyncErrorCode|null,
+    errorCode:TError|null,
     completedAt:string,
     successfulChecksOverride?:number,
   ):{updated:number;ignoredStale:number}{
