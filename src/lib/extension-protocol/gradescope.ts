@@ -52,6 +52,15 @@ export const gradescopeCourseV1Schema=z.object({
   year:z.string().trim().min(1).max(16).nullable(),
 }).strict();
 
+export const gradescopeAssignmentStructureDiagnosticsV1Schema=z.object({
+  courseRootDetected:z.boolean(),
+  tableCount:z.number().int().nonnegative(),
+  roleRowCount:z.number().int().nonnegative(),
+  assignmentLinkCount:z.number().int().nonnegative(),
+  submitButtonCount:z.number().int().nonnegative(),
+  assignmentTableDetected:z.boolean(),
+}).strict();
+
 export const gradescopeAssignmentV1Schema=z.object({
   courseId:decimalIdSchema,
   assignmentId:decimalIdSchema,
@@ -106,6 +115,7 @@ export const gradescopeCourseSyncResultV1Schema=z.object({
     code:z.enum(["UNRECOGNIZED_ROW","MISSING_STABLE_ID"]),
     count:z.number().int().positive(),
   }).strict()).default([]),
+  assignmentDiagnostics:gradescopeAssignmentStructureDiagnosticsV1Schema.optional(),
 }).strict();
 
 export const gradescopeSyncResultV1Schema=z.object({
@@ -178,6 +188,7 @@ export const gradescopeBridgeResponseV1Schema=z.discriminatedUnion("type",[
 
 export type GradescopeDiscoveryDiagnosticsV1=z.infer<typeof gradescopeDiscoveryDiagnosticsV1Schema>;
 export type GradescopeCourseV1=z.infer<typeof gradescopeCourseV1Schema>;
+export type GradescopeAssignmentStructureDiagnosticsV1=z.infer<typeof gradescopeAssignmentStructureDiagnosticsV1Schema>;
 export type GradescopeAssignmentV1=z.infer<typeof gradescopeAssignmentV1Schema>;
 export type GradescopeDiscoverRequestV1=z.infer<typeof gradescopeDiscoverRequestV1Schema>;
 export type GradescopeDiscoverResultV1=z.infer<typeof gradescopeDiscoverResultV1Schema>;
