@@ -21,13 +21,11 @@ const labels:Record<DueGroup,string>={
 export function AssignmentExplorer({
   assignments,
   timeZone,
-  lastSyncCompletedAt,
   canvasConnected,
   now=new Date(),
 }:{
   assignments:Assignment[];
   timeZone:string;
-  lastSyncCompletedAt:string|null;
   canvasConnected:boolean;
   now?:Date;
 }){
@@ -43,10 +41,7 @@ export function AssignmentExplorer({
   if(assignments.length===0){
     return (
       <div className="space-y-5">
-        <ConnectedSourceSyncControls
-          canvasConnected={canvasConnected}
-          canvasLastSyncCompletedAt={lastSyncCompletedAt}
-        />
+        <ConnectedSourceSyncControls canvasConnected={canvasConnected}/>
         <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center">
           <h2 className="font-semibold">No assignments yet</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">Connect a source or run a sync to fill your dashboard.</p>
@@ -58,10 +53,7 @@ export function AssignmentExplorer({
 
   return (
     <div className="space-y-5">
-      <ConnectedSourceSyncControls
-        canvasConnected={canvasConnected}
-        canvasLastSyncCompletedAt={lastSyncCompletedAt}
-      />
+      <ConnectedSourceSyncControls canvasConnected={canvasConnected}/>
       <AssignmentFilterBar courses={courses} value={filters} onChange={setFilters}/>
       {order.map(key=>groups[key].length>0&&(
         <section key={key}>
