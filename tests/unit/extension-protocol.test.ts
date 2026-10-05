@@ -5,6 +5,7 @@ import {
   submissionSyncRequestV1Schema,
   submissionStatusResultV1Schema,
 } from "@/lib/extension-protocol/submission-status";
+import { kairosBridgeRequestV1Schema } from "@/lib/extension-protocol/bridge";
 
 const locator = {
   assignmentLocalId: "local-1",
