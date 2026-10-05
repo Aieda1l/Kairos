@@ -49,7 +49,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
       </div>
       <div className="hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] sm:block">
         <Table>
-          <thead><tr><Th>Assignment</Th><Th>Course</Th><Th>Due</Th><Th>Source</Th><Th>Status</Th></tr></thead>
+          <thead><tr><Th>Assignment</Th><Th>Course</Th><Th>Due</Th><Th>Source</Th><Th>Status</Th><Th>Grade</Th></tr></thead>
           <tbody>
             {visible.map(a=>(
               <tr key={a.id}>
@@ -62,6 +62,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
                 <Td>{formatDueDate(a.dueAt,timeZone)}</Td>
                 <Td><SourceBadge source={a.source}/></Td>
                 <Td><SubmissionStatusBadge status={a.submissionStatus}/></Td>
+                <Td>{a.gradeDisplay??"—"}</Td>
               </tr>
             ))}
           </tbody>
@@ -78,6 +79,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
           >
             <strong>{a.title}</strong>
             <span className="mt-1 block text-sm text-[var(--muted)]">{a.courseName} · {formatDueDate(a.dueAt,timeZone)}</span>
+            {a.gradeDisplay&&<span className="mt-1 block text-sm">Grade {a.gradeDisplay}</span>}
           </button>
         ))}
       </div>

@@ -29,7 +29,7 @@ export default defineConfig({
     },
     {
       name:"firefox",
-      testMatch:/submission-status\.spec\.ts/,
+      testMatch:/(submission-status|gradescope-sync)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],

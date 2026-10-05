@@ -1,8 +1,8 @@
+import { PROTOCOL_VERSION } from "@/lib/extension-protocol/submission-status";
 import {
-  PROTOCOL_VERSION,
   kairosBridgeRequestV1Schema,
   kairosBridgeResponseV1Schema,
-} from "@/lib/extension-protocol/submission-status";
+} from "@/lib/extension-protocol/bridge";
 
 const allowedOrigins=new Set(["http://localhost:3000","http://127.0.0.1:3000"]);
 

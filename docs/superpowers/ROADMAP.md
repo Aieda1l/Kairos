@@ -36,15 +36,25 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-03-canvas-submission-status-design.md`
 - `docs/superpowers/plans/2026-10-03-canvas-submission-status-milestone-2.md`
 
-## Milestone 3 — Gradescope connector discovery + implementation — Planned
+## Milestone 3 — Direct Gradescope connector — Automated implementation complete; manual smoke pending
 
-Before choosing an integration strategy, validate the real Gradescope account capabilities.
+Implemented:
+- direct read-only Gradescope access through the existing Firefox extension;
+- reuse of an already signed-in `www.gradescope.com` tab without exporting passwords, cookies, CSRF tokens, response headers, or raw authenticated HTML;
+- student course discovery with explicit local course selection;
+- release, due, late-due, source-status, normalized submission state, published score/max score, and source-link persistence;
+- stale-on-open plus manual Gradescope refresh;
+- partial/failure-safe persistence that keeps prior known assignment/status/grade data;
+- strict source-specific bridge protocols and numeric-identity validation;
+- fixture-driven parser, protocol, repository, integration, component, and Firefox E2E coverage;
+- source-independent Upcoming/Calendar resolution behavior while preserving Gradescope records separately from Canvas.
 
-Preference order:
-1. supported/tokenized access, if available;
-2. otherwise a browser-local bridge that does not collect or store UW credentials.
+Remaining completion gate:
+- complete the documented real-browser smoke against the user's signed-in Gradescope account and confirm the extractor matches real student data plus no-tab/signed-out/failure-preservation behavior.
 
-The connector should use the existing normalized source-adapter architecture and preserve source-specific identity rather than silently merging assignments.
+Primary docs:
+- `docs/superpowers/specs/2026-10-04-gradescope-connector-design.md`
+- `docs/superpowers/plans/2026-10-04-gradescope-connector-milestone-3.md`
 
 ## Milestone 4 — Ed connector discovery + implementation — Planned
 

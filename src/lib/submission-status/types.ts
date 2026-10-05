@@ -24,10 +24,15 @@ export type SubmissionSyncErrorCode =
   | "PARTIAL_SYNC"
   | "INVALID_RESULT";
 
-export type SubmissionStatusSyncState = {
+export type SubmissionStatusWrite = AssignmentSubmissionStatus & {
+  assignmentLocalId: string;
+  errorCode?: SubmissionSyncErrorCode;
+};
+
+export type SubmissionStatusSyncState<TError extends string = SubmissionSyncErrorCode> = {
   lastAttemptedAt: string | null;
   lastSuccessfulAt: string | null;
-  lastErrorCode: SubmissionSyncErrorCode | null;
+  lastErrorCode: TError | null;
   updatedCount: number;
   failedCount: number;
 };

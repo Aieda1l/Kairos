@@ -5,7 +5,7 @@ import {expect,it} from "vitest";
 import {AssignmentRow} from "@/features/assignments/assignment-row";
 import type {Assignment} from "@/lib/assignments/types";
 
-const item:Assignment={id:"1",source:"canvas",externalId:"1",courseId:null,courseName:"CSE 331",title:"Homework 3",dueAt:"2026-10-04T05:00:00Z",status:"unknown",sourceUrl:"https://example.com",sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:true,isMissing:false,submittedAt:"2026-10-03T22:00:00Z",checkedAt:"2026-10-03T22:05:00Z",extractorVersion:"canvas-html-v1"}};
+const item:Assignment={id:"1",source:"canvas",externalId:"1",courseId:null,courseName:"CSE 331",title:"Homework 3",releaseAt:null,dueAt:"2026-10-04T05:00:00Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://example.com",sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:true,isMissing:false,submittedAt:"2026-10-03T22:00:00Z",checkedAt:"2026-10-03T22:05:00Z",extractorVersion:"canvas-html-v1"}};
 
 it("opens assignment details with normalized Canvas submission status",async()=>{
   const user=userEvent.setup();

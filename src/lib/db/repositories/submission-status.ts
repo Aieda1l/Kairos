@@ -1,12 +1,11 @@
 import "server-only";
 import type Database from "better-sqlite3";
-import type { SubmissionStatusResultV1 } from "@/lib/extension-protocol/submission-status";
-import type { SubmissionStatusSyncState, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
+import type { SubmissionStatusSyncState, SubmissionStatusWrite, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
 
 type SyncRow={
   last_attempted_at:string|null;
   last_successful_at:string|null;
-  last_error_code:SubmissionSyncErrorCode|null;
+  last_error_code:string|null;
   updated_count:number;
   failed_count:number;
 };
@@ -14,7 +13,7 @@ type SyncRow={
 export class SubmissionStatusRepository {
   constructor(private db:Database.Database){}
 
-  getSyncState(sourceConnectionId:string):SubmissionStatusSyncState {
+  getSyncState<TError extends string = SubmissionSyncErrorCode>(sourceConnectionId:string):SubmissionStatusSyncState<TError> {
     const row=this.db.prepare(`
       SELECT last_attempted_at,last_successful_at,last_error_code,updated_count,failed_count
       FROM submission_status_sync WHERE source_connection_id=?
@@ -22,7 +21,7 @@ export class SubmissionStatusRepository {
     return {
       lastAttemptedAt:row?.last_attempted_at??null,
       lastSuccessfulAt:row?.last_successful_at??null,
-      lastErrorCode:row?.last_error_code??null,
+      lastErrorCode:(row?.last_error_code as TError|null|undefined)??null,
       updatedCount:row?.updated_count??0,
       failedCount:row?.failed_count??0,
     };
@@ -38,16 +37,17 @@ export class SubmissionStatusRepository {
     `).run(sourceConnectionId,attemptedAt,attemptedAt);
   }
 
-  applyCompletion(
+  applyCompletion<T extends SubmissionStatusWrite,TError extends string = SubmissionSyncErrorCode>(
     sourceConnectionId:string,
-    results:SubmissionStatusResultV1[],
+    results:T[],
     failedCount:number,
-    errorCode:SubmissionSyncErrorCode|null,
+    errorCode:TError|null,
     completedAt:string,
+    successfulChecksOverride?:number,
   ):{updated:number;ignoredStale:number}{
     let updated=0;
     let ignoredStale=0;
-    let successfulChecks=0;
+    let successfulChecks=successfulChecksOverride??0;
     const belongs=this.db.prepare("SELECT id FROM assignments WHERE id=? AND source_connection_id=?");
     const existing=this.db.prepare("SELECT checked_at FROM assignment_submission_status WHERE assignment_id=?");
     const upsert=this.db.prepare(`
@@ -68,7 +68,7 @@ export class SubmissionStatusRepository {
       for(const result of results){
         if(result.errorCode) continue;
         if(!belongs.get(result.assignmentLocalId,sourceConnectionId)) continue;
-        successfulChecks++;
+        if(successfulChecksOverride===undefined) successfulChecks++;
         const current=existing.get(result.assignmentLocalId) as {checked_at:string}|undefined;
         if(current && current.checked_at>=result.checkedAt){
           ignoredStale++;

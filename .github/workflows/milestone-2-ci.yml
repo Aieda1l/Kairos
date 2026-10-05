@@ -1,13 +1,14 @@
-name: Milestone 2 CI
+name: Kairos Feature CI
 
 on:
   push:
     branches:
       - feat/milestone-2-submission-status
+      - feat/milestone-3-gradescope-connector
   workflow_dispatch:
 
 concurrency:
-  group: milestone-2-${{ github.ref }}
+  group: kairos-feature-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -34,4 +35,4 @@ jobs:
       - run: npm run build
       - run: node scripts/verify-dynamic-dashboard-build.mjs
       - name: Review prohibited credential/permission patterns
-        run: git grep -nE '(cookies.*permission|<all_urls>|authorization.*:|password.*canvas|canvas\.uw\.edu.*cookie)' -- extension src tests ':!tests/fixtures/**' || true
+        run: git grep -nE '(cookies.*permission|<all_urls>|webRequest|authorization.*:|password.*(canvas|gradescope)|(canvas\.uw\.edu|gradescope\.com).*cookie|csrf.*gradescope)' -- extension src tests ':!tests/fixtures/**' || true

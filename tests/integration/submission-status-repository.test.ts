@@ -5,6 +5,7 @@ import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
 import type { SubmissionStatusResultV1 } from "@/lib/extension-protocol/submission-status";
+import type { SubmissionStatusWrite } from "@/lib/submission-status/types";
 
 function setup() {
   const db=openDatabase(":memory:");
@@ -13,7 +14,8 @@ function setup() {
   const assignments=new AssignmentRepository(db);
   assignments.upsertMany(connection.id,[{
     source:"canvas",externalId:"event-assignment-1",courseId:"999",courseName:"CSE 999",title:"HW",
-    dueAt:"2026-10-08T06:59:00.000Z",status:"unknown",sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",sourceUpdatedAt:null,
+    releaseAt:null,
+    dueAt:"2026-10-08T06:59:00.000Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",sourceUpdatedAt:null,
   }],"2026-10-01T00:00:00.000Z");
   return {db,connection,assignments,assignmentId:assignments.list()[0].id,statuses:new SubmissionStatusRepository(db)};
 }
@@ -24,6 +26,22 @@ const makeResult=(assignmentLocalId:string,overrides:Partial<SubmissionStatusRes
 });
 
 describe("SubmissionStatusRepository",()=>{
+  it("accepts source-agnostic status writes",()=>{
+    const {db,connection,assignments,assignmentId,statuses}=setup();
+    const write:SubmissionStatusWrite={
+      assignmentLocalId:assignmentId,
+      state:"submitted",
+      isLate:false,
+      isMissing:false,
+      submittedAt:null,
+      checkedAt:"2026-10-04T06:00:00.000Z",
+      extractorVersion:"gradescope-html-v1",
+    };
+    expect(statuses.applyCompletion(connection.id,[write],0,null,"2026-10-04T06:00:01.000Z")).toEqual({updated:1,ignoredStale:0});
+    expect(assignments.list()[0].submissionStatus?.extractorVersion).toBe("gradescope-html-v1");
+    db.close();
+  });
+
   it("persists the latest checked status and ignores an older completion",()=>{
     const {db,connection,assignments,assignmentId,statuses}=setup();
     expect(statuses.applyCompletion(connection.id,[makeResult(assignmentId)],0,null,"2026-10-04T06:00:01.000Z")).toEqual({updated:1,ignoredStale:0});

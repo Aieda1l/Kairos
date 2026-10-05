@@ -24,8 +24,8 @@ vi.mock("@/features/submission-status/submission-status-provider",()=>({
 }));
 
 const items:Assignment[]=[
-  {id:"1",source:"canvas",externalId:"1",courseId:"1",courseName:"CSE 331",title:"Homework 3",dueAt:"2026-10-04T05:00:00Z",status:"unknown",sourceUrl:"https://example.com/1",sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:true,isMissing:false,submittedAt:null,checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
-  {id:"2",source:"canvas",externalId:"2",courseId:"2",courseName:"MATH 308",title:"Problem Set",dueAt:null,status:"unknown",sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:null},
+  {id:"1",source:"canvas",externalId:"1",courseId:"1",courseName:"CSE 331",title:"Homework 3",releaseAt:null,dueAt:"2026-10-04T05:00:00Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://example.com/1",sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:true,isMissing:false,submittedAt:null,checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
+  {id:"2",source:"canvas",externalId:"2",courseId:"2",courseName:"MATH 308",title:"Problem Set",releaseAt:null,dueAt:null,lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:null},
 ];
 
 beforeEach(()=>{refresh.mockClear();statusSyncNow.mockClear();vi.unstubAllGlobals();});

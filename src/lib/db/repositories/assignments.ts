@@ -15,8 +15,14 @@ type Row={
   course_id:string|null;
   course_name:string;
   title:string;
+  release_at:string|null;
   due_at:string|null;
+  late_due_at:string|null;
   status:Assignment["status"];
+  source_status_text:string|null;
+  grade_score:string|null;
+  grade_max:string|null;
+  grade_display:string|null;
   source_url:string|null;
   source_updated_at:string|null;
   first_seen_at:string;
@@ -36,8 +42,14 @@ const map=(r:Row):Assignment=>({
   courseId:r.course_id,
   courseName:r.course_name,
   title:r.title,
+  releaseAt:r.release_at,
   dueAt:r.due_at,
+  lateDueAt:r.late_due_at,
   status:r.status,
+  sourceStatusText:r.source_status_text,
+  gradeScore:r.grade_score,
+  gradeMax:r.grade_max,
+  gradeDisplay:r.grade_display,
   sourceUrl:r.source_url,
   sourceUpdatedAt:r.source_updated_at,
   firstSeenAt:r.first_seen_at,
@@ -58,16 +70,36 @@ export class AssignmentRepository{
   upsertMany(sourceConnectionId:string,assignments:NormalizedAssignment[],seenAt:string):{inserted:number;updated:number}{
     let inserted=0,updated=0;
     const existing=this.db.prepare("SELECT id FROM assignments WHERE source_connection_id=? AND external_id=?");
-    const insert=this.db.prepare(`INSERT INTO assignments(id,source_connection_id,source_kind,external_id,course_id,course_name,title,due_at,status,source_url,source_updated_at,first_seen_at,last_seen_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    const update=this.db.prepare(`UPDATE assignments SET source_kind=?,course_id=?,course_name=?,title=?,due_at=?,status=?,source_url=?,source_updated_at=?,last_seen_at=?,updated_at=? WHERE source_connection_id=? AND external_id=?`);
+    const insert=this.db.prepare(`
+      INSERT INTO assignments(
+        id,source_connection_id,source_kind,external_id,course_id,course_name,title,
+        release_at,due_at,late_due_at,status,source_status_text,grade_score,grade_max,grade_display,
+        source_url,source_updated_at,first_seen_at,last_seen_at,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `);
+    const update=this.db.prepare(`
+      UPDATE assignments SET
+        source_kind=?,course_id=?,course_name=?,title=?,release_at=?,due_at=?,late_due_at=?,status=?,
+        source_status_text=?,grade_score=?,grade_max=?,grade_display=?,source_url=?,source_updated_at=?,
+        last_seen_at=?,updated_at=?
+      WHERE source_connection_id=? AND external_id=?
+    `);
     const tx=this.db.transaction(()=>{
       for(const a of assignments){
         const row=existing.get(sourceConnectionId,a.externalId) as {id:string}|undefined;
         if(row){
-          update.run(a.source,a.courseId,a.courseName,a.title,a.dueAt,a.status,a.sourceUrl,a.sourceUpdatedAt,seenAt,seenAt,sourceConnectionId,a.externalId);
+          update.run(
+            a.source,a.courseId,a.courseName,a.title,a.releaseAt,a.dueAt,a.lateDueAt,a.status,
+            a.sourceStatusText,a.gradeScore,a.gradeMax,a.gradeDisplay,a.sourceUrl,a.sourceUpdatedAt,
+            seenAt,seenAt,sourceConnectionId,a.externalId,
+          );
           updated++;
         }else{
-          insert.run(crypto.randomUUID(),sourceConnectionId,a.source,a.externalId,a.courseId,a.courseName,a.title,a.dueAt,a.status,a.sourceUrl,a.sourceUpdatedAt,seenAt,seenAt,seenAt,seenAt);
+          insert.run(
+            crypto.randomUUID(),sourceConnectionId,a.source,a.externalId,a.courseId,a.courseName,a.title,
+            a.releaseAt,a.dueAt,a.lateDueAt,a.status,a.sourceStatusText,a.gradeScore,a.gradeMax,a.gradeDisplay,
+            a.sourceUrl,a.sourceUpdatedAt,seenAt,seenAt,seenAt,seenAt,
+          );
           inserted++;
         }
       }
@@ -88,7 +120,9 @@ export class AssignmentRepository{
     }
     const sql=`
       SELECT
-        a.id,a.source_kind,a.external_id,a.course_id,a.course_name,a.title,a.due_at,a.status,
+        a.id,a.source_kind,a.external_id,a.course_id,a.course_name,a.title,
+        a.release_at,a.due_at,a.late_due_at,a.status,a.source_status_text,
+        a.grade_score,a.grade_max,a.grade_display,
         a.source_url,a.source_updated_at,a.first_seen_at,a.last_seen_at,
         s.state AS submission_state,
         s.is_late AS submission_is_late,
