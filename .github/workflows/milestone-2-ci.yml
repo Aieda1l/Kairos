@@ -1,6 +1,9 @@
 name: Kairos Feature CI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feat/milestone-2-submission-status
