@@ -128,6 +128,23 @@ describe("extractGradescopeStudentAssignments",()=>{
     });
   });
 
+  it("treats two role rows split across two tables as a valid empty course",()=>{
+    const html=`
+      <html><body>
+        <table><tbody>
+          <tr role="row"><th>Assignments</th><th>Status</th><th>Due</th></tr>
+        </tbody></table>
+        <table><tbody>
+          <tr role="row"><td></td><td></td><td></td></tr>
+        </tbody></table>
+      </body></html>
+    `;
+    expect(extractGradescopeStudentAssignments(html,"123",checkedAt)).toEqual({
+      assignments:[],
+      diagnostics:[],
+    });
+  });
+
   it("throws a parse error when the authenticated course page shape is unrecognized",()=>{
     expect(()=>extractGradescopeStudentAssignments(
       fixture("gradescope-course-malformed.html"),
