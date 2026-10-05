@@ -24,7 +24,23 @@ const makeResult=(assignmentLocalId:string,overrides:Partial<SubmissionStatusRes
   submittedAt:"2026-10-04T05:00:00.000Z",checkedAt:"2026-10-04T06:00:00.000Z",extractorVersion:"canvas-html-v1",...overrides,
 });
 
-describe("SubmissionStatusRepository",()=>{\n  it("accepts source-agnostic status writes",()=>{\n    const {db,connection,assignments,assignmentId,statuses}=setup();\n    const write:SubmissionStatusWrite={\n      assignmentLocalId:assignmentId,\n      state:"submitted",\n      isLate:false,\n      isMissing:false,\n      submittedAt:null,\n      checkedAt:"2026-10-04T06:00:00.000Z",\n      extractorVersion:"gradescope-html-v1",\n    };\n    expect(statuses.applyCompletion(connection.id,[write],0,null,"2026-10-04T06:00:01.000Z")).toEqual({updated:1,ignoredStale:0});\n    expect(assignments.list()[0].submissionStatus?.extractorVersion).toBe("gradescope-html-v1");\n    db.close();\n  });\n
+describe("SubmissionStatusRepository",()=>{
+  it("accepts source-agnostic status writes",()=>{
+    const {db,connection,assignments,assignmentId,statuses}=setup();
+    const write:SubmissionStatusWrite={
+      assignmentLocalId:assignmentId,
+      state:"submitted",
+      isLate:false,
+      isMissing:false,
+      submittedAt:null,
+      checkedAt:"2026-10-04T06:00:00.000Z",
+      extractorVersion:"gradescope-html-v1",
+    };
+    expect(statuses.applyCompletion(connection.id,[write],0,null,"2026-10-04T06:00:01.000Z")).toEqual({updated:1,ignoredStale:0});
+    expect(assignments.list()[0].submissionStatus?.extractorVersion).toBe("gradescope-html-v1");
+    db.close();
+  });
+
   it("persists the latest checked status and ignores an older completion",()=>{
     const {db,connection,assignments,assignmentId,statuses}=setup();
     expect(statuses.applyCompletion(connection.id,[makeResult(assignmentId)],0,null,"2026-10-04T06:00:01.000Z")).toEqual({updated:1,ignoredStale:0});
