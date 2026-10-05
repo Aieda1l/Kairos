@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import type { Assignment } from "@/lib/assignments/types";
 import { formatDueDate } from "@/lib/dates/format";
-import { SubmissionStatusBadge } from "@/features/submission-status/submission-status-badge";
+import { AssignmentStatusBadge } from "./assignment-status-badge";
 import { SourceBadge } from "./source-badge";
 import { AssignmentDetailDialog } from "./assignment-detail-dialog";
 
@@ -24,7 +24,7 @@ export function AssignmentRow({assignment,timeZone}:{assignment:Assignment;timeZ
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <SourceBadge source={assignment.source}/>
-          <SubmissionStatusBadge status={assignment.submissionStatus}/>
+          <AssignmentStatusBadge assignment={assignment}/>
           {assignment.sourceUrl&&(
             <a
               href={assignment.sourceUrl}
