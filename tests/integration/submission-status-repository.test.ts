@@ -4,7 +4,8 @@ import { migrate } from "@/lib/db/migrate";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
-import type { SubmissionStatusResultV1 } from "@/lib/extension-protocol/submission-status";\nimport type { SubmissionStatusWrite } from "@/lib/submission-status/types";
+import type { SubmissionStatusResultV1 } from "@/lib/extension-protocol/submission-status";
+import type { SubmissionStatusWrite } from "@/lib/submission-status/types";
 
 function setup() {
   const db=openDatabase(":memory:");
