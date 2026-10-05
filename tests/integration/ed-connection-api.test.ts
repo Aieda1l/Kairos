@@ -19,6 +19,7 @@ const enrollment=(id:number,code:string,name:string)=>({
 beforeEach(()=>{
   dbPath=path.join(os.tmpdir(),`kairos-ed-connect-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
+  process.env.E2E_FIXTURES="0";
   resetDatabaseSingletonForTests();
 });
 afterEach(()=>{
