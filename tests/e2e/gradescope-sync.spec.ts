@@ -19,7 +19,17 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
   });
 
   await page.addInitScript(()=>{
-    const state:GradescopeCapture={messages:[],discoverRequests:0,syncRequests:0};
+    const storageKey="kairos-gradescope-e2e-capture";
+    let state:GradescopeCapture={messages:[],discoverRequests:0,syncRequests:0};
+    try{
+      const stored=window.sessionStorage.getItem(storageKey);
+      if(stored)state=JSON.parse(stored) as GradescopeCapture;
+    }catch{
+      // A pre-navigation document can deny storage access; the real app origin will persist it.
+    }
+    const save=()=>{
+      try{window.sessionStorage.setItem(storageKey,JSON.stringify(state));}catch{}
+    };
     (window as Window&{__gradescopeCapture?:GradescopeCapture}).__gradescopeCapture=state;
 
     window.addEventListener("message",event=>{
@@ -27,6 +37,7 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
       const data=event.data as Record<string,unknown>;
       if(data?.source!=="kairos-page")return;
       state.messages.push(JSON.stringify(data));
+      save();
 
       if(data.type==="PING"){
         window.postMessage({
@@ -43,6 +54,7 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
 
       if(data.type==="GRADESCOPE_DISCOVER_COURSES"){
         state.discoverRequests++;
+        save();
         const payload=data.payload as {requestId:string};
         window.postMessage({
           source:"kairos-extension",
@@ -67,6 +79,7 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
 
       if(data.type==="GRADESCOPE_SYNC_ASSIGNMENTS"){
         state.syncRequests++;
+        save();
         const payload=data.payload as {requestId:string;courseIds:string[]};
         const checkedAt="2026-10-05T06:00:00.000Z";
         window.postMessage({
