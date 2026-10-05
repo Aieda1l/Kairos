@@ -43,6 +43,20 @@ export function startGradescopeDiscovery(
   return {requestId,protocolVersion:1};
 }
 
+function discoveryFailureMessage(code:GradescopeSyncErrorCode):string{
+  switch(code){
+    case "EXTENSION_UNAVAILABLE":return "Firefox extension not detected";
+    case "EXTENSION_TIMEOUT":return "Firefox extension timed out.";
+    case "GRADESCOPE_TAB_UNAVAILABLE":return "Open Gradescope in Firefox, then try again.";
+    case "GRADESCOPE_SIGNED_OUT":return "Sign in to Gradescope, then retry.";
+    case "GRADESCOPE_NETWORK_ERROR":return "Gradescope could not be reached. Try again.";
+    case "GRADESCOPE_PARSE_ERROR":return "Gradescope course data could not be recognized. The connector may need an update.";
+    case "GRADESCOPE_COURSE_UNAVAILABLE":return "A Gradescope course is unavailable.";
+    case "PARTIAL_SYNC":return "Gradescope course discovery completed only partially.";
+    case "INVALID_RESULT":return "Gradescope returned an invalid result.";
+  }
+}
+
 export function completeGradescopeDiscovery(
   db:Database.Database,
   input:GradescopeDiscoverResultV1,
@@ -58,7 +72,7 @@ export function completeGradescopeDiscovery(
   if(input.errorCode){
     throw new GradescopeDiscoveryServiceError(
       "GRADESCOPE_DISCOVERY_FAILED",
-      "Gradescope course discovery did not complete.",
+      discoveryFailureMessage(input.errorCode),
       input.errorCode,
     );
   }
