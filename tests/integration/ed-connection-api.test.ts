@@ -27,9 +27,14 @@ afterEach(()=>{
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
 });
 
-async function post(pathname:string,body:unknown){
-  const route=await import(`@/app/api/sources/ed/${pathname}/route`);
-  return route.POST(new Request("http://local/api",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}));
+async function post(pathname:"test"|"connect",body:unknown){
+  const request=new Request("http://local/api",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+  if(pathname==="test"){
+    const route=await import("@/app/api/sources/ed/test/route");
+    return route.POST(request);
+  }
+  const route=await import("@/app/api/sources/ed/connect/route");
+  return route.POST(request);
 }
 
 describe("Ed connection routes",()=>{
