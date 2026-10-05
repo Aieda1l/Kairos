@@ -298,7 +298,6 @@ git commit -m "feat: connect Ed and manage courses"
 - Create: `src/app/api/sources/ed/sync/route.ts`
 - Create: `tests/integration/ed-sync-service.test.ts`
 - Create: `tests/integration/ed-sync-api.test.ts`
-- Modify: `tests/integration/assignment-repository.test.ts` only if an Ed-specific persistence assertion cannot be expressed cleanly in the new sync-service test
 
 **Interfaces:**
 - Consumes: Task 1 repositories; Task 2 `EdSource`; existing `AssignmentRepository` and `SubmissionStatusRepository`.
