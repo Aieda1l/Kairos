@@ -14,7 +14,6 @@ import { z } from "zod";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 import {
-  gradescopeCourseV1Schema,
   gradescopeSyncErrorCodeSchema,
   type GradescopeSyncErrorCode,
   type GradescopeSyncResultV1,
@@ -300,7 +299,10 @@ export function GradescopeProvider({
   },[getExtensionInfo,router,syncState.lastSuccessfulAt]);
 
   useEffect(()=>{
-    void getExtensionInfo().catch(()=>undefined);
+    const timer=window.setTimeout(()=>{
+      void getExtensionInfo().catch(()=>undefined);
+    },0);
+    return ()=>window.clearTimeout(timer);
   },[getExtensionInfo]);
 
   useEffect(()=>{
