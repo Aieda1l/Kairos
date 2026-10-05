@@ -10,8 +10,14 @@ export type Assignment = {
   courseId: string | null;
   courseName: string;
   title: string;
+  releaseAt: string | null;
   dueAt: string | null;
+  lateDueAt: string | null;
   status: AssignmentStatus;
+  sourceStatusText: string | null;
+  gradeScore: string | null;
+  gradeMax: string | null;
+  gradeDisplay: string | null;
   sourceUrl: string | null;
   sourceUpdatedAt: string | null;
   firstSeenAt: string;
