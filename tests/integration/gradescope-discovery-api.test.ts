@@ -80,6 +80,21 @@ describe("Gradescope discovery routes",()=>{
     expect(await bad.json()).toMatchObject({code:"INVALID_COURSE_SELECTION"});
   });
 
+  it("returns an actionable signed-out discovery error",async()=>{
+    const started=await (await start()).json();
+    const response=await complete({
+      protocolVersion:1,
+      requestId:started.requestId,
+      courses:[],
+      errorCode:"GRADESCOPE_SIGNED_OUT",
+    });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      code:"GRADESCOPE_SIGNED_OUT",
+      message:"Sign in to Gradescope, then retry.",
+    });
+  });
+
   it("strictly rejects raw authenticated content and oversized discovery results",async()=>{
     const started=await (await start()).json();
     const raw=await complete({protocolVersion:1,requestId:started.requestId,courses,errorCode:null,html:"<html>private</html>"});
