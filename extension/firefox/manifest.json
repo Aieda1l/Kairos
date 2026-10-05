@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Kairos Canvas Submission Status",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Lets local Kairos read normalized Canvas submission status from an already signed-in Firefox tab.",
-  "icons": {"48": "icon.svg", "96": "icon.svg"},
+  "icons": {"48": "icon48.png", "96": "icon96.png"},
   "permissions": ["tabs"],
   "host_permissions": [
     "https://canvas.uw.edu/*",
@@ -27,7 +27,7 @@
   ],
   "action": {
     "default_title": "Kairos",
-    "default_icon": "icon.svg",
+    "default_icon": {"48": "icon48.png", "96": "icon96.png"},
     "default_popup": "popup.html"
   },
   "browser_specific_settings": {

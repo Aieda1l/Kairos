@@ -12,11 +12,13 @@ describe("Firefox manifest",()=>{
       icons?:Record<string,string>;
       action?:{default_icon?:string|Record<string,string>};
     };
-    expect(manifest.version).toBe("0.2.6");
-    expect(manifest.icons).toEqual({"48":"icon.svg","96":"icon.svg"});
-    expect(manifest.action?.default_icon).toBe("icon.svg");
-    expect(fs.existsSync(path.join(process.cwd(),"extension/firefox/icon.svg"))).toBe(true);
-    expect(fs.existsSync(path.join(process.cwd(),"src/app/icon.svg"))).toBe(true);
+    expect(manifest.version).toBe("0.2.7");
+    expect(manifest.icons).toEqual({"48":"icon48.png","96":"icon96.png"});
+    expect(manifest.action?.default_icon).toEqual({"48":"icon48.png","96":"icon96.png"});
+    expect(fs.existsSync(path.join(process.cwd(),"extension/firefox/icon48.png"))).toBe(true);
+    expect(fs.existsSync(path.join(process.cwd(),"extension/firefox/icon96.png"))).toBe(true);
+    expect(fs.existsSync(path.join(process.cwd(),"src/app/icon.png"))).toBe(true);
+    expect(fs.existsSync(path.join(process.cwd(),"public/icon.png"))).toBe(true);
     expect(manifest.permissions??[]).toEqual(expect.arrayContaining(["tabs"]));
     expect(manifest.permissions??[]).not.toEqual(expect.arrayContaining(["cookies","history","downloads","<all_urls>"]));
     expect(manifest.host_permissions).toEqual([
