@@ -15,6 +15,7 @@ import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 import {
   gradescopeSyncErrorCodeSchema,
+  type GradescopeDiscoveryDiagnosticsV1,
   type GradescopeSyncErrorCode,
   type GradescopeSyncResultV1,
 } from "@/lib/extension-protocol/gradescope";
@@ -141,6 +142,24 @@ function messageForSyncError(code:GradescopeSyncErrorCode):string{
   }
 }
 
+
+function formatDiscoveryDiagnostics(diagnostics:GradescopeDiscoveryDiagnosticsV1):string{
+  const headings=diagnostics.headings;
+  return [
+    "No Gradescope courses were found.",
+    "Discovery diagnostics:",
+    `root=${diagnostics.accountRootDetected?"yes":"no"}`,
+    `createCourse=${diagnostics.createCourseControlDetected?"yes":"no"}`,
+    `headings=courses:${headings.courses}/student:${headings.studentCourses}/instructor:${headings.instructorCourses}/other:${headings.other}`,
+    `courseLists=${diagnostics.courseListDirectCount} direct/${diagnostics.courseListDescendantCount} total`,
+    `terms=${diagnostics.termDescendantCount}`,
+    `courseLinks=${diagnostics.courseAnchorDescendantCount} prefix/${diagnostics.courseHrefContainsCount??0} contains`,
+    `shortNames=${diagnostics.shortNameNodeCount}`,
+    `fullNames=${diagnostics.fullNameNodeCount}`,
+    `reactProps=${diagnostics.reactPropsNodeCount??0}`,
+  ].join(" ");
+}
+
 function errorMessage(error:unknown):string{
   if(error instanceof Error)return error.message;
   return "Gradescope request failed.";
@@ -211,6 +230,11 @@ export function GradescopeProvider({
       setConnection(completed.connection);
       setCourses(completed.courses);
       setPhase("success");
+      setMessage(
+        result.courses.length===0&&result.discoveryDiagnostics
+          ?formatDiscoveryDiagnostics(result.discoveryDiagnostics)
+          :"",
+      );
       router.refresh();
     }catch(error){
       setPhase("error");
