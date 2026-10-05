@@ -1,33 +1,62 @@
 {
   "manifest_version": 3,
-  "name": "Kairos Canvas Submission Status",
-  "version": "0.2.7",
-  "description": "Lets local Kairos read normalized Canvas submission status from an already signed-in Firefox tab.",
-  "icons": {"48": "icon48.png", "96": "icon96.png"},
-  "permissions": ["tabs"],
+  "name": "Kairos Local Bridge",
+  "version": "0.3.0",
+  "description": "Lets local Kairos read normalized Canvas and Gradescope data from already signed-in Firefox tabs.",
+  "icons": {
+    "48": "icon48.png",
+    "96": "icon96.png"
+  },
+  "permissions": [
+    "tabs"
+  ],
   "host_permissions": [
     "https://canvas.uw.edu/*",
+    "https://www.gradescope.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
   "background": {
-    "scripts": ["dist/background.js"]
+    "scripts": [
+      "dist/background.js"
+    ]
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
-      "js": ["dist/kairos-bridge.js"],
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "dist/kairos-bridge.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://canvas.uw.edu/*"],
-      "js": ["dist/canvas-content.js"],
+      "matches": [
+        "https://canvas.uw.edu/*"
+      ],
+      "js": [
+        "dist/canvas-content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.gradescope.com/*"
+      ],
+      "js": [
+        "dist/gradescope-content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "action": {
     "default_title": "Kairos",
-    "default_icon": {"48": "icon48.png", "96": "icon96.png"},
+    "default_icon": {
+      "48": "icon48.png",
+      "96": "icon96.png"
+    },
     "default_popup": "popup.html"
   },
   "browser_specific_settings": {
