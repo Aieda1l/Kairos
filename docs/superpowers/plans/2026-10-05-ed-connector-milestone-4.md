@@ -551,6 +551,30 @@ git commit -m "feat: integrate Ed lessons into assignment views"
 
 ---
 
+### Task 6A: Apply live-smoke UI corrections
+
+**Files:**
+- Create: `src/features/assignments/assignment-status-badge.tsx`
+- Modify: `src/features/assignments/assignment-row.tsx`
+- Modify: `src/features/assignments/assignment-table.tsx`
+- Modify: `src/features/assignments/assignment-detail-dialog.tsx`
+- Create: `src/features/sync/connected-source-sync-controls.tsx`
+- Modify: `src/features/assignments/assignment-explorer.tsx`
+- Modify: `src/app/(dashboard)/upcoming/page.tsx`
+- Test: `tests/component/ed-assignment-ui.test.tsx`
+- Test: `tests/component/connected-source-sync-controls.test.tsx`
+- Test: `tests/component/upcoming.test.tsx`
+
+Live-account smoke showed that Ed Lessons were correctly imported but the generic submission badge displayed “Status unavailable” even though Ed provides lesson progress. It also showed that Upcoming exposed only Canvas sync controls.
+
+- [x] Display Ed `completed`, `attempted`, and `unattempted` as **Completed**, **In progress**, and **Not started**.
+- [x] Keep generic submission-state handling for resolved-work logic and as a fallback only.
+- [x] Show Upcoming sync controls for every connected source: Canvas deadlines, Canvas submissions, Gradescope, and Ed.
+- [x] Hide controls for disconnected sources and disable course-based source sync until a course is enabled.
+- [x] Preserve Canvas deadline refresh feedback and per-source error messages.
+
+---
+
 ### Task 7: Add end-to-end coverage and secret-leak regression checks
 
 **Files:**
