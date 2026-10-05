@@ -559,17 +559,34 @@ git commit -m "feat: integrate Ed lessons into assignment views"
 ### Task 7: Add end-to-end coverage and secret-leak regression checks
 
 **Files:**
+- Create: `src/lib/ed/e2e-fixture-fetch.ts`
+- Modify: `src/app/api/sources/ed/test/route.ts`
+- Modify: `src/app/api/sources/ed/connect/route.ts`
+- Modify: `src/app/api/sources/ed/refresh/route.ts`
+- Modify: `src/app/api/sources/ed/sync/route.ts`
 - Create: `tests/e2e/ed-sync.spec.ts`
 - Modify: `src/app/api/test-fixtures/reset/route.ts` only if current reset does not clear generic Ed tables through its existing database reset
-- Modify: Playwright fixture/config files only if Ed route mocking needs an existing test-only hook; prefer `page.route()` against Ed's fixed origin
 
 **Interfaces:**
 - Uses public Ed Sources UI and server routes exactly as a browser user does.
-- No real PAT or Ed account is used.
+- Produces `getEdRouteFetch(): typeof fetch`: returns normal global `fetch` unless `E2E_FIXTURES === "1"`; in fixture mode it returns a deterministic in-process fetch implementation for the same fixed `https://edstem.org/api/*` URLs.
+- The fixture fetch accepts only the known E2E token marker and only the exact Ed endpoints needed by the scenario; it never changes `EdApiClient`'s fixed production origin.
+- No real PAT, external Ed request, or Ed account is used.
 
-- [ ] **Step 1: Write the E2E scenario**
+- [ ] **Step 1: Add the server-side Ed E2E fixture transport**
 
-Intercept `https://edstem.org/api/user` and `https://edstem.org/api/courses/123/lessons` with deterministic JSON.
+Because Ed network calls originate inside Next.js server routes, do not use Playwright `page.route()` to mock `edstem.org`; browser routing cannot intercept server-side fetches.
+
+Implement `getEdRouteFetch()` behind the existing `E2E_FIXTURES=1` gate. In fixture mode, return deterministic JSON for:
+
+- `GET https://edstem.org/api/user`;
+- `GET https://edstem.org/api/courses/123/lessons`.
+
+Return 401 for any token other than `fixture-ed-token-never-echo`, and reject any unexpected method/path. Normal application mode must return the real global `fetch`.
+
+Wire the Ed test/connect/refresh/sync routes to pass `getEdRouteFetch()` into their service functions. Unit/integration tests may continue injecting/stubbing fetch directly.
+
+- [ ] **Step 2: Write the E2E scenario**
 
 Exercise:
 
@@ -586,7 +603,7 @@ Exercise:
 11. verify a completed lesson remains visible in All Assignments but not Upcoming;
 12. verify the Ed source status/detail fields.
 
-- [ ] **Step 2: Add request/response secret capture assertions**
+- [ ] **Step 3: Add request/response secret capture assertions**
 
 Capture Kairos `/api/sources/ed/` response bodies and post bodies.
 
@@ -599,7 +616,7 @@ Allow the PAT only in the request body for `/test` and `/connect`; assert it is 
 
 Also assert no serialized `authorization` header appears in Kairos API payloads.
 
-- [ ] **Step 3: Run Firefox/Chromium E2E target used by the repository**
+- [ ] **Step 4: Run the repository E2E target**
 
 Run:
 
@@ -609,10 +626,10 @@ npm run test:e2e -- tests/e2e/ed-sync.spec.ts
 
 Expected: PASS. If Playwright config requires project selection for this file, use the existing project's supported invocation rather than adding a new browser dependency.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add tests/e2e/ed-sync.spec.ts src/app/api/test-fixtures/reset/route.ts
+git add src/lib/ed/e2e-fixture-fetch.ts src/app/api/sources/ed tests/e2e/ed-sync.spec.ts src/app/api/test-fixtures/reset/route.ts
 git commit -m "test: cover Ed onboarding and sync"
 ```
 
