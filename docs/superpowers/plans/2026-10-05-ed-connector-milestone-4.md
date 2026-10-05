@@ -42,7 +42,7 @@
 - Modify: `src/lib/db/repositories/source-connections.ts`
 - Test: `tests/integration/db-schema.test.ts`
 - Test: `tests/integration/source-credentials.test.ts`
-- Test: `tests/integration/source-connections.test.ts` if present; otherwise add Ed assertions to the nearest source-connection repository test
+- Test: `tests/integration/source-credentials.test.ts` (include the Ed connection upsert assertion here so this persistence task stays focused)
 
 **Interfaces:**
 - Consumes: existing `source_connections`, `source_credentials`, `SourceKind = "canvas" | "gradescope" | "ed"`.
@@ -166,8 +166,8 @@ Lesson cases must assert:
 - `completed -> status:"submitted"`;
 - `attempted/unattempted -> status:"pending"`;
 - unknown progress -> `status:"unknown"`;
-- `sourceStatusText` retains meaningful Ed progress/state;
-- missing stable lesson ID/title fails that row safely;
+- `sourceStatusText` is the Ed progress `status` when present, otherwise the availability `state`, otherwise null;
+- a malformed lesson missing stable ID/title is skipped while valid sibling lessons still parse;
 - unrecognized top-level payload -> `ED_PARSE_ERROR`;
 - `sourceUrl` is `null` until a stable canonical lesson URL has been verified.
 
@@ -359,7 +359,7 @@ Expected: FAIL because the Ed sync service/route do not exist.
 
 At sync start:
 
-- mark the connection attempt using `SubmissionStatusRepository.markAttempt`;
+- mark the connection attempt using both `SourceConnectionRepository.markSyncStarted` and `SubmissionStatusRepository.markAttempt`;
 - load the stored PAT and enabled courses;
 - fetch each course independently with an `EdSource`.
 
@@ -369,7 +369,7 @@ Persist only successful-course assignments/status rows. Never delete missing ass
 
 Use `SubmissionStatusRepository.applyCompletion(..., successfulChecksOverride)` so a successful empty course advances freshness.
 
-Return `PARTIAL_SYNC` when successful course count > 0 and failed course count > 0; use the first stable upstream error when all fail.
+Return `PARTIAL_SYNC` when successful course count > 0 and failed course count > 0; use the first stable upstream error when all fail. Mirror the result into `source_connections`: full success -> `markSyncSuccess(..., null)`, partial success -> `markSyncSuccess(..., "PARTIAL_SYNC")`, total failure -> `markSyncError(...)`.
 
 - [ ] **Step 6: Implement `POST /api/sources/ed/sync`**
 
@@ -487,10 +487,6 @@ git commit -m "feat: add Ed source onboarding UI"
 - Modify: `src/lib/assignments/queries.ts`
 - Modify: `tests/unit/due-date-groups.test.ts`
 - Create: `tests/component/ed-assignment-ui.test.tsx`
-- Modify: assignment row/table/detail files only if the new tests expose missing generic rendering:
-  - `src/features/assignments/assignment-row.tsx`
-  - `src/features/assignments/assignment-table.tsx`
-  - `src/features/assignments/assignment-detail-dialog.tsx`
 
 **Interfaces:**
 - Consumes: persisted Ed `Assignment` plus Task 4 submission-status rows.
@@ -539,7 +535,7 @@ if source is ed and dueAt is null, skip it
 
 Do not remove or rename the existing `no-due-date` bucket because other sources rely on it.
 
-Only change assignment presentation components if their tests reveal a generic-field gap.
+The existing generic assignment row/table/detail components already consume `source`, `releaseAt`, `dueAt`, `sourceStatusText`, and nullable `sourceUrl`; do not add Ed-specific branches to them.
 
 - [ ] **Step 5: Run focused tests and verify pass**
 
@@ -550,7 +546,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/lib/assignments/queries.ts tests/unit/due-date-groups.test.ts tests/component/ed-assignment-ui.test.tsx src/features/assignments
+git add src/lib/assignments/queries.ts tests/unit/due-date-groups.test.ts tests/component/ed-assignment-ui.test.tsx
 git commit -m "feat: integrate Ed lessons into assignment views"
 ```
 
@@ -565,7 +561,6 @@ git commit -m "feat: integrate Ed lessons into assignment views"
 - Modify: `src/app/api/sources/ed/refresh/route.ts`
 - Modify: `src/app/api/sources/ed/sync/route.ts`
 - Create: `tests/e2e/ed-sync.spec.ts`
-- Modify: `src/app/api/test-fixtures/reset/route.ts` only if current reset does not clear generic Ed tables through its existing database reset
 
 **Interfaces:**
 - Uses public Ed Sources UI and server routes exactly as a browser user does.
@@ -629,7 +624,7 @@ Expected: PASS. If Playwright config requires project selection for this file, u
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/ed/e2e-fixture-fetch.ts src/app/api/sources/ed tests/e2e/ed-sync.spec.ts src/app/api/test-fixtures/reset/route.ts
+git add src/lib/ed/e2e-fixture-fetch.ts src/app/api/sources/ed tests/e2e/ed-sync.spec.ts
 git commit -m "test: cover Ed onboarding and sync"
 ```
 
