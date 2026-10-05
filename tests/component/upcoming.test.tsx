@@ -38,12 +38,12 @@ beforeEach(()=>{refresh.mockClear();statusSyncNow.mockClear();vi.unstubAllGlobal
 
 it("groups and filters upcoming assignments while showing submission status",async()=>{
   const user=userEvent.setup();
-  render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} lastSyncCompletedAt={null} canvasConnected/>);
+  render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} canvasConnected/>);
   expect(screen.queryByText("Today")).not.toBeInTheDocument();
   expect(screen.getByRole("heading",{name:/No due date/})).toBeInTheDocument();
   expect(screen.queryByText("Submitted · Late")).not.toBeInTheDocument();
   expect(screen.getByText("Status unavailable")).toBeInTheDocument();
-  expect(screen.getByRole("button",{name:"Sync submission status"})).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Sync All"})).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Course"),"CSE 331");
   expect(screen.queryByText("Homework 3")).not.toBeInTheDocument();
   expect(screen.queryByText("Problem Set")).not.toBeInTheDocument();
@@ -52,8 +52,8 @@ it("groups and filters upcoming assignments while showing submission status",asy
 it("refreshes server-rendered assignments after a successful deadline sync",async()=>{
   const user=userEvent.setup();
   vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({connectionId:"1",inserted:1,updated:0,skipped:0,errors:[],partial:false,completedAt:"2026-10-03T20:00:00Z"}),{status:200})));
-  render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} lastSyncCompletedAt={null} canvasConnected/>);
-  await user.click(screen.getByRole("button",{name:"Sync Now"}));
+  render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} canvasConnected/>);
+  await user.click(screen.getByRole("button",{name:"Sync All"}));
   await waitFor(()=>expect(refresh).toHaveBeenCalledTimes(1));
   expect(screen.getByText("Canvas sync complete.")).toBeInTheDocument();
 });
