@@ -109,6 +109,52 @@ describe("Gradescope sync service",()=>{
     db.close();
   });
 
+  it("returns anonymous error-code and page-structure diagnostics for failed courses",()=>{
+    const {db}=setup();
+    const started=startGradescopeSync(db,new Date("2026-10-05T05:00:00.000Z"));
+    const result=completeGradescopeSync(db,{
+      requestId:started.requestId,
+      batches:[{
+        protocolVersion:1,
+        requestId:started.requestId,
+        courses:[
+          {courseId:"123",checkedAt:"2026-10-05T05:05:00.000Z",assignments:[assignment()],errorCode:null,parseDiagnosticCounts:[]},
+          {
+            courseId:"456",
+            checkedAt:"2026-10-05T05:05:00.000Z",
+            assignments:[],
+            errorCode:"GRADESCOPE_PARSE_ERROR",
+            parseDiagnosticCounts:[],
+            assignmentDiagnostics:{
+              courseRootDetected:true,
+              tableCount:0,
+              roleRowCount:0,
+              assignmentLinkCount:0,
+              submitButtonCount:0,
+              assignmentTableDetected:false,
+            },
+          },
+        ],
+        errorCode:"PARTIAL_SYNC",
+      }],
+    },new Date("2026-10-05T05:05:01.000Z"));
+
+    expect(result.failureErrorCodes).toEqual([{code:"GRADESCOPE_PARSE_ERROR",count:1}]);
+    expect(result.failureStructures).toEqual([{
+      errorCode:"GRADESCOPE_PARSE_ERROR",
+      diagnostics:{
+        courseRootDetected:true,
+        tableCount:0,
+        roleRowCount:0,
+        assignmentLinkCount:0,
+        submitButtonCount:0,
+        assignmentTableDetected:false,
+      },
+    }]);
+    expect(JSON.stringify(result)).not.toContain("456");
+    db.close();
+  });
+
   it("rejects a missing or unexpected course result and records invalid-result state",()=>{
     const {db,connection,statuses}=setup();
     const started=startGradescopeSync(db,new Date("2026-10-05T05:00:00.000Z"));
