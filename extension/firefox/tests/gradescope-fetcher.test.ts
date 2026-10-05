@@ -35,6 +35,11 @@ describe("Gradescope same-origin fetching",()=>{
     }));
     expect(result.courses.map(course=>course.courseId)).toEqual(["123","124"]);
     expect(result.requestId).toBe(requestId);
+    expect(result.discoveryDiagnostics).toMatchObject({
+      accountRootDetected:true,
+      courseListDescendantCount:2,
+      courseAnchorDescendantCount:3,
+    });
     expect(JSON.stringify(result)).not.toContain("<html");
   });
 
@@ -51,6 +56,11 @@ describe("Gradescope same-origin fetching",()=>{
       (async()=>response("<html><body>private changed page</body></html>")) as typeof fetch,
     );
     expect(malformed.errorCode).toBe("GRADESCOPE_PARSE_ERROR");
+    expect(malformed.discoveryDiagnostics).toMatchObject({
+      accountRootDetected:false,
+      courseListDescendantCount:0,
+      courseAnchorDescendantCount:0,
+    });
     expect(JSON.stringify(malformed)).not.toContain("private changed page");
   });
 
