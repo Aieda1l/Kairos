@@ -89,8 +89,9 @@ describe("Ed connection routes",()=>{
     vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({user:{id:7}}),{status:200,headers:{"content-type":"application/json"}})));
     const malformed=await post("connect",{token:"secret-malformed-token"});
     expect(malformed.status).toBe(502);
-    expect(await malformed.json()).toMatchObject({code:"ED_PARSE_ERROR"});
-    expect(await malformed.clone().text()).not.toContain("secret-malformed-token");
+    const malformedText=await malformed.text();
+    expect(JSON.parse(malformedText)).toMatchObject({code:"ED_PARSE_ERROR"});
+    expect(malformedText).not.toContain("secret-malformed-token");
   });
 
   it("keeps the previous valid token when a replacement token fails validation",async()=>{
