@@ -1,7 +1,6 @@
 import "server-only";
 import type Database from "better-sqlite3";
-import type { SubmissionStatusResultV1 } from "@/lib/extension-protocol/submission-status";
-import type { SubmissionStatusSyncState, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
+import type { SubmissionStatusSyncState, SubmissionStatusWrite, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
 
 type SyncRow={
   last_attempted_at:string|null;
@@ -40,7 +39,7 @@ export class SubmissionStatusRepository {
 
   applyCompletion(
     sourceConnectionId:string,
-    results:SubmissionStatusResultV1[],
+    results:SubmissionStatusWrite[],
     failedCount:number,
     errorCode:SubmissionSyncErrorCode|null,
     completedAt:string,
