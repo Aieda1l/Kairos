@@ -34,10 +34,14 @@ export function getSubmissionStatusLabel(
   return parts.join(" · ");
 }
 
+export function submissionStatusClassesForState(state:SubmissionVisualState):string{
+  return statusClasses[state];
+}
+
 export function submissionStatusClasses(
   status:AssignmentSubmissionStatus|null,
 ):string{
-  return statusClasses[submissionVisualState(status)];
+  return submissionStatusClassesForState(submissionVisualState(status));
 }
 
 export function isResolvedSubmissionStatus(
