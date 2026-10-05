@@ -161,7 +161,8 @@ git commit -m "feat: define Gradescope bridge protocol"
 
 **Interfaces:**
 - Produces `extractGradescopeStudentCourses(html: string): GradescopeCourseV1[]`.
-- Produces `extractGradescopeStudentAssignments(html: string, courseId: string, checkedAt: string): { assignments: GradescopeAssignmentV1[]; diagnostics: GradescopeParseDiagnostic[] }`.
+- Produces `GradescopeParseError` for an authenticated page whose expected student-course/assignment structure is absent.
+- Produces `extractGradescopeStudentAssignments(html: string, courseId: string, checkedAt: string): { assignments: GradescopeAssignmentV1[]; diagnostics: GradescopeParseDiagnostic[] }`; malformed page shape throws `GradescopeParseError`, while malformed individual rows are omitted with diagnostics.
 - Uses `DOMParser`; no BeautifulSoup/Python dependency.
 - Maps numeric visible score to `graded`, exact normalized `Submitted` to `submitted`, exact `No Submission`/`Not Submitted` to `not_submitted`, all other text to `unknown`.
 - Leaves `submittedAt` null unless a future verified page field exists.
@@ -219,7 +220,7 @@ git commit -m "feat: parse Gradescope student courses and assignments"
 - Modify: `extension/firefox/src/popup.ts`
 - Modify: `extension/firefox/popup.html`
 - Create: `extension/firefox/tests/gradescope-fetcher.test.ts`
-- Modify: `extension/firefox/tests/background-broker.test.ts`
+- Modify: `extension/firefox/tests/broker.test.ts`
 - Modify: `extension/firefox/tests/manifest.test.ts`
 
 **Interfaces:**
@@ -246,7 +247,7 @@ Assert:
 - [ ] **Step 2: Run extension tests and verify RED**
 
 Run:
-`npm test -- extension/firefox/tests/gradescope-fetcher.test.ts extension/firefox/tests/background-broker.test.ts extension/firefox/tests/manifest.test.ts`
+`npm test -- extension/firefox/tests/gradescope-fetcher.test.ts extension/firefox/tests/broker.test.ts extension/firefox/tests/manifest.test.ts`
 
 Expected: FAIL.
 
@@ -329,7 +330,7 @@ git commit -m "feat: persist Gradescope course discovery"
 **Interfaces:**
 - `startGradescopeSync(db, now?) -> { requestId, courseIds, maxCourseBatchSize: 20 }` binds the request to the exact enabled discovered course IDs and marks an attempt.
 - `completeGradescopeSync(db, input, now?)` consumes the request, rejects unexpected course IDs, constructs canonical source URLs server-side, upserts assignment metadata, applies normalized submission writes, and returns counts/freshness/error diagnostics.
-- A successful parsed assignment uses `externalId = assignmentId` within the Gradescope source connection.
+- A successful parsed assignment uses `externalId = assignmentId` within the Gradescope source connection and maps normalized state to legacy `Assignment.status` as: `graded -> graded`, `submitted -> submitted`, `not_submitted -> pending`, `unknown -> unknown`.
 - Grade/status/metadata for a failed course are left untouched.
 - A course with a successful parse but zero assignments counts as actually checked.
 - `lastSuccessfulAt` advances when >=1 selected course was actually checked, including partial success.
