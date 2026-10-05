@@ -14,7 +14,8 @@ function setup() {
   const assignments=new AssignmentRepository(db);
   assignments.upsertMany(connection.id,[{
     source:"canvas",externalId:"event-assignment-1",courseId:"999",courseName:"CSE 999",title:"HW",
-    dueAt:"2026-10-08T06:59:00.000Z",status:"unknown",sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",sourceUpdatedAt:null,
+    releaseAt:null,
+    dueAt:"2026-10-08T06:59:00.000Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",sourceUpdatedAt:null,
   }],"2026-10-01T00:00:00.000Z");
   return {db,connection,assignments,assignmentId:assignments.list()[0].id,statuses:new SubmissionStatusRepository(db)};
 }
