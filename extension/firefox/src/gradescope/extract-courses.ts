@@ -22,14 +22,15 @@ export function extractGradescopeStudentCourses(html:string):GradescopeCourseV1[
   if(!root)throw new GradescopeParseError("Gradescope account page structure was not recognized.");
 
   const courses:GradescopeCourseV1[]=[];
-  let studentSection=true;
+  const isStaff=Boolean(document.querySelector("button.js-createNewCourse"));
+  let studentSection=!isStaff;
   let sawCourseSection=false;
 
   for(const child of Array.from(root.children)){
     if(child.matches("h2.pageHeading")){
       const heading=child.textContent?.trim()??"";
       if(heading==="Student Courses")studentSection=true;
-      else if(/Courses$/.test(heading))studentSection=false;
+      else if(heading==="Instructor Courses")studentSection=false;
       continue;
     }
     if(!child.classList.contains("courseList"))continue;
