@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { SourceConnection } from "@/lib/assignments/types";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { SourceStatus } from "./source-status";
@@ -14,6 +15,13 @@ export function GradescopeSourceCard(){
 
 
   const busy=gradescope.phase==="discovering"||gradescope.phase==="syncing";
+  const statusConnection:SourceConnection|null=gradescope.connection?{
+    ...gradescope.connection,
+    lastSyncStatus:gradescope.lastSuccessfulAt
+      ?gradescope.lastErrorCode&&gradescope.lastErrorCode!=="PARTIAL_SYNC"?"error":"success"
+      :"never",
+    lastErrorCode:gradescope.lastErrorCode,
+  }:null;
 
   function toggle(courseId:string,checked:boolean){
     setSelected(current=>checked
@@ -31,7 +39,7 @@ export function GradescopeSourceCard(){
             Kairos never asks for your Gradescope password.
           </p>
         </div>
-        <SourceStatus connection={gradescope.connection}/>
+        <SourceStatus connection={statusConnection}/>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -93,6 +101,16 @@ export function GradescopeSourceCard(){
         </fieldset>
       )}
 
+      {(gradescope.lastAttemptedAt||gradescope.lastSuccessfulAt)&&(
+        <div className="mt-4 grid gap-1 text-sm text-[var(--muted)]">
+          {gradescope.lastAttemptedAt&&(
+            <p>Last attempted {new Date(gradescope.lastAttemptedAt).toLocaleString()}</p>
+          )}
+          {gradescope.lastSuccessfulAt&&(
+            <p>Last successful {new Date(gradescope.lastSuccessfulAt).toLocaleString()}</p>
+          )}
+        </div>
+      )}
       <p className="mt-4 text-sm text-[var(--muted)]">
         {gradescope.extensionDetected
           ?gradescope.gradescopeTabDetected
