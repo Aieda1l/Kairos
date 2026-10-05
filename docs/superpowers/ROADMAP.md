@@ -56,9 +56,9 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-04-gradescope-connector-design.md`
 - `docs/superpowers/plans/2026-10-04-gradescope-connector-milestone-3.md`
 
-## Milestone 4 — Direct Ed connector — Automated implementation complete; verification/manual smoke pending
+## Milestone 4 — Direct Ed connector — Complete
 
-Implemented on `feat/milestone-4-ed-connector`:
+Delivered:
 - direct read-only Ed API access using a user-created personal API token;
 - token persistence only in the local server-side SQLite credential table;
 - enrolled-course discovery with explicit local course selection;
@@ -70,10 +70,9 @@ Implemented on `feat/milestone-4-ed-connector`:
 - Ed-native progress labels in assignment surfaces plus one purple Upcoming Sync All action for every connected source;
 - deterministic integration/component/E2E coverage designed to assert token non-exposure.
 
-Remaining completion gates:
-- run the full automated verification suite on the implementation branch;
-- complete the documented real-account Ed smoke using the user's token without exposing it in chat/logs/fixtures;
-- only then mark Milestone 4 complete.
+Completed validation:
+- full feature CI passed: Vitest, lint, typecheck, Firefox extension build, Playwright E2E, production build, dynamic-dashboard verification, and credential/permission review;
+- real-account smoke confirmed Ed token connection, course discovery/selection, lesson synchronization, Ed-native progress/status presentation, calendar styling, and the Upcoming Sync All workflow.
 
 Primary docs:
 - `docs/superpowers/specs/2026-10-05-ed-connector-design.md`
