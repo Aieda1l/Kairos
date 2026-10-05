@@ -1,0 +1,28 @@
+name: Prune merged branches
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    if: github.event.head_commit.message == 'chore: prune merged branches'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Delete verified merged branches
+        run: |
+          set -euo pipefail
+          for branch in             feat/kairos-icon-and-upcoming             feat/milestone-1-dashboard             feat/milestone-2-submission-status             feat/status-color-coding             fix/canvas-submission-api             fix/canvas-submission-http-status             fix/canvas-submission-status-diagnostics             fix/canvas-submission-status-network             fix/submission-status-semantics
+          do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              git push origin --delete "$branch"
+            fi
+          done
