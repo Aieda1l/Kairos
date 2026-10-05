@@ -119,37 +119,26 @@ export async function handleBridgeRequest(
   }
 
   if(parsed.type==="GRADESCOPE_DISCOVER_COURSES"){
+    let raw:unknown;
     try{
-      const payload=gradescopeDiscoverResultV1Schema.parse(
-        await adapter.sendToGradescopeTab(tab.id,parsed.payload),
-      );
-      if(payload.requestId!==parsed.requestId){
-        return bridgeError(
-          parsed.requestId,
-          "INVALID_RESULT",
-          "Gradescope returned a result for a different request.",
-        );
-      }
-      return kairosBridgeResponseV1Schema.parse({
-        source:"kairos-extension",
-        type:"GRADESCOPE_DISCOVER_COURSES_RESULT",
-        protocolVersion:PROTOCOL_VERSION,
-        requestId:parsed.requestId,
-        payload,
-      });
+      raw=await adapter.sendToGradescopeTab(tab.id,parsed.payload);
     }catch{
+      return bridgeError(
+        parsed.requestId,
+        "INVALID_RESULT",
+        "Refresh the Gradescope tab after reloading the Kairos extension, then try again.",
+      );
+    }
+
+    const result=gradescopeDiscoverResultV1Schema.safeParse(raw);
+    if(!result.success){
       return bridgeError(
         parsed.requestId,
         "INVALID_RESULT",
         "Gradescope returned an invalid course discovery result.",
       );
     }
-  }
-
-  try{
-    const payload=gradescopeSyncResultV1Schema.parse(
-      await adapter.sendToGradescopeTab(tab.id,parsed.payload),
-    );
+    const payload=result.data;
     if(payload.requestId!==parsed.requestId){
       return bridgeError(
         parsed.requestId,
@@ -159,16 +148,45 @@ export async function handleBridgeRequest(
     }
     return kairosBridgeResponseV1Schema.parse({
       source:"kairos-extension",
-      type:"GRADESCOPE_SYNC_ASSIGNMENTS_RESULT",
+      type:"GRADESCOPE_DISCOVER_COURSES_RESULT",
       protocolVersion:PROTOCOL_VERSION,
       requestId:parsed.requestId,
       payload,
     });
+  }
+
+  let raw:unknown;
+  try{
+    raw=await adapter.sendToGradescopeTab(tab.id,parsed.payload);
   }catch{
+    return bridgeError(
+      parsed.requestId,
+      "INVALID_RESULT",
+      "Refresh the Gradescope tab after reloading the Kairos extension, then try again.",
+    );
+  }
+
+  const result=gradescopeSyncResultV1Schema.safeParse(raw);
+  if(!result.success){
     return bridgeError(
       parsed.requestId,
       "INVALID_RESULT",
       "Gradescope returned an invalid assignment sync result.",
     );
   }
+  const payload=result.data;
+  if(payload.requestId!==parsed.requestId){
+    return bridgeError(
+      parsed.requestId,
+      "INVALID_RESULT",
+      "Gradescope returned a result for a different request.",
+    );
+  }
+  return kairosBridgeResponseV1Schema.parse({
+    source:"kairos-extension",
+    type:"GRADESCOPE_SYNC_ASSIGNMENTS_RESULT",
+    protocolVersion:PROTOCOL_VERSION,
+    requestId:parsed.requestId,
+    payload,
+  });
 }
