@@ -120,6 +120,8 @@ function installFetch({
         lastErrorCode:syncErrorCode,
         failureDiagnostics:[],
         failureHttpStatuses:[],
+        failureErrorCodes:[],
+        failureStructures:[],
       });
     }
     throw new Error(`Unexpected fetch ${url} ${init?.method??"GET"}`);
