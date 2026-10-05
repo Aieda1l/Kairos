@@ -190,8 +190,10 @@ Normalization is intentionally conservative:
 
 - visible numeric grade -> `graded`;
 - explicit Gradescope "Submitted" state -> `submitted`;
-- explicit source text meaning no submission -> `not_submitted`;
-- any unrecognized status -> `unknown`.
+- exact normalized source text `No Submission` or `Not Submitted` -> `not_submitted`;
+- any other unrecognized status -> `unknown`.
+
+If the real student UI uses another explicit no-submission phrase during manual smoke testing, add that phrase only with a regression fixture/test before changing the allowlist.
 
 Kairos must never infer `not_submitted` merely because no grade is visible.
 
