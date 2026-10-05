@@ -417,6 +417,28 @@ Where available, show:
 - Ed progress/status;
 - source link.
 
+### Ed progress presentation
+
+Assignment rows and tables show Ed-native lesson progress instead of the Canvas-oriented “Status unavailable” label whenever Ed exposes a progress/status value:
+
+- `completed` -> **Completed**;
+- `attempted` -> **In progress**;
+- `unattempted` -> **Not started**;
+- other non-empty Ed status values are displayed in human-readable form.
+
+The normalized submission-status record remains available for source-independent resolved-work logic, but it is not the primary user-facing label for Ed Lessons.
+
+### Upcoming sync controls
+
+Upcoming shows sync controls for every connected source rather than only Canvas:
+
+- Canvas calendar/deadline sync;
+- Canvas submission-status sync;
+- Gradescope sync when a Gradescope connection exists;
+- Ed sync when an Ed connection exists.
+
+Gradescope and Ed controls remain disabled until at least one discovered course is enabled, and each source keeps its own warning/error message visible.
+
 ### Calendar
 
 Only lessons with real due dates create dated assignment events.
