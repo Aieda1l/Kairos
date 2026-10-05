@@ -29,13 +29,13 @@ function seed(options:{second?:boolean;invalid?:boolean}={}){
   const connection=new SourceConnectionRepository(db).upsertCanvas("Canvas");
   const assignments=new AssignmentRepository(db);
   assignments.upsertMany(connection.id,[{
-    source:"canvas",externalId:"one",courseId:"999",courseName:"CSE 999",title:"One",dueAt:null,status:"unknown",
+    source:"canvas",externalId:"one",courseId:"999",courseName:"CSE 999",title:"One",releaseAt:null,dueAt:null,lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,
     sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",sourceUpdatedAt:null,
   },...(options.second?[{
-    source:"canvas" as const,externalId:"two",courseId:"999",courseName:"CSE 999",title:"Two",dueAt:null,status:"unknown" as const,
+    source:"canvas" as const,externalId:"two",courseId:"999",courseName:"CSE 999",title:"Two",releaseAt:null,dueAt:null,lateDueAt:null,status:"unknown" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,
     sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4343",sourceUpdatedAt:null,
   }]:[]),...(options.invalid?[{
-    source:"canvas" as const,externalId:"bad",courseId:"abc",courseName:"CSE 999",title:"Bad",dueAt:null,status:"unknown" as const,
+    source:"canvas" as const,externalId:"bad",courseId:"abc",courseName:"CSE 999",title:"Bad",releaseAt:null,dueAt:null,lateDueAt:null,status:"unknown" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,
     sourceUrl:"https://evil.example/courses/abc/assignments/999",sourceUpdatedAt:null,
   }]:[])],"2026-10-04T05:00:00.000Z");
   return {db,connection,assignments};
