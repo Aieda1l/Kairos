@@ -93,6 +93,24 @@ describe("extractGradescopeStudentAssignments",()=>{
     expect(result.diagnostics).toEqual([{code:"MISSING_STABLE_ID",count:1}]);
   });
 
+  it("treats the Gradescope two-role-row empty student course signature as a valid empty course",()=>{
+    const html=`
+      <html><body>
+        <table><tbody><tr><td>Unrelated course metadata</td></tr></tbody></table>
+        <table>
+          <tbody>
+            <tr role="row"><th>Assignments</th><th>Status</th><th>Due</th></tr>
+            <tr role="row"><td></td><td></td><td></td></tr>
+          </tbody>
+        </table>
+      </body></html>
+    `;
+    expect(extractGradescopeStudentAssignments(html,"123",checkedAt)).toEqual({
+      assignments:[],
+      diagnostics:[],
+    });
+  });
+
   it("throws a parse error when the authenticated course page shape is unrecognized",()=>{
     expect(()=>extractGradescopeStudentAssignments(
       fixture("gradescope-course-malformed.html"),
