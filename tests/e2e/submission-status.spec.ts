@@ -114,7 +114,7 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
     capture?.releaseFirstSync();
   });
 
-  await expect(page.getByText("Submitted").first()).toBeVisible();
+  await expect(page.getByText("Fixture Homework")).toHaveCount(0);
   await expect(page.getByText(/Canvas submissions · Updated/)).toBeVisible();
 
   // router.refresh() rerenders server data but must not start a second automatic sync.
@@ -123,7 +123,7 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
 
   await page.getByRole("button",{name:"Sync submission status"}).click();
   await expect.poll(()=>startRequests).toBe(2);
-  await expect(page.getByText("Submitted").first()).toBeVisible();
+  await expect(page.getByText("Fixture Homework")).toHaveCount(0);
 
   const bridgeCapture=await page.evaluate(()=>{
     const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;
