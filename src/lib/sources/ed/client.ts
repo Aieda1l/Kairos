@@ -1,6 +1,6 @@
 import { EdSourceError } from "./errors";
 
-const ED_API_BASE="https://edstem.org/api/";
+const ED_API_BASE="https://us.edstem.org/api/";
 const DECIMAL_ID=/^\d+$/;
 
 export class EdApiClient{
@@ -47,7 +47,7 @@ export class EdApiClient{
       throw new EdSourceError("ED_COURSE_UNAVAILABLE","This Ed course could not be read.");
     }
     if(!response.ok){
-      throw new EdSourceError("ED_UPSTREAM_ERROR","Ed returned an unexpected response. Try again.");
+      throw new EdSourceError("ED_UPSTREAM_ERROR",`Ed returned HTTP ${response.status}. Try again.`);
     }
 
     try{
