@@ -1,4 +1,7 @@
-import type { GradescopeAssignmentV1 } from "@/lib/extension-protocol/gradescope";
+import type {
+  GradescopeAssignmentStructureDiagnosticsV1,
+  GradescopeAssignmentV1,
+} from "@/lib/extension-protocol/gradescope";
 import { GradescopeParseError } from "./errors";
 
 export { GradescopeParseError } from "./errors";
@@ -35,6 +38,26 @@ function findAssignmentTable(document:Document,courseId:string):Element|null{
     );
     return /\bassignment\b/i.test(header)&&/\b(status|points|grade)\b/i.test(header);
   })??null;
+}
+
+
+export function inspectGradescopeAssignmentStructure(
+  html:string,
+  courseId:string,
+):GradescopeAssignmentStructureDiagnosticsV1{
+  const document=new DOMParser().parseFromString(html,"text/html");
+  return {
+    courseRootDetected:Boolean(document.querySelector("main#course-show")),
+    tableCount:document.querySelectorAll("table").length,
+    roleRowCount:document.querySelectorAll('tr[role="row"]').length,
+    assignmentLinkCount:document.querySelectorAll(
+      `a[href^="/courses/${courseId}/assignments/"]`,
+    ).length,
+    submitButtonCount:document.querySelectorAll(
+      "button.js-submitAssignment[data-assignment-id]",
+    ).length,
+    assignmentTableDetected:Boolean(findAssignmentTable(document,courseId)),
+  };
 }
 
 function assignmentIdFromCell(cell:Element,courseId:string):string|null{
