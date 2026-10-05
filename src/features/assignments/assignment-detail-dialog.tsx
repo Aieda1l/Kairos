@@ -9,6 +9,12 @@ function formatTimestamp(value:string,timeZone:string):string {
   return new Date(value).toLocaleString("en-US",{timeZone});
 }
 
+function sourceLabel(source:Assignment["source"]):string{
+  if(source==="canvas")return "Canvas";
+  if(source==="gradescope")return "Gradescope";
+  return "Ed";
+}
+
 export function AssignmentDetailDialog({
   assignment,
   timeZone,
@@ -25,9 +31,21 @@ export function AssignmentDetailDialog({
     <Dialog open={open} onClose={onClose} title={assignment.title}>
       <dl className="grid gap-3 text-sm">
         <div><dt className="text-[var(--muted)]">Course</dt><dd>{assignment.courseName}</dd></div>
+        {assignment.releaseAt&&(
+          <div><dt className="text-[var(--muted)]">Released</dt><dd>{formatTimestamp(assignment.releaseAt,timeZone)}</dd></div>
+        )}
         <div><dt className="text-[var(--muted)]">Due</dt><dd>{formatDueDate(assignment.dueAt,timeZone)}</dd></div>
+        {assignment.lateDueAt&&(
+          <div><dt className="text-[var(--muted)]">Late due</dt><dd>{formatTimestamp(assignment.lateDueAt,timeZone)}</dd></div>
+        )}
         <div><dt className="text-[var(--muted)]">Source</dt><dd className="mt-1"><SourceBadge source={assignment.source}/></dd></div>
+        {assignment.sourceStatusText&&(
+          <div><dt className="text-[var(--muted)]">Source status</dt><dd>{assignment.sourceStatusText}</dd></div>
+        )}
         <div><dt className="text-[var(--muted)]">Submission status</dt><dd className="mt-1"><SubmissionStatusBadge status={status}/></dd></div>
+        {assignment.gradeDisplay&&(
+          <div><dt className="text-[var(--muted)]">Grade</dt><dd>{assignment.gradeDisplay}</dd></div>
+        )}
         {status?.submittedAt&&(
           <div><dt className="text-[var(--muted)]">Submitted at</dt><dd>{formatTimestamp(status.submittedAt,timeZone)}</dd></div>
         )}
@@ -42,7 +60,7 @@ export function AssignmentDetailDialog({
           target="_blank"
           rel="noreferrer"
         >
-          Open in {assignment.source==="canvas"?"Canvas":assignment.source}
+          Open in {sourceLabel(assignment.source)}
         </a>
       )}
     </Dialog>
