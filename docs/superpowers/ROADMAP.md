@@ -67,7 +67,7 @@ Implemented on `feat/milestone-4-ed-connector`:
 - effective release/due timestamp support without invented deadlines;
 - partial/failure-safe per-course synchronization that preserves prior data;
 - Ed Sources UI with test/connect, token replacement, course refresh/selection, and manual sync;
-- Ed-native progress labels in assignment surfaces plus Upcoming sync controls for every connected source;
+- Ed-native progress labels in assignment surfaces plus one purple Upcoming Sync All action for every connected source;
 - deterministic integration/component/E2E coverage designed to assert token non-exposure.
 
 Remaining completion gates:
