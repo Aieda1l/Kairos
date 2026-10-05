@@ -141,9 +141,19 @@ const gradescopeSyncBridgeResponseV1Schema=z.object({
   payload:gradescopeSyncResultV1Schema,
 }).strict();
 
+const gradescopeErrorBridgeResponseV1Schema=z.object({
+  source:z.literal("kairos-extension"),
+  type:z.literal("ERROR"),
+  protocolVersion:z.literal(PROTOCOL_VERSION),
+  requestId:z.string().uuid(),
+  errorCode:gradescopeSyncErrorCodeSchema,
+  message:z.string().min(1),
+}).strict();
+
 export const gradescopeBridgeResponseV1Schema=z.discriminatedUnion("type",[
   gradescopeDiscoverBridgeResponseV1Schema,
   gradescopeSyncBridgeResponseV1Schema,
+  gradescopeErrorBridgeResponseV1Schema,
 ]);
 
 export type GradescopeCourseV1=z.infer<typeof gradescopeCourseV1Schema>;
