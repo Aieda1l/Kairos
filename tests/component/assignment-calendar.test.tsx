@@ -80,3 +80,41 @@ it("color-codes calendar assignments and marks resolved work as complete",()=>{
   const unavailable=screen.getByRole("button",{name:/Unknown HW.*Status unavailable/i});
   expect(unavailable.className).toContain("--status-unavailable");
 });
+
+
+it("uses Ed-native progress for calendar color and accessibility labels",()=>{
+  const edBase:Assignment={
+    ...item("ed-attempted","Ed attempted","unknown"),
+    source:"ed",
+    status:"pending",
+    sourceStatusText:"attempted",
+    submissionStatus:{
+      state:"unknown",
+      isLate:false,
+      isMissing:false,
+      submittedAt:null,
+      checkedAt:"2026-10-04T23:00:00Z",
+      extractorVersion:"ed-api-v1",
+    },
+  };
+  const edCompleted:Assignment={
+    ...edBase,
+    id:"ed-completed",
+    externalId:"ed-completed",
+    title:"Ed completed",
+    status:"submitted",
+    sourceStatusText:"completed",
+    submissionStatus:{...edBase.submissionStatus!,state:"submitted"},
+  };
+
+  render(<AssignmentCalendar assignments={[edBase,edCompleted]} timeZone="America/Los_Angeles" initialMonth={new Date("2026-10-01T12:00:00Z")}/>);
+
+  const attempted=screen.getByRole("button",{name:/Ed attempted.*In progress/i});
+  expect(attempted.className).toContain("--status-not-submitted");
+  expect(attempted.className).not.toContain("--status-unavailable");
+  expect(attempted.className).not.toContain("line-through");
+
+  const completed=screen.getByRole("button",{name:/Ed completed.*Completed/i});
+  expect(completed.className).toContain("--status-submitted");
+  expect(completed.className).toContain("line-through");
+});

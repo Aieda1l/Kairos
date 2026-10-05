@@ -3,7 +3,7 @@ import {migrate} from "@/lib/db/migrate";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {CanvasSourceCard} from "@/features/sources/canvas-source-card";
 import {GradescopeSourceCard} from "@/features/sources/gradescope-source-card";
-import {FutureSourceCard} from "@/features/sources/future-source-card";
+import {EdSourceCard} from "@/features/sources/ed-source-card";
 
 export default function SourcesPage(){
   const db=getDatabase();
@@ -20,10 +20,7 @@ export default function SourcesPage(){
     <div className="grid gap-4">
       <CanvasSourceCard connection={canvas}/>
       <GradescopeSourceCard/>
-      <FutureSourceCard
-        name="Ed"
-        description="A future connector will be added only after the account's real integration capabilities are validated."
-      />
+      <EdSourceCard/>
     </div>
   </div>;
 }

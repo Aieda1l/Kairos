@@ -13,11 +13,12 @@ test("connect Canvas, sync once, and see one assignment in every view",async({pa
   });
 
   await page.goto("/sources");
+  const canvasCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Canvas",exact:true})});
   const feedUrl=`http://127.0.0.1:3000/api/test-fixtures/canvas-feed?token=${secret}`;
-  await page.getByLabel("Canvas calendar feed URL").fill(feedUrl);
-  await page.getByRole("button",{name:"Test connection"}).click();
+  await canvasCard.getByLabel("Canvas calendar feed URL").fill(feedUrl);
+  await canvasCard.getByRole("button",{name:"Test connection"}).click();
   await expect(page.getByText(/1 assignments found/)).toBeVisible();
-  await page.getByRole("button",{name:"Connect Canvas"}).click();
+  await canvasCard.getByRole("button",{name:"Connect Canvas"}).click();
   await page.waitForURL("**/upcoming");
   await expect(page.getByText("Fixture Homework").first()).toBeVisible();
 

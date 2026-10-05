@@ -1,6 +1,6 @@
 # Kairos
 
-Kairos is a local-first assignment dashboard for a UW Seattle student. It combines Canvas deadlines, Canvas submission status, and a direct read-only Gradescope connector while keeping authenticated browser data inside Firefox.
+Kairos is a local-first assignment dashboard for a UW Seattle student. It combines Canvas deadlines, Canvas submission status, a direct read-only Gradescope connector, and a direct read-only Ed connector.
 
 This is a personal tool, not an official University of Washington product. It does not use UW logos and never asks for your UW NetID, Canvas, or Gradescope password.
 
@@ -9,6 +9,7 @@ This is a personal tool, not an official University of Washington product. It do
 - Node.js 22 or newer
 - npm 10 or newer
 - Firefox for Canvas submission-status and Gradescope browser-local sync
+- An Ed personal API token if you want to connect Ed
 
 ## Install and run
 
@@ -94,6 +95,23 @@ Gradescope course discovery and assignment reads happen inside the signed-in `ww
 
 Gradescope does not provide a supported public student API for this workflow. This connector therefore depends on the authenticated student web page structure. The parser is isolated, fixture-tested, versioned, and fails closed with a parse error rather than guessing identities, but a future Gradescope HTML change may require an extractor update.
 
+## Connect Ed
+
+Ed uses a direct read-only API connection and does **not** require the Firefox extension.
+
+1. In Ed, open the API-token settings page and create/copy a personal API token.
+2. In Kairos, open **Sources → Ed**.
+3. Paste the token and choose **Test connection**.
+4. Choose **Connect Ed**.
+5. Select the Ed courses Kairos should sync and choose **Save selection**.
+6. Choose **Sync Ed**.
+
+Kairos imports all visible Ed Lessons from enabled courses, including lessons without due dates. Hidden and unlisted lessons are excluded. Effective release/due timestamps are preferred when Ed supplies them; Kairos never invents a deadline for an undated lesson. Completed Ed lessons are treated as resolved work for Upcoming, while attempted/unattempted lessons remain unresolved.
+
+The Ed token is stored in Kairos's local SQLite `source_credentials` table and is never returned or displayed after it is saved. **The local SQLite database is not encrypted at rest in this milestone**, so anyone with access to that database may be able to recover the token. Use Ed's token settings to rotate/revoke it if necessary.
+
+The Ed API used by this connector is beta/unofficial and may change independently of Kairos. The client/parser are isolated and fail closed so a changed response does not erase previously known lesson data. Kairos performs no Ed writes.
+
 ## Submission-status states
 
 Kairos displays these normalized states across sources:
@@ -110,7 +128,7 @@ Published Gradescope scores are stored as decimal strings rather than floating-p
 
 ## Cross-source behavior
 
-Canvas and Gradescope records remain independent. Kairos does not silently deduplicate assignments or choose one source as the canonical deadline when sources disagree.
+Canvas, Gradescope, and Ed records remain independent. Kairos does not silently deduplicate assignments or choose one source as the canonical deadline when sources disagree.
 
 Resolved work—Submitted, Graded, or Excused—is hidden from **Upcoming** while remaining visible in **Calendar** and **All Assignments** with its completion styling.
 
@@ -133,7 +151,7 @@ npm run test:e2e
 npm run build
 ```
 
-The Chromium E2E project covers Canvas iCal onboarding. Firefox E2E tests use deterministic page-level extension bridge shims for Canvas submission status and Gradescope discovery/sync. CI never depends on live Canvas or Gradescope sessions, user credentials, cookies, or authenticated page HTML.
+The Chromium E2E project covers Canvas iCal onboarding and deterministic Ed API onboarding/sync fixtures. Firefox E2E tests use deterministic page-level extension bridge shims for Canvas submission status and Gradescope discovery/sync. CI never depends on live Canvas, Gradescope, or Ed sessions or real credentials.
 
 ### Real-browser acceptance smoke
 
@@ -152,6 +170,17 @@ Gradescope:
 5. Confirm Submitted/Graded work is absent from Upcoming but remains in Calendar and All Assignments.
 6. Close Gradescope tabs, then sign out in a separate check, and verify errors are actionable while previously saved data remains.
 
+Ed:
+
+1. Create/use a personal Ed API token without pasting it into chat, shell history, fixtures, or committed files.
+2. In Kairos, test and connect the token.
+3. Confirm the expected Ed courses appear and enable at least one.
+4. Sync and compare real lesson titles, visibility, progress, release dates, and due dates with Ed.
+5. If the course has an undated lesson, confirm it remains in All Assignments but not Upcoming.
+6. Confirm completed lessons are absent from Upcoming.
+7. Replace the saved token only after a new token validates; an invalid replacement must not destroy the last working credential.
+8. Confirm the saved token is never rendered back by Kairos or returned in Kairos API responses.
+
 ## Reset local data
 
 Stop the development server and remove the local database:
@@ -164,9 +193,9 @@ Then restart with `npm run dev` and reconnect the sources you use.
 
 ## Privacy notes
 
-- Do not paste your UW, Canvas, or Gradescope password into Kairos.
-- Do not commit `.data/`, `.env` files, or a real Canvas feed URL.
+- Do not paste your UW, Canvas, or Gradescope password into Kairos. Ed uses a personal API token instead of your password.
+- Do not commit `.data/`, `.env` files, a real Canvas feed URL, or a real Ed API token.
 - Do not export Canvas or Gradescope cookies for Kairos.
 - The extension has no cookie API permission and never sends authenticated Canvas/Gradescope HTML through the page bridge.
 - A failed or partial sync retains previously known assignment, status, and grade data.
-- Canvas, Gradescope, and future sources may disagree; Kairos preserves those differences rather than destructively merging them.
+- Canvas, Gradescope, and Ed may disagree; Kairos preserves those differences rather than destructively merging them.

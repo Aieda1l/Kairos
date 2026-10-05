@@ -24,7 +24,7 @@ export default defineConfig({
   projects:[
     {
       name:"chromium",
-      testMatch:/canvas-onboarding\.spec\.ts/,
+      testMatch:/(canvas-onboarding|ed-sync)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {

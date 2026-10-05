@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS source_connections (
 CREATE TABLE IF NOT EXISTS source_credentials (
   source_connection_id TEXT PRIMARY KEY REFERENCES source_connections(id) ON DELETE CASCADE,
   canvas_feed_url TEXT,
+  ed_api_token TEXT,
   updated_at TEXT NOT NULL
 );
 
@@ -114,6 +115,14 @@ const ASSIGNMENT_COLUMNS: Array<[string,string]> = [
   ["grade_display","TEXT"],
 ];
 
+function ensureSourceCredentialColumns(db: Database.Database): void {
+  const existing=new Set(
+    (db.prepare("PRAGMA table_info(source_credentials)").all() as Array<{name:string}>)
+      .map(column=>column.name),
+  );
+  if(!existing.has("ed_api_token")) db.exec("ALTER TABLE source_credentials ADD COLUMN ed_api_token TEXT");
+}
+
 function ensureAssignmentMetadataColumns(db: Database.Database): void {
   const existing=new Set(
     (db.prepare("PRAGMA table_info(assignments)").all() as Array<{name:string}>)
@@ -127,6 +136,7 @@ function ensureAssignmentMetadataColumns(db: Database.Database): void {
 export function migrate(db: Database.Database): void {
   const now = new Date().toISOString();
   db.exec(SCHEMA);
+  ensureSourceCredentialColumns(db);
   ensureAssignmentMetadataColumns(db);
   db.prepare(`
     INSERT INTO app_settings(key, value, updated_at)

@@ -27,6 +27,7 @@ export function groupUpcoming(
 
   for(const assignment of assignments){
     if(isResolvedSubmission(assignment))continue;
+    if(assignment.source==="ed"&&assignment.dueAt===null)continue;
     groups[classifyDueDate(assignment.dueAt,now,timeZone)].push(assignment);
   }
   return groups;

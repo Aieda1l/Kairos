@@ -1,6 +1,9 @@
 name: Kairos Feature CI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feat/milestone-2-submission-status
@@ -13,6 +16,7 @@ concurrency:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   verify:
@@ -36,3 +40,17 @@ jobs:
       - run: node scripts/verify-dynamic-dashboard-build.mjs
       - name: Review prohibited credential/permission patterns
         run: git grep -nE '(cookies.*permission|<all_urls>|webRequest|authorization.*:|password.*(canvas|gradescope)|(canvas\.uw\.edu|gradescope\.com).*cookie|csrf.*gradescope)' -- extension src tests ':!tests/fixtures/**' || true
+      - name: Publish feature CI status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          state=success
+          if [ "$JOB_STATUS" != "success" ]; then state=failure; fi
+          curl -L --fail-with-body -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -d "{\"state\":\"$state\",\"context\":\"kairos-feature-ci\",\"description\":\"Kairos feature CI: $JOB_STATUS\",\"target_url\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}"
