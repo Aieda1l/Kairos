@@ -2,6 +2,7 @@ import { PROTOCOL_VERSION } from "@/lib/extension-protocol/submission-status";
 import {
   gradescopeDiscoverResultV1Schema,
   gradescopeSyncResultV1Schema,
+  type GradescopeAssignmentStructureDiagnosticsV1,
   type GradescopeCourseSyncResultV1,
   type GradescopeDiscoverRequestV1,
   type GradescopeDiscoverResultV1,
@@ -15,7 +16,11 @@ import {
   extractGradescopeStudentCourses,
   inspectGradescopeAccountStructure,
 } from "./extract-courses";
-import { extractGradescopeStudentAssignments, GradescopeParseError } from "./extract-assignments";
+import {
+  extractGradescopeStudentAssignments,
+  GradescopeParseError,
+  inspectGradescopeAssignmentStructure,
+} from "./extract-assignments";
 
 const GRADESCOPE_ORIGIN="https://www.gradescope.com";
 const CONCURRENCY=4;
@@ -113,6 +118,7 @@ function courseFailure(
   errorCode:GradescopeSyncErrorCode,
   diagnosticCode?:GradescopeDiagnosticCode,
   httpStatus?:number,
+  assignmentDiagnostics?:GradescopeAssignmentStructureDiagnosticsV1,
 ):GradescopeCourseSyncResultV1 {
   return {
     courseId,
@@ -121,6 +127,7 @@ function courseFailure(
     errorCode,
     ...(diagnosticCode?{diagnosticCode}:{}),
     ...(httpStatus!==undefined?{httpStatus}:{}),
+    ...(assignmentDiagnostics?{assignmentDiagnostics}:{}),
     parseDiagnosticCounts:[],
   };
 }
@@ -182,6 +189,7 @@ export async function fetchGradescopeAssignments(
         }
 
         const html=await response.text();
+        const assignmentDiagnostics=inspectGradescopeAssignmentStructure(html,courseId);
         try{
           const parsed=extractGradescopeStudentAssignments(html,courseId,checkedAt);
           results[index]={
@@ -193,7 +201,14 @@ export async function fetchGradescopeAssignments(
           };
         }catch(error){
           if(error instanceof GradescopeParseError){
-            results[index]=courseFailure(courseId,checkedAt,"GRADESCOPE_PARSE_ERROR");
+            results[index]=courseFailure(
+              courseId,
+              checkedAt,
+              "GRADESCOPE_PARSE_ERROR",
+              undefined,
+              undefined,
+              assignmentDiagnostics,
+            );
             continue;
           }
           throw error;
