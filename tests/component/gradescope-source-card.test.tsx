@@ -70,6 +70,8 @@ describe("GradescopeSourceCard",()=>{
 
     await user.click(screen.getByRole("button",{name:"Sync Gradescope"}));
     expect(syncNow).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Connected · not synced")).not.toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeVisible();
     expect(screen.getByText(/Last attempted/i)).toBeVisible();
     expect(screen.getByText(/Last successful/i)).toBeVisible();
   });
