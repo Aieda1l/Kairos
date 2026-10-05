@@ -112,15 +112,12 @@ export function extractGradescopeStudentAssignments(
   const table=findAssignmentTable(document,courseId);
   if(!table){
     const roleRows=Array.from(document.querySelectorAll('tr[role="row"]'));
-    const sameTable=roleRows.length===2
-      && roleRows[0]?.closest("table")!==null
-      && roleRows[0]?.closest("table")===roleRows[1]?.closest("table");
     const hasAssignmentCandidates=Boolean(
       document.querySelector(
         `a[href^="/courses/${courseId}/assignments/"], button.js-submitAssignment[data-assignment-id]`,
       ),
     );
-    if(sameTable&&!hasAssignmentCandidates){
+    if(roleRows.length===2&&!hasAssignmentCandidates){
       return {assignments:[],diagnostics:[]};
     }
     throw new GradescopeParseError("Gradescope course page structure was not recognized.");
