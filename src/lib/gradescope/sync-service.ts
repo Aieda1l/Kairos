@@ -9,6 +9,7 @@ import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-sta
 import {
   gradescopeSyncErrorCodeSchema,
   gradescopeSyncResultV1Schema,
+  type GradescopeAssignmentStructureDiagnosticsV1,
   type GradescopeAssignmentV1,
   type GradescopeDiagnosticCode,
   type GradescopeSyncErrorCode,
@@ -54,6 +55,11 @@ export type GradescopeSyncCompleteResponse={
   lastErrorCode:GradescopeSyncErrorCode|null;
   failureDiagnostics:Array<{code:GradescopeDiagnosticCode;count:number}>;
   failureHttpStatuses:Array<{status:number;count:number}>;
+  failureErrorCodes:Array<{code:GradescopeSyncErrorCode;count:number}>;
+  failureStructures:Array<{
+    errorCode:GradescopeSyncErrorCode;
+    diagnostics:GradescopeAssignmentStructureDiagnosticsV1;
+  }>;
 };
 
 export class GradescopeSyncServiceError extends Error{
@@ -110,6 +116,8 @@ function legacyStatus(state:GradescopeAssignmentV1["state"]):AssignmentStatus{
 function aggregateDiagnostics(courses:GradescopeSyncResultV1["courses"]){
   const diagnosticCounts=new Map<GradescopeDiagnosticCode,number>();
   const httpCounts=new Map<number,number>();
+  const errorCounts=new Map<GradescopeSyncErrorCode,number>();
+  const failureStructures:GradescopeSyncCompleteResponse["failureStructures"]=[];
   for(const course of courses){
     if(course.diagnosticCode){
       diagnosticCounts.set(course.diagnosticCode,(diagnosticCounts.get(course.diagnosticCode)??0)+1);
@@ -120,6 +128,15 @@ function aggregateDiagnostics(courses:GradescopeSyncResultV1["courses"]){
     if(course.httpStatus!==undefined){
       httpCounts.set(course.httpStatus,(httpCounts.get(course.httpStatus)??0)+1);
     }
+    if(course.errorCode){
+      errorCounts.set(course.errorCode,(errorCounts.get(course.errorCode)??0)+1);
+      if(course.assignmentDiagnostics){
+        failureStructures.push({
+          errorCode:course.errorCode,
+          diagnostics:course.assignmentDiagnostics,
+        });
+      }
+    }
   }
   return {
     failureDiagnostics:Array.from(diagnosticCounts.entries())
@@ -128,6 +145,10 @@ function aggregateDiagnostics(courses:GradescopeSyncResultV1["courses"]){
     failureHttpStatuses:Array.from(httpCounts.entries())
       .sort(([a],[b])=>a-b)
       .map(([status,count])=>({status,count})),
+    failureErrorCodes:Array.from(errorCounts.entries())
+      .sort(([a],[b])=>a.localeCompare(b))
+      .map(([code,count])=>({code,count})),
+    failureStructures,
   };
 }
 
@@ -203,6 +224,8 @@ export function completeGradescopeSync(
       lastErrorCode:state.lastErrorCode,
       failureDiagnostics:[],
       failureHttpStatuses:[],
+      failureErrorCodes:[{code:errorCode,count:registered.courseIds.length}],
+      failureStructures:[],
     };
   }
 
