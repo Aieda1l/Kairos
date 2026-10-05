@@ -57,6 +57,29 @@ describe("Gradescope protocol",()=>{
     }).success).toBe(false);
   });
 
+  it.each([0,1,3,50])("accepts %i discovered courses",count=>{
+    expect(gradescopeDiscoverResultV1Schema.safeParse({
+      protocolVersion:1,
+      requestId,
+      courses:Array.from({length:count},(_,i)=>({...course,courseId:String(i+1)})),
+      errorCode:null,
+    }).success).toBe(true);
+  });
+
+  it.each([0,1,7])("accepts a course with %i assignments",count=>{
+    expect(gradescopeSyncResultV1Schema.safeParse({
+      protocolVersion:1,
+      requestId,
+      courses:[{
+        courseId:"123",
+        checkedAt:"2026-10-04T20:00:00.000Z",
+        assignments:Array.from({length:count},(_,i)=>({...assignment,assignmentId:String(i+1)})),
+        errorCode:null,
+      }],
+      errorCode:null,
+    }).success).toBe(true);
+  });
+
   it("rejects identifying text inside discovery diagnostics",()=>{
     expect(gradescopeDiscoverResultV1Schema.safeParse({
       protocolVersion:1,requestId,courses:[],errorCode:null,
