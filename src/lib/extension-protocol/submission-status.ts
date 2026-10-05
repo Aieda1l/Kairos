@@ -102,6 +102,7 @@ const pongResponseSchema = z
     requestId: z.string().uuid(),
     extensionVersion: z.string().min(1),
     canvasTabDetected: z.boolean(),
+    gradescopeTabDetected: z.boolean().optional(),
   })
   .strict();
 
