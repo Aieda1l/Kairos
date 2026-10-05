@@ -8,6 +8,7 @@ await build({
     background:path.join(root,"extension/firefox/src/background.ts"),
     "kairos-bridge":path.join(root,"extension/firefox/src/content/kairos-bridge.ts"),
     "canvas-content":path.join(root,"extension/firefox/src/content/canvas.ts"),
+    "gradescope-content":path.join(root,"extension/firefox/src/content/gradescope.ts"),
     popup:path.join(root,"extension/firefox/src/popup.ts"),
   },
   outdir:path.join(root,"extension/firefox/dist"),
