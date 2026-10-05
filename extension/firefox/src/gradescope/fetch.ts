@@ -6,11 +6,15 @@ import {
   type GradescopeDiscoverRequestV1,
   type GradescopeDiscoverResultV1,
   type GradescopeDiagnosticCode,
+  type GradescopeDiscoveryDiagnosticsV1,
   type GradescopeSyncErrorCode,
   type GradescopeSyncRequestV1,
   type GradescopeSyncResultV1,
 } from "@/lib/extension-protocol/gradescope";
-import { extractGradescopeStudentCourses } from "./extract-courses";
+import {
+  extractGradescopeStudentCourses,
+  inspectGradescopeAccountStructure,
+} from "./extract-courses";
 import { extractGradescopeStudentAssignments, GradescopeParseError } from "./extract-assignments";
 
 const GRADESCOPE_ORIGIN="https://www.gradescope.com";
@@ -39,6 +43,7 @@ function discoverFailure(
   errorCode:GradescopeSyncErrorCode,
   diagnosticCode?:GradescopeDiagnosticCode,
   httpStatus?:number,
+  discoveryDiagnostics?:GradescopeDiscoveryDiagnosticsV1,
 ):GradescopeDiscoverResultV1 {
   return gradescopeDiscoverResultV1Schema.parse({
     protocolVersion:PROTOCOL_VERSION,
@@ -47,6 +52,7 @@ function discoverFailure(
     errorCode,
     ...(diagnosticCode?{diagnosticCode}:{}),
     ...(httpStatus!==undefined?{httpStatus}:{}),
+    ...(discoveryDiagnostics?{discoveryDiagnostics}:{}),
   });
 }
 
@@ -74,6 +80,7 @@ export async function discoverGradescopeCourses(
     if(kind==="unexpected")return discoverFailure(request.requestId,"GRADESCOPE_NETWORK_ERROR");
 
     const html=await response.text();
+    const discoveryDiagnostics=inspectGradescopeAccountStructure(html);
     try{
       const courses=extractGradescopeStudentCourses(html);
       return gradescopeDiscoverResultV1Schema.parse({
@@ -81,10 +88,17 @@ export async function discoverGradescopeCourses(
         requestId:request.requestId,
         courses,
         errorCode:null,
+        discoveryDiagnostics,
       });
     }catch(error){
       if(error instanceof GradescopeParseError){
-        return discoverFailure(request.requestId,"GRADESCOPE_PARSE_ERROR");
+        return discoverFailure(
+          request.requestId,
+          "GRADESCOPE_PARSE_ERROR",
+          undefined,
+          undefined,
+          discoveryDiagnostics,
+        );
       }
       throw error;
     }
