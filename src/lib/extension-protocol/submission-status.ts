@@ -139,3 +139,6 @@ export type KairosBridgeRequestV1 = z.infer<typeof kairosBridgeRequestV1Schema>;
 export type KairosBridgeResponseV1 = z.infer<typeof kairosBridgeResponseV1Schema>;
 export type SubmissionSyncErrorCode = z.infer<typeof submissionSyncErrorCodeSchema>;
 export type SubmissionFailureDiagnostic = z.infer<typeof submissionFailureDiagnosticSchema>;
+
+export const canvasBridgeRequestV1Schema = kairosBridgeRequestV1Schema;
+export const canvasBridgeResponseV1Schema = kairosBridgeResponseV1Schema;
