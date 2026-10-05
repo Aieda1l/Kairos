@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
 import { GradescopeProvider } from "@/features/gradescope/gradescope-provider";
+import { EdProvider } from "@/features/ed/ed-provider";
 import { getDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
@@ -14,6 +15,14 @@ import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 import type { GradescopeSyncErrorCode } from "@/lib/extension-protocol/gradescope";
 
 const emptyCanvasSyncState: SubmissionStatusSyncState = {
+  lastAttemptedAt: null,
+  lastSuccessfulAt: null,
+  lastErrorCode: null,
+  updatedCount: 0,
+  failedCount: 0,
+};
+
+const emptyEdSyncState: SubmissionStatusSyncState<string> = {
   lastAttemptedAt: null,
   lastSuccessfulAt: null,
   lastErrorCode: null,
@@ -54,8 +63,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? statuses.getSyncState<GradescopeSyncErrorCode>(gradescopeConnection.id)
     : emptyGradescopeSyncState;
 
+  const edConnection = connections.getByKind("ed");
+  const edCourses = edConnection
+    ? new SourceCourseRepository(db).list(edConnection.id)
+    : [];
+  const edSyncState = edConnection
+    ? statuses.getSyncState<string>(edConnection.id)
+    : emptyEdSyncState;
+
   return (
     <ThemeProvider>
+      <EdProvider connection={edConnection} initialCourses={edCourses} initialSyncState={edSyncState}>
       <GradescopeProvider
         connection={gradescopeConnection}
         initialCourses={gradescopeCourses}
@@ -68,6 +86,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <AppShell>{children}</AppShell>
         </SubmissionStatusProvider>
       </GradescopeProvider>
+      </EdProvider>
     </ThemeProvider>
   );
 }
