@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-04
+**Updated:** 2026-10-05
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -36,7 +36,7 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-03-canvas-submission-status-design.md`
 - `docs/superpowers/plans/2026-10-03-canvas-submission-status-milestone-2.md`
 
-## Milestone 3 — Direct Gradescope connector — Automated implementation complete; manual smoke pending
+## Milestone 3 — Direct Gradescope connector — Complete
 
 Implemented:
 - direct read-only Gradescope access through the existing Firefox extension;
@@ -49,16 +49,34 @@ Implemented:
 - fixture-driven parser, protocol, repository, integration, component, and Firefox E2E coverage;
 - source-independent Upcoming/Calendar resolution behavior while preserving Gradescope records separately from Canvas.
 
-Remaining completion gate:
-- complete the documented real-browser smoke against the user's signed-in Gradescope account and confirm the extractor matches real student data plus no-tab/signed-out/failure-preservation behavior.
+Completed validation:
+- real-browser smoke against the user's signed-in Gradescope account confirmed discovery/sync behavior before PR #11 was squash-merged.
 
 Primary docs:
 - `docs/superpowers/specs/2026-10-04-gradescope-connector-design.md`
 - `docs/superpowers/plans/2026-10-04-gradescope-connector-milestone-3.md`
 
-## Milestone 4 — Ed connector discovery + implementation — Planned
+## Milestone 4 — Direct Ed connector — Automated implementation complete; verification/manual smoke pending
 
-Validate the real Ed account/API/token capabilities first, then implement through the same source-adapter contract and local-first privacy model.
+Implemented on `feat/milestone-4-ed-connector`:
+- direct read-only Ed API access using a user-created personal API token;
+- token persistence only in the local server-side SQLite credential table;
+- enrolled-course discovery with explicit local course selection;
+- all visible Ed Lessons imported, including undated lessons;
+- hidden/unlisted lesson exclusion and conservative progress normalization;
+- effective release/due timestamp support without invented deadlines;
+- partial/failure-safe per-course synchronization that preserves prior data;
+- Ed Sources UI with test/connect, token replacement, course refresh/selection, and manual sync;
+- deterministic integration/component/E2E coverage designed to assert token non-exposure.
+
+Remaining completion gates:
+- run the full automated verification suite on the implementation branch;
+- complete the documented real-account Ed smoke using the user's token without exposing it in chat/logs/fixtures;
+- only then mark Milestone 4 complete.
+
+Primary docs:
+- `docs/superpowers/specs/2026-10-05-ed-connector-design.md`
+- `docs/superpowers/plans/2026-10-05-ed-connector-milestone-4.md`
 
 ## Later extension follow-ups — Planned, not yet numbered
 
