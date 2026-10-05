@@ -36,9 +36,9 @@ export function ConnectedSourceSyncControls({
   );
   const hasAnySource=canvasConnected||Boolean(gradescope.connection)||Boolean(ed.connection);
   const sourceBusy=
-    submission.phase==="syncing"||
-    gradescope.phase==="syncing"||
-    ed.phase==="syncing";
+    (canvasConnected&&submission.phase==="syncing")||
+    (Boolean(gradescope.connection)&&gradescope.phase==="syncing")||
+    (Boolean(ed.connection)&&ed.phase==="syncing");
 
   if(!hasAnySource)return null;
 
