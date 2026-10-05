@@ -1,5 +1,37 @@
-import type { GradescopeCourseV1 } from "@/lib/extension-protocol/gradescope";
+import type {
+  GradescopeCourseV1,
+  GradescopeDiscoveryDiagnosticsV1,
+} from "@/lib/extension-protocol/gradescope";
 import { GradescopeParseError } from "./errors";
+
+
+export function inspectGradescopeAccountStructure(html:string):GradescopeDiscoveryDiagnosticsV1{
+  const document=new DOMParser().parseFromString(html,"text/html");
+  const root=document.querySelector("div#account-show");
+  const headingCounts={courses:0,studentCourses:0,instructorCourses:0,other:0};
+  for(const heading of Array.from(root?.querySelectorAll("h2.pageHeading")??[])){
+    const text=heading.textContent?.trim()??"";
+    if(text==="Courses")headingCounts.courses++;
+    else if(text==="Student Courses")headingCounts.studentCourses++;
+    else if(text==="Instructor Courses")headingCounts.instructorCourses++;
+    else headingCounts.other++;
+  }
+  return {
+    accountRootDetected:Boolean(root),
+    createCourseControlDetected:Boolean(document.querySelector("button.js-createNewCourse")),
+    headings:headingCounts,
+    courseListDescendantCount:root?.querySelectorAll(".courseList").length??0,
+    courseListDirectCount:root
+      ?Array.from(root.children).filter(child=>child.classList.contains("courseList")).length
+      :0,
+    termDescendantCount:root?.querySelectorAll(".courseList--term").length??0,
+    courseAnchorDescendantCount:root?.querySelectorAll('a[href^="/courses/"]').length??0,
+    courseHrefContainsCount:root?.querySelectorAll('a[href*="/courses/"]').length??0,
+    shortNameNodeCount:root?.querySelectorAll(".courseBox--shortname").length??0,
+    fullNameNodeCount:root?.querySelectorAll(".courseBox--name").length??0,
+    reactPropsNodeCount:root?.querySelectorAll("[data-react-props]").length??0,
+  };
+}
 
 function directChildren(element:Element,tagName:string):Element[]{
   return Array.from(element.children).filter(child=>child.tagName===tagName);
