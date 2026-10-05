@@ -33,13 +33,13 @@ beforeEach(()=>{refresh.mockClear();statusSyncNow.mockClear();vi.unstubAllGlobal
 it("groups and filters upcoming assignments while showing submission status",async()=>{
   const user=userEvent.setup();
   render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} lastSyncCompletedAt={null}/>);
-  expect(screen.getByText("Today")).toBeInTheDocument();
+  expect(screen.queryByText("Today")).not.toBeInTheDocument();
   expect(screen.getByRole("heading",{name:/No due date/})).toBeInTheDocument();
-  expect(screen.getByText("Submitted · Late")).toBeInTheDocument();
+  expect(screen.queryByText("Submitted · Late")).not.toBeInTheDocument();
   expect(screen.getByText("Status unavailable")).toBeInTheDocument();
   expect(screen.getByRole("button",{name:"Sync submission status"})).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Course"),"CSE 331");
-  expect(screen.getByText("Homework 3")).toBeInTheDocument();
+  expect(screen.queryByText("Homework 3")).not.toBeInTheDocument();
   expect(screen.queryByText("Problem Set")).not.toBeInTheDocument();
 });
 

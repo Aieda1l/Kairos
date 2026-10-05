@@ -35,11 +35,11 @@ function assignment(id:string,state:NonNullable<Assignment["submissionStatus"]>[
   };
 }
 
-it("keeps resolved past-due Canvas work out of Upcoming overdue",()=>{
+it("keeps resolved Canvas work out of Upcoming regardless of due date",()=>{
   const groups=groupUpcoming([
-    assignment("submitted","submitted"),
-    assignment("graded","graded"),
-    assignment("excused","excused"),
+    {...assignment("submitted","submitted"),dueAt:"2026-10-08T05:00:00.000Z"},
+    {...assignment("graded","graded"),dueAt:"2026-10-09T05:00:00.000Z"},
+    {...assignment("excused","excused"),dueAt:"2026-10-10T05:00:00.000Z"},
     assignment("not-submitted","not_submitted"),
     assignment("unknown","unknown"),
   ],new Date("2026-10-04T23:00:00.000Z"),"America/Los_Angeles");
