@@ -127,6 +127,20 @@ async function expectJson(response:Response,fallback:string):Promise<unknown>{
   throw new Error(message);
 }
 
+function messageForSyncError(code:GradescopeSyncErrorCode):string{
+  switch(code){
+    case "EXTENSION_UNAVAILABLE":return "Firefox extension not detected";
+    case "EXTENSION_TIMEOUT":return "Firefox extension timed out.";
+    case "GRADESCOPE_TAB_UNAVAILABLE":return "Open Gradescope in Firefox, then try again.";
+    case "GRADESCOPE_SIGNED_OUT":return "Sign in to Gradescope, then retry.";
+    case "GRADESCOPE_NETWORK_ERROR":return "Gradescope could not be reached. Try again.";
+    case "GRADESCOPE_COURSE_UNAVAILABLE":return "A selected Gradescope course is unavailable. Discover courses again.";
+    case "GRADESCOPE_PARSE_ERROR":return "Gradescope page data could not be recognized. The connector may need an update.";
+    case "PARTIAL_SYNC":return "Some Gradescope courses could not be updated.";
+    case "INVALID_RESULT":return "Gradescope returned an invalid result.";
+  }
+}
+
 function errorMessage(error:unknown):string{
   if(error instanceof Error)return error.message;
   return "Gradescope request failed.";
@@ -280,10 +294,10 @@ export function GradescopeProvider({
       setSyncState(nextState);
       if(completed.lastErrorCode==="PARTIAL_SYNC"){
         setPhase("partial");
-        setMessage("Some Gradescope courses could not be updated.");
+        setMessage(messageForSyncError(completed.lastErrorCode));
       }else if(completed.lastErrorCode){
         setPhase("error");
-        setMessage(bridgeMessage||"Gradescope sync could not be completed.");
+        setMessage(bridgeMessage||messageForSyncError(completed.lastErrorCode));
       }else{
         setPhase("success");
       }
