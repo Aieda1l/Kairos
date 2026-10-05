@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { SourceStatus } from "./source-status";
@@ -12,9 +12,6 @@ export function GradescopeSourceCard(){
     gradescope.courses.filter(course=>course.enabled).map(course=>course.externalCourseId),
   );
 
-  useEffect(()=>{
-    setSelected(gradescope.courses.filter(course=>course.enabled).map(course=>course.externalCourseId));
-  },[gradescope.courses]);
 
   const busy=gradescope.phase==="discovering"||gradescope.phase==="syncing";
 
