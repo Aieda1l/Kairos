@@ -428,16 +428,18 @@ Assignment rows and tables show Ed-native lesson progress instead of the Canvas-
 
 The normalized submission-status record remains available for source-independent resolved-work logic, but it is not the primary user-facing label for Ed Lessons.
 
-### Upcoming sync controls
+### Upcoming Sync All
 
-Upcoming shows sync controls for every connected source rather than only Canvas:
+Upcoming shows one primary purple **Sync All** button rather than separate source cards or source-specific buttons.
+
+Pressing it refreshes every connected/eligible source in sequence:
 
 - Canvas calendar/deadline sync;
 - Canvas submission-status sync;
-- Gradescope sync when a Gradescope connection exists;
-- Ed sync when an Ed connection exists.
+- Gradescope sync when connected with at least one enabled course;
+- Ed sync when connected with at least one enabled course.
 
-Gradescope and Ed controls remain disabled until at least one discovered course is enabled, and each source keeps its own warning/error message visible.
+Source-specific failures remain isolated so one failed source does not erase another source's data. Compact warnings may appear below the button, but the normal Upcoming surface exposes only the single Sync All action.
 
 ### Calendar
 
