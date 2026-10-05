@@ -38,10 +38,10 @@ export const gradescopeDiscoveryDiagnosticsV1Schema=z.object({
   courseListDirectCount:z.number().int().nonnegative(),
   termDescendantCount:z.number().int().nonnegative(),
   courseAnchorDescendantCount:z.number().int().nonnegative(),
-  courseHrefContainsCount:z.number().int().nonnegative(),
+  courseHrefContainsCount:z.number().int().nonnegative().optional(),
   shortNameNodeCount:z.number().int().nonnegative(),
   fullNameNodeCount:z.number().int().nonnegative(),
-  reactPropsNodeCount:z.number().int().nonnegative(),
+  reactPropsNodeCount:z.number().int().nonnegative().optional(),
 }).strict();
 
 export const gradescopeCourseV1Schema=z.object({
