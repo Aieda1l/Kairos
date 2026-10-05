@@ -1,7 +1,7 @@
 "use client";
 import type { Assignment } from "@/lib/assignments/types";
 import { Dialog } from "@/components/ui/dialog";
-import { SubmissionStatusBadge } from "@/features/submission-status/submission-status-badge";
+import { AssignmentStatusBadge, assignmentStatusLabel } from "./assignment-status-badge";
 import { SourceBadge } from "./source-badge";
 import { formatDueDate } from "@/lib/dates/format";
 
@@ -42,7 +42,7 @@ export function AssignmentDetailDialog({
         {assignment.sourceStatusText&&(
           <div><dt className="text-[var(--muted)]">Source status</dt><dd>{assignment.sourceStatusText}</dd></div>
         )}
-        <div><dt className="text-[var(--muted)]">Submission status</dt><dd className="mt-1"><SubmissionStatusBadge status={status}/></dd></div>
+        <div><dt className="text-[var(--muted)]">{assignment.source==="ed"?"Progress":"Submission status"}</dt><dd className="mt-1"><AssignmentStatusBadge assignment={assignment}/><span className="sr-only">{assignmentStatusLabel(assignment)}</span></dd></div>
         {assignment.gradeDisplay&&(
           <div><dt className="text-[var(--muted)]">Grade</dt><dd>{assignment.gradeDisplay}</dd></div>
         )}
