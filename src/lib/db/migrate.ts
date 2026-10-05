@@ -22,6 +22,23 @@ CREATE TABLE IF NOT EXISTS source_credentials (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS source_courses (
+  id TEXT PRIMARY KEY,
+  source_connection_id TEXT NOT NULL REFERENCES source_connections(id) ON DELETE CASCADE,
+  external_course_id TEXT NOT NULL,
+  short_name TEXT,
+  full_name TEXT NOT NULL,
+  term TEXT,
+  year TEXT,
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(source_connection_id, external_course_id)
+);
+CREATE INDEX IF NOT EXISTS source_courses_connection_enabled_idx
+  ON source_courses(source_connection_id, enabled);
+
 CREATE TABLE IF NOT EXISTS assignments (
   id TEXT PRIMARY KEY,
   source_connection_id TEXT NOT NULL REFERENCES source_connections(id) ON DELETE CASCADE,
@@ -30,8 +47,14 @@ CREATE TABLE IF NOT EXISTS assignments (
   course_id TEXT,
   course_name TEXT NOT NULL,
   title TEXT NOT NULL,
+  release_at TEXT,
   due_at TEXT,
+  late_due_at TEXT,
   status TEXT NOT NULL CHECK(status IN ('pending','submitted','graded','overdue','unknown')),
+  source_status_text TEXT,
+  grade_score TEXT,
+  grade_max TEXT,
+  grade_display TEXT,
   source_url TEXT,
   source_updated_at TEXT,
   first_seen_at TEXT NOT NULL,
@@ -82,9 +105,29 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 `;
 
+const ASSIGNMENT_COLUMNS: Array<[string,string]> = [
+  ["release_at","TEXT"],
+  ["late_due_at","TEXT"],
+  ["source_status_text","TEXT"],
+  ["grade_score","TEXT"],
+  ["grade_max","TEXT"],
+  ["grade_display","TEXT"],
+];
+
+function ensureAssignmentMetadataColumns(db: Database.Database): void {
+  const existing=new Set(
+    (db.prepare("PRAGMA table_info(assignments)").all() as Array<{name:string}>)
+      .map(column=>column.name),
+  );
+  for(const [name,type] of ASSIGNMENT_COLUMNS){
+    if(!existing.has(name)) db.exec(`ALTER TABLE assignments ADD COLUMN ${name} ${type}`);
+  }
+}
+
 export function migrate(db: Database.Database): void {
   const now = new Date().toISOString();
   db.exec(SCHEMA);
+  ensureAssignmentMetadataColumns(db);
   db.prepare(`
     INSERT INTO app_settings(key, value, updated_at)
     VALUES ('timezone', 'America/Los_Angeles', ?)
