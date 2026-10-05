@@ -77,8 +77,10 @@ describe("Gradescope assignment presentation",()=>{
     const dialog=screen.getByRole("dialog");
     expect(within(dialog).getByText("Released")).toBeInTheDocument();
     expect(within(dialog).getByText("Late due")).toBeInTheDocument();
-    expect(within(dialog).getByText("Source status")).toBeInTheDocument();
-    expect(within(dialog).getByText("8.5 / 10",{selector:"dd"})).toBeInTheDocument();
+    const sourceStatusLabel=within(dialog).getByText("Source status");
+    expect(sourceStatusLabel.parentElement).toHaveTextContent("8.5 / 10");
+    const gradeLabel=within(dialog).getByText("Grade");
+    expect(gradeLabel.parentElement).toHaveTextContent("8.5 / 10");
     expect(within(dialog).getByText("Graded")).toBeInTheDocument();
     expect(within(dialog).getByRole("link",{name:"Open in Gradescope"})).toHaveAttribute(
       "href",
