@@ -149,8 +149,11 @@ function recordInvalid(
   registered:RegisteredGradescopeRequest,
   now:Date,
 ):never{
+  if(!registered.connectionId){
+    throw new GradescopeSyncServiceError("INVALID_RESULT","The Gradescope sync request had no connection identity.");
+  }
   new SubmissionStatusRepository(db).applyCompletion(
-    connectionId,
+    registered.connectionId,
     [],
     registered.courseIds.length,
     "INVALID_RESULT",
@@ -306,7 +309,7 @@ export function completeGradescopeSync(
     ignoredStale=applied.ignoredStale;
   })();
 
-  const state=statusRepo.getSyncState(registered.connectionId);
+  const state=statusRepo.getSyncState<GradescopeSyncErrorCode>(connectionId);
   const diagnostics=aggregateDiagnostics(courses);
   return {
     requestId:input.requestId,
