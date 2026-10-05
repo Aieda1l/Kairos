@@ -80,7 +80,7 @@ function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
 
-function installFetch({initialCourse=course(false)}:{}={}){
+function installFetch({initialCourse=course(false)}:{initialCourse?:SourceCourse}={}){
   const calls={discoverStart:0,discoverComplete:0,selection:0,syncStart:0,syncComplete:0};
   vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
     const url=String(input);
