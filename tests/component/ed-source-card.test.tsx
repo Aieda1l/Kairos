@@ -5,25 +5,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 
-const {testToken,connect,refreshCourses,saveEnabledCourses,syncNow,state}=vi.hoisted(()=>({
-  testToken:vi.fn(async()=>true),
-  connect:vi.fn(async()=>true),
-  refreshCourses:vi.fn(),
-  saveEnabledCourses:vi.fn(),
-  syncNow:vi.fn(),
-  state:{connected:false},
-}));
-
-const connection:SourceConnection={
-  id:"ed-connection",kind:"ed",label:"Ed",enabled:true,
-  lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
-};
-const course:SourceCourse={
-  id:"local-123",sourceConnectionId:"ed-connection",externalCourseId:"123",shortName:"CSE 331",
-  fullName:"Software Design",term:"Autumn",year:"2026",enabled:false,firstSeenAt:"",lastSeenAt:"",
-};
-const connectedCourses=[course];
-const emptyCourses:SourceCourse[]=[];
+const {
+  testToken,connect,refreshCourses,saveEnabledCourses,syncNow,state,connection,connectedCourses,emptyCourses,
+}=vi.hoisted(()=>{
+  const connection:SourceConnection={
+    id:"ed-connection",kind:"ed",label:"Ed",enabled:true,
+    lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
+  };
+  const course:SourceCourse={
+    id:"local-123",sourceConnectionId:"ed-connection",externalCourseId:"123",shortName:"CSE 331",
+    fullName:"Software Design",term:"Autumn",year:"2026",enabled:false,firstSeenAt:"",lastSeenAt:"",
+  };
+  return {
+    testToken:vi.fn(async()=>true),
+    connect:vi.fn(async()=>true),
+    refreshCourses:vi.fn(),
+    saveEnabledCourses:vi.fn(),
+    syncNow:vi.fn(),
+    state:{connected:false},
+    connection,
+    connectedCourses:[course],
+    emptyCourses:[] as SourceCourse[],
+  };
+});
 
 vi.mock("@/features/ed/ed-provider",()=>({
   useEd:()=>({
