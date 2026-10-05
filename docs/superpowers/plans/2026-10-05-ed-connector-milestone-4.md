@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Ed API base URL is fixed to `https://edstem.org/api/`; never accept an arbitrary upstream URL.
+- Ed API base URL is fixed to `https://us.edstem.org/api/`; never accept an arbitrary upstream URL.
 - Authenticate only with `Authorization: Bearer <PAT>`; never ask for the user's Ed password.
 - Store the PAT only in server-only local SQLite persistence; never return or re-render it after save.
 - Milestone 4 is read-only: no Ed Discussion, Resources, Workspaces, quiz submission, lesson completion, or other Ed write calls.
@@ -130,7 +130,7 @@ git commit -m "feat: add Ed credential persistence"
 
 Cover:
 
-- requests target exactly `https://edstem.org/api/user` and `https://edstem.org/api/courses/123/lessons`;
+- requests target exactly `https://us.edstem.org/api/user` and `https://us.edstem.org/api/courses/123/lessons`;
 - request header is `Authorization: Bearer fixture-ed-token-never-echo`;
 - 401/403 -> `ED_AUTH_INVALID`;
 - 429 -> `ED_RATE_LIMITED`;
@@ -563,7 +563,7 @@ git commit -m "feat: integrate Ed lessons into assignment views"
 
 **Interfaces:**
 - Uses public Ed Sources UI and server routes exactly as a browser user does.
-- Produces `getEdRouteFetch(): typeof fetch`: returns normal global `fetch` unless `E2E_FIXTURES === "1"`; in fixture mode it returns a deterministic in-process fetch implementation for the same fixed `https://edstem.org/api/*` URLs.
+- Produces `getEdRouteFetch(): typeof fetch`: returns normal global `fetch` unless `E2E_FIXTURES === "1"`; in fixture mode it returns a deterministic in-process fetch implementation for the same fixed `https://us.edstem.org/api/*` URLs.
 - The fixture fetch accepts only the known E2E token marker and only the exact Ed endpoints needed by the scenario; it never changes `EdApiClient`'s fixed production origin.
 - No real PAT, external Ed request, or Ed account is used.
 
@@ -573,8 +573,8 @@ Because Ed network calls originate inside Next.js server routes, do not use Play
 
 Implement `getEdRouteFetch()` behind the existing `E2E_FIXTURES=1` gate. In fixture mode, return deterministic JSON for:
 
-- `GET https://edstem.org/api/user`;
-- `GET https://edstem.org/api/courses/123/lessons`.
+- `GET https://us.edstem.org/api/user`;
+- `GET https://us.edstem.org/api/courses/123/lessons`.
 
 Return 401 for any token other than `fixture-ed-token-never-echo`, and reject any unexpected method/path. Normal application mode must return the real global `fetch`.
 
