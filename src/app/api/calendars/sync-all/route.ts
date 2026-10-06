@@ -1,9 +1,11 @@
 import {createCalendarAdapterFactory} from "@/lib/calendar/provider-factory";
 import {reconcileAllCalendars} from "@/lib/calendar/reconcile";
-import {getCalendarRouteRuntime} from "@/lib/platform/calendar-runtime";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
 export async function POST(){
-  const runtime=await getCalendarRouteRuntime();
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   if(runtime.kind==="legacy"){
     return Response.json(await reconcileAllCalendars(runtime.db,{
       adapterFactory:createCalendarAdapterFactory(runtime.db),
