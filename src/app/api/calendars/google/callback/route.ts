@@ -5,7 +5,7 @@ import {
 } from "@/lib/calendar/google/oauth";
 import {connectOAuthCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
-import {getCalendarRouteRuntime} from "@/lib/platform/calendar-runtime";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
 export async function GET(request:Request){
   const url=new URL(request.url);
@@ -18,7 +18,9 @@ export async function GET(request:Request){
     },{status:400});
   }
 
-  const runtime=await getCalendarRouteRuntime();
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   const registered=runtime.kind==="legacy"
     ?consumeOAuthRequest(state,"google")
     :await consumeOAuthRequest(
