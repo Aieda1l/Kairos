@@ -23,7 +23,7 @@ class FakeAdapter implements CalendarDestinationAdapter{
   private async enter(){this.active++;this.maxActive=Math.max(this.maxActive,this.active);await new Promise(r=>setTimeout(r,2));return()=>{this.active--;};}
   async createEvent(_c:string,p:CalendarEventProjection,key:string){const leave=await this.enter();try{
     this.createCalls++; if(this.failAll||this.failTitles.has(p.title))throw new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","create failed");
-    const known=this.byKey.get(key);if(known)return this.events.get(known)!.event;
+    const known=this.byKey.get(key);if(known&&this.events.has(known))return this.events.get(known)!.event;
     const id="remote-"+key.slice(0,16);const event={remoteEventId:id,etag:"create-etag"};this.byKey.set(key,id);this.events.set(id,{event,projection:p,syncKey:key});
     if(this.loseNextCreate){this.loseNextCreate=false;throw new CalendarSyncError("CALENDAR_NETWORK_ERROR","lost response");}return event;
   }finally{leave();}}
