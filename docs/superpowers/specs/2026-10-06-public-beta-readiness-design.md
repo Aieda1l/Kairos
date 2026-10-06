@@ -1,7 +1,7 @@
 # Kairos Milestone 7 — Public Beta Readiness Design
 
 **Date:** 2026-10-06  
-**Status:** Awaiting written-spec review  
+**Status:** Approved design  
 **Branch:** `feat/milestone-6-multi-user-hosted-foundation` (planning artifact; implementation branch will start after Milestone 6 merges)  
 **Production domain:** `https://mykairos.me`
 
