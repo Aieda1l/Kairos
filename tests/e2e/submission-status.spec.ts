@@ -109,6 +109,10 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
   await expect(page.getByText("Fixture Homework").first()).toBeVisible();
   await expect(page.getByText("Status unavailable").first()).toBeVisible();
   await expect.poll(()=>startRequests).toBe(1);
+  await expect.poll(async()=>page.evaluate(()=>{
+    const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;
+    return capture?.syncRequests??0;
+  })).toBe(1);
 
   await page.evaluate(()=>{
     const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;
