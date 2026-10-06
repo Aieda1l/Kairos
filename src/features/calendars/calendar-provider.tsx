@@ -59,6 +59,27 @@ function resultStatus(value:unknown):Exclude<CalendarSyncStatus,"never">|null{
   return value==="success"||value==="partial"||value==="error"?value:null;
 }
 
+function countValue(body:Record<string,unknown>,key:string):number{
+  const value=body[key];
+  return typeof value==="number"&&Number.isFinite(value)&&value>=0?value:0;
+}
+
+function syncSuccessMessage(
+  connection:CalendarConnection,
+  body:Record<string,unknown>,
+):string{
+  const created=countValue(body,"createdCount");
+  const updated=countValue(body,"updatedCount");
+  const deleted=countValue(body,"deletedCount");
+  const unchanged=countValue(body,"unchangedCount");
+  const failed=countValue(body,"failedCount");
+  const counts=`${created} created, ${updated} updated, ${deleted} deleted, ${unchanged} unchanged, ${failed} failed`;
+  const destination=connection.provider==="microsoft"
+    ?" Check Outlook's secondary Kairos calendar if events are not visible in your primary calendar."
+    :"";
+  return `${connection.label} synchronized: ${counts}.${destination}`;
+}
+
 export function CalendarSyncProvider({
   initialConnections,
   children,
@@ -209,7 +230,7 @@ export function CalendarSyncProvider({
         phase:body.status==="partial"?"error":"success",
         message:body.status==="partial"
           ?`${connection.label} synchronized with warnings.`
-          :`${connection.label} synchronized.`,
+          :syncSuccessMessage(connection,body),
       });
     }catch{
       setLocal(id,{phase:"error",message:`${connection.label} could not be synchronized.`});
