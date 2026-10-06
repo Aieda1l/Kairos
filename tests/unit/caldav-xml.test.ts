@@ -55,6 +55,53 @@ describe("Apple CalDAV URL and XML safety",()=>{
     ]);
   });
 
+  it("treats bind plus write-content as event-write access",()=>{
+    const xml=`<?xml version="1.0"?>
+      <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+        <d:response>
+          <d:href>/123/calendars/kairos/</d:href>
+          <d:propstat>
+            <d:prop>
+              <d:displayname>Kairos</d:displayname>
+              <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+              <d:current-user-privilege-set>
+                <d:privilege><d:read/></d:privilege>
+                <d:privilege><d:bind/></d:privilege>
+                <d:privilege><d:unbind/></d:privilege>
+                <d:privilege><d:write-content/></d:privilege>
+                <d:privilege><d:write-properties/></d:privilege>
+              </d:current-user-privilege-set>
+            </d:prop>
+          </d:propstat>
+        </d:response>
+      </d:multistatus>`;
+    expect(parseCalendarCollections(xml)).toEqual([{
+      href:"/123/calendars/kairos/",
+      name:"Kairos",
+      writable:true,
+    }]);
+  });
+
+  it("does not call a calendar writable when it cannot create event resources",()=>{
+    const xml=`<?xml version="1.0"?>
+      <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+        <d:response>
+          <d:href>/123/calendars/read-only-ish/</d:href>
+          <d:propstat>
+            <d:prop>
+              <d:displayname>Read only-ish</d:displayname>
+              <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+              <d:current-user-privilege-set>
+                <d:privilege><d:read/></d:privilege>
+                <d:privilege><d:write-content/></d:privilege>
+              </d:current-user-privilege-set>
+            </d:prop>
+          </d:propstat>
+        </d:response>
+      </d:multistatus>`;
+    expect(parseCalendarCollections(xml)[0]).toMatchObject({writable:false});
+  });
+
   it.each([
     "<!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]><multistatus/>",
     "<multistatus><!ENTITY xxe 'boom'></multistatus>",
