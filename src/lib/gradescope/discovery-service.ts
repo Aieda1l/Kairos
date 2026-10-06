@@ -1,6 +1,8 @@
 import "server-only";
 import type Database from "better-sqlite3";
 import type {UserScope} from "@/lib/auth/user-scope";
+import type {SourceConnection} from "@/lib/assignments/types";
+import type {SourceCourse} from "@/lib/sources/types";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
@@ -183,17 +185,17 @@ export function completeGradescopeDiscovery(
 export function replaceEnabledGradescopeCourses(
   db:Database.Database,
   enabledCourseIds:string[],
-):{connection:ReturnType<SourceConnectionRepository["getByKind"]>;courses:ReturnType<SourceCourseRepository["list"]>};
+):{connection:SourceConnection;courses:SourceCourse[]};
 export function replaceEnabledGradescopeCourses(
   db:D1DatabaseLike,
   scope:UserScope,
   enabledCourseIds:string[],
-):Promise<{connection:Awaited<ReturnType<D1SourceConnectionRepository["getByKind"]>>;courses:Awaited<ReturnType<D1SourceCourseRepository["list"]>>}>;
+):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export function replaceEnabledGradescopeCourses(
   db:Database.Database|D1DatabaseLike,
   arg2:string[]|UserScope,
   arg3?:string[],
-){
+):{connection:SourceConnection;courses:SourceCourse[]}|Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(Array.isArray(arg2)){
     const legacyDb=db as Database.Database;
     const connection=new SourceConnectionRepository(legacyDb).getByKind("gradescope");
