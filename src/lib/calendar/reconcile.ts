@@ -157,6 +157,7 @@ export async function reconcileCalendarConnection(
         connection.remoteCalendarId!,
         link.remoteEventId,
         projection,
+        remote.etag,
       );
       links.markSynced(link.id,updated.remoteEventId,updated.etag,hash,completedAt);
       return {kind:"updated"};
