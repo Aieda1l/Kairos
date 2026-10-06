@@ -1,4 +1,5 @@
 import { getDatabase } from "@/lib/db/client";
+import { reconcileCalendarsAfterSourceWrite } from "@/lib/calendar/post-source-sync";
 import { migrate } from "@/lib/db/migrate";
 import {
   completeCanvasSubmissionStatusSync,
@@ -21,7 +22,12 @@ export async function POST(request:Request){
   const db=getDatabase();
   migrate(db);
   try{
-    return Response.json(completeCanvasSubmissionStatusSync(db,parsed.data));
+    const result=completeCanvasSubmissionStatusSync(db,parsed.data);
+    await reconcileCalendarsAfterSourceWrite(db,{
+      defer:request.headers.get("x-kairos-calendar-sync")==="defer",
+      changed:result.updatedCount>0,
+    });
+    return Response.json(result);
   }catch(error){
     if(error instanceof SubmissionStatusSyncServiceError){
       return Response.json(
