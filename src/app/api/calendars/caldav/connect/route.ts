@@ -13,7 +13,7 @@ export async function POST(request:Request){
     return Response.json({connection});
   }catch(error){
     const e=error instanceof CalendarSyncError?error:new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","Apple Calendar could not be connected.");
-    const status=e.code==="CALENDAR_AUTH_EXPIRED"?401:e.code==="CALENDAR_CONFIG_MISSING"?404:502;
+    const status=(e.code==="CALENDAR_AUTH_EXPIRED"||e.code==="CALENDAR_AUTH_REQUIRED")?401:e.code==="CALENDAR_CONFIG_MISSING"?404:502;
     return Response.json({code:e.code,message:e.message},{status});
   }
 }
