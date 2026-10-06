@@ -178,6 +178,44 @@ describe("Microsoft Calendar client",()=>{
     );
   });
 
+  it("lists every editable exact-name Kairos calendar instead of picking one arbitrarily",async()=>{
+    const fetchMock=vi.fn(async()=>Response.json({value:[
+      {id:"kairos-a",name:"Kairos",canEdit:true},
+      {id:"kairos-b",name:"Kairos"},
+      {id:"readonly",name:"Kairos",canEdit:false},
+      {id:"other",name:"Kairos Old",canEdit:true},
+    ]}));
+    const client=new MicrosoftCalendarClient("fixture-access",fetchMock as typeof fetch);
+    await expect(client.listCalendarsByName("Kairos")).resolves.toEqual([
+      {remoteCalendarId:"kairos-a",name:"Kairos"},
+      {remoteCalendarId:"kairos-b",name:"Kairos"},
+    ]);
+  });
+
+  it("rejects ambiguous duplicate Kairos calendars instead of silently binding one",async()=>{
+    const fetchMock=vi.fn(async(input:RequestInfo|URL)=>{
+      const url=String(input);
+      if(url.endsWith("/me/calendars/kairos-calendar-id")){
+        return Response.json({id:"kairos-calendar-id",name:"Kairos"});
+      }
+      expect(url).toBe("https://graph.microsoft.com/v1.0/me/calendars");
+      return Response.json({value:[
+        {id:"kairos-calendar-id",name:"Kairos"},
+        {id:"kairos-other",name:"Kairos"},
+      ]});
+    });
+    const adapter=new MicrosoftCalendarAdapter(
+      connection(),
+      new MicrosoftCalendarClient("fixture-access",fetchMock as typeof fetch),
+    );
+    await expect(adapter.testConnection()).rejects.toMatchObject({
+      code:"CALENDAR_CONFIG_MISSING",
+    });
+    await expect(adapter.ensureCalendar()).rejects.toMatchObject({
+      code:"CALENDAR_CONFIG_MISSING",
+    });
+  });
+
   it("reuses an existing Kairos calendar before creating another on reconnect",async()=>{
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       expect(String(input)).toBe("https://graph.microsoft.com/v1.0/me/calendars");
