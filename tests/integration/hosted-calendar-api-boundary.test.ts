@@ -14,7 +14,7 @@ vi.mock("@/lib/platform/calendar-runtime",()=>({
   getCalendarRouteRuntime:runtime.get,
   getCalendarRuntimeContext:runtime.get,
   resolveCalendarRuntimeContext:runtime.get,
-  useLegacyCalendarRuntime:()=>false,
+  shouldUseLegacyCalendarRuntime:()=>false,
 }));
 
 const keyring:CredentialKeyring={
