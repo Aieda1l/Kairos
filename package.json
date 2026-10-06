@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:extension && next build",
+    "build": "npm run build:extension && cross-env KAIROS_NEXT_COMPAT_BUILD=1 next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -64,7 +64,8 @@
     "@cloudflare/vite-plugin": "^1.62.4",
     "@vitejs/plugin-rsc": "^0.5.35",
     "vite": "^8.3.3",
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.147.0",
+    "cross-env": "^10.1.0"
   },
   "type": "module"
 }
