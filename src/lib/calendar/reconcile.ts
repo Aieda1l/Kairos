@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import {D1AssignmentRepository} from "@/lib/db/d1/repositories/assignments";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
@@ -69,7 +69,7 @@ type CalendarRepositories={
   };
 };
 
-function legacyRepositories(db:Database.Database):CalendarRepositories{
+function legacyRepositories(db:LegacyDatabase):CalendarRepositories{
   const connections=new CalendarConnectionRepository(db);
   const assignments=new AssignmentRepository(db);
   const settings=new SettingsRepository(db);
@@ -376,7 +376,7 @@ async function reconcileWithRepositories(
 }
 
 export function reconcileCalendarConnection(
-  db:Database.Database,
+  db:LegacyDatabase,
   connectionId:string,
   options:ReconcileOptions,
 ):Promise<CalendarSyncResult>;
@@ -387,14 +387,14 @@ export function reconcileCalendarConnection(
   options:ReconcileOptions,
 ):Promise<CalendarSyncResult>;
 export function reconcileCalendarConnection(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string|UserScope,
   arg3:string|ReconcileOptions,
   arg4?:ReconcileOptions,
 ):Promise<CalendarSyncResult>{
   if(typeof arg2==="string"){
     return reconcileWithRepositories(
-      legacyRepositories(db as Database.Database),
+      legacyRepositories(db as LegacyDatabase),
       arg2,
       arg3 as ReconcileOptions,
     );
@@ -426,7 +426,7 @@ async function reconcileAllWithRepositories(
 }
 
 export function reconcileAllCalendars(
-  db:Database.Database,
+  db:LegacyDatabase,
   options:ReconcileOptions,
 ):Promise<CalendarSyncAllResult>;
 export function reconcileAllCalendars(
@@ -435,13 +435,13 @@ export function reconcileAllCalendars(
   options:ReconcileOptions,
 ):Promise<CalendarSyncAllResult>;
 export function reconcileAllCalendars(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:ReconcileOptions|UserScope,
   arg3?:ReconcileOptions,
 ):Promise<CalendarSyncAllResult>{
   if("adapterFactory" in arg2){
     const options=arg2;
-    const repositories=legacyRepositories(db as Database.Database);
+    const repositories=legacyRepositories(db as LegacyDatabase);
     return reconcileAllWithRepositories(
       repositories,
       id=>reconcileWithRepositories(repositories,id,options),
