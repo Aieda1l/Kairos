@@ -53,8 +53,9 @@ export class CalDavCalendarAdapter implements CalendarDestinationAdapter{
     remoteCalendarId:string,
     remoteEventId:string,
     projection:CalendarEventProjection,
+    remoteEtag:string|null=null,
   ):Promise<RemoteCalendarEvent>{
-    return this.client.updateEvent(remoteCalendarId,remoteEventId,projection);
+    return this.client.updateEvent(remoteCalendarId,remoteEventId,projection,remoteEtag);
   }
 
   deleteEvent(remoteCalendarId:string,remoteEventId:string):Promise<void>{
