@@ -151,7 +151,7 @@ export class CalDavClient{
   async getEvent(calendarId:string,eventId:string):Promise<RemoteCalendarEvent|null>{
     const calendar=resolveAppleDavUrl(new URL(ICLOUD_CALDAV_ORIGIN),calendarId);
     const target=resolveAppleDavUrl(calendar,eventId);
-    const response=await this.request(target,{method:"HEAD"},{allowNotFound:true});
+    const response=await this.request(target,{method:"GET"},{allowNotFound:true});
     if(!response)return null;
     return {remoteEventId:eventId,etag:response.headers.get("etag")};
   }
