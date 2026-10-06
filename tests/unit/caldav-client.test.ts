@@ -143,6 +143,29 @@ describe("Apple iCloud CalDAV client",()=>{
     expect(calls[3]!.method).toBe("DELETE");
   });
 
+  it("reads existing calendar objects with GET instead of relying on HEAD",async()=>{
+    const calls:string[]=[];
+    const fetchMock=vi.fn(async(_input:RequestInfo|URL,init?:RequestInit)=>{
+      const method=init?.method??"GET";
+      calls.push(method);
+      if(method==="HEAD")return new Response("method not allowed",{status:405});
+      if(method==="GET")return new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",{
+        status:200,
+        headers:{etag:"etag-existing"},
+      });
+      return new Response("unexpected",{status:500});
+    });
+    const client=new CalDavClient("student@example.com","fixture-app-password",fetchMock as typeof fetch);
+    await expect(client.getEvent(
+      "https://p12-caldav.icloud.com/123/calendars/kairos/",
+      "event.ics",
+    )).resolves.toEqual({
+      remoteEventId:"event.ics",
+      etag:"etag-existing",
+    });
+    expect(calls).toEqual(["GET"]);
+  });
+
   it("treats deleted remote events as absent and deleted calendars as missing",async()=>{
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       const method=init?.method??"GET";
