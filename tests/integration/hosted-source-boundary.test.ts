@@ -10,6 +10,16 @@ import {
   completeGradescopeDiscovery,
   startGradescopeDiscovery,
 } from "@/lib/gradescope/discovery-service";
+import {
+  completeGradescopeSync,
+  startGradescopeSync,
+} from "@/lib/gradescope/sync-service";
+import {
+  completeCanvasSubmissionStatusSync,
+  startCanvasSubmissionStatusSync,
+} from "@/lib/submission-status/sync-service";
+import {D1AssignmentRepository} from "@/lib/db/d1/repositories/assignments";
+import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
 import { resolveSourceRuntimeContext } from "@/lib/platform/source-runtime";
 
 const keyring:CredentialKeyring={
@@ -115,6 +125,99 @@ describe("hosted source tenant boundary",()=>{
     await expect(completeGradescopeDiscovery(
       db,{userId:ALICE.id},payload,new Date("2026-10-06T05:01:00.000Z"),
     )).resolves.toMatchObject({connection:{kind:"gradescope"}});
+    close();
+  });
+  it("binds Gradescope assignment sync requests to the authenticated user",async()=>{
+    const {db,sqlite,close}=openD1TestDatabase();
+    await seedUsers(sqlite);
+    const alice={userId:ALICE.id};
+    const connection=await new D1SourceConnectionRepository(db,alice)
+      .upsertGradescope("Gradescope");
+    const courses=new D1SourceCourseRepository(db,alice);
+    await courses.upsertDiscovered(connection.id,[{
+      externalCourseId:"123",
+      shortName:"CSE 331",
+      fullName:"Software Design",
+      term:"Autumn",
+      year:"2026",
+    }],"2026-10-06T05:00:00.000Z");
+    await courses.setEnabled(connection.id,["123"]);
+
+    const started=await startGradescopeSync(
+      db,alice,new Date("2026-10-06T05:01:00.000Z"),
+    );
+    const input={
+      requestId:started.requestId,
+      batches:[{
+        protocolVersion:1 as const,
+        requestId:started.requestId,
+        courses:[{
+          courseId:"123",
+          checkedAt:"2026-10-06T05:02:00.000Z",
+          assignments:[],
+          errorCode:null,
+          parseDiagnosticCounts:[],
+        }],
+        errorCode:null,
+      }],
+    };
+
+    await expect(completeGradescopeSync(
+      db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
+    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+
+    await expect(completeGradescopeSync(
+      db,alice,input,new Date("2026-10-06T05:02:00.000Z"),
+    )).resolves.toMatchObject({failedCourseCount:0,lastErrorCode:null});
+    close();
+  });
+
+  it("binds Canvas submission-status requests to the authenticated user",async()=>{
+    const {db,sqlite,close}=openD1TestDatabase();
+    await seedUsers(sqlite);
+    const alice={userId:ALICE.id};
+    const connection=await new D1SourceConnectionRepository(db,alice)
+      .upsertCanvas("Canvas");
+    await new D1AssignmentRepository(db,alice).upsertMany(connection.id,[{
+      source:"canvas",
+      externalId:"canvas-4242",
+      courseId:"999",
+      courseName:"CSE 999",
+      title:"Homework",
+      releaseAt:null,
+      dueAt:null,
+      lateDueAt:null,
+      status:"unknown",
+      sourceStatusText:null,
+      gradeScore:null,
+      gradeMax:null,
+      gradeDisplay:null,
+      sourceUrl:"https://canvas.uw.edu/courses/999/assignments/4242",
+      sourceUpdatedAt:null,
+    }],"2026-10-06T05:00:00.000Z");
+
+    const started=await startCanvasSubmissionStatusSync(
+      db,alice,new Date("2026-10-06T05:01:00.000Z"),
+    );
+    expect(started.assignments).toHaveLength(1);
+    const result={
+      ...started.assignments[0]!,
+      state:"submitted" as const,
+      isLate:false,
+      isMissing:false,
+      submittedAt:null,
+      checkedAt:"2026-10-06T05:02:00.000Z",
+      extractorVersion:"canvas-html-v1",
+    };
+    const input={requestId:started.requestId,results:[result]};
+
+    await expect(completeCanvasSubmissionStatusSync(
+      db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
+    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+
+    await expect(completeCanvasSubmissionStatusSync(
+      db,alice,input,new Date("2026-10-06T05:02:00.000Z"),
+    )).resolves.toMatchObject({updatedCount:1,failedCount:0});
     close();
   });
 });
