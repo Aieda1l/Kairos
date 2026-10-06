@@ -137,6 +137,8 @@ describe("Apple iCloud CalDAV client",()=>{
     });
     await client.updateEvent(calendarId,created.remoteEventId,projection,"etag-current");
     expect(calls[2]!.headers.get("if-match")).toBe("etag-current");
+    const uid=created.remoteEventId.replace(/\.ics$/,"")+"@kairos.local";
+    expect(calls[2]!.body).toContain("UID:"+uid);
     await client.deleteEvent(calendarId,created.remoteEventId);
     expect(calls[3]!.method).toBe("DELETE");
   });
