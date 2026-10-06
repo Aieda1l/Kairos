@@ -23,10 +23,23 @@ type StoredEvent=E2ECalendarEvent&{
   raw:string;
 };
 
-let mode:FixtureMode="normal";
-let calendarExists=false;
-let etagCounter=0;
-const events=new Map<string,StoredEvent>();
+type FixtureStore={
+  mode:FixtureMode;
+  calendarExists:boolean;
+  etagCounter:number;
+  events:Map<string,StoredEvent>;
+};
+
+const fixtureGlobal=globalThis as typeof globalThis&{
+  __kairosCalendarE2EFixture?:FixtureStore;
+};
+const store=fixtureGlobal.__kairosCalendarE2EFixture??={
+  mode:"normal",
+  calendarExists:false,
+  etagCounter:0,
+  events:new Map<string,StoredEvent>(),
+};
+fixtureGlobal.__kairosCalendarE2EFixture=store;
 
 function xml(body:string,status=207):Response{
   return new Response(body,{
@@ -74,7 +87,7 @@ function homeXml():string{
 }
 
 function calendarCollectionXml():string{
-  if(!calendarExists){
+  if(!store.calendarExists){
     return `<?xml version="1.0" encoding="UTF-8"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"/>`;
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -115,13 +128,13 @@ function icalUtcToIso(value:string):string{
 }
 
 function eventFromBody(id:string,raw:string):StoredEvent{
-  etagCounter++;
+  store.etagCounter++;
   return {
     id,
     summary:unescapeIcal(field(raw,"SUMMARY")),
     startsAt:icalUtcToIso(field(raw,"DTSTART")),
     endsAt:icalUtcToIso(field(raw,"DTEND")),
-    etag:`"fixture-etag-${etagCounter}"`,
+    etag:`"fixture-etag-${store.etagCounter}"`,
     raw,
   };
 }
@@ -134,7 +147,7 @@ function isDavUrl(url:URL):boolean{
 const fixtureFetch:typeof fetch=async(input,init)=>{
   const url=new URL(typeof input==="string"?input:input instanceof URL?input.toString():input.url);
   if(!isDavUrl(url))throw new Error("E2E Calendar fixture rejected a non-Apple origin.");
-  if(mode==="network-error")throw new Error("fixture calendar network error");
+  if(store.mode==="network-error")throw new Error("fixture calendar network error");
 
   const headers=new Headers(init?.headers);
   if(headers.get("authorization")!==expectedAuthorization()){
@@ -146,33 +159,33 @@ const fixtureFetch:typeof fetch=async(input,init)=>{
   if(method==="PROPFIND"&&url.href===PRINCIPAL)return xml(homeXml());
   if(method==="PROPFIND"&&url.href===HOME)return xml(calendarCollectionXml());
   if(method==="PROPFIND"&&url.href===CALENDAR){
-    return calendarExists?xml(calendarCollectionXml()):empty(404);
+    return store.calendarExists?xml(calendarCollectionXml()):empty(404);
   }
 
   if(method==="MKCALENDAR"&&url.href===CALENDAR){
-    calendarExists=true;
+    store.calendarExists=true;
     return empty(201);
   }
 
   if(url.href.startsWith(CALENDAR)&&url.pathname.endsWith(".ics")){
-    if(!calendarExists)return empty(404);
+    if(!store.calendarExists)return empty(404);
     const id=url.pathname.split("/").at(-1)!;
     if(method==="HEAD"){
-      const event=events.get(id);
+      const event=store.events.get(id);
       return event
         ?new Response(null,{status:200,headers:{etag:event.etag,"cache-control":"no-store"}})
         :empty(404);
     }
     if(method==="PUT"){
-      const existing=events.get(id);
+      const existing=store.events.get(id);
       if(headers.get("if-none-match")==="*"&&existing)return empty(412);
       const raw=String(init?.body??"");
       const event=eventFromBody(id,raw);
-      events.set(id,event);
+      store.events.set(id,event);
       return new Response(null,{status:existing?204:201,headers:{etag:event.etag,"cache-control":"no-store"}});
     }
     if(method==="DELETE"){
-      events.delete(id);
+      store.events.delete(id);
       return empty(204);
     }
   }
@@ -185,10 +198,10 @@ export function getCalendarRouteFetch():typeof fetch{
 }
 
 export function resetE2ECalendarFixture():void{
-  mode="normal";
-  calendarExists=false;
-  etagCounter=0;
-  events.clear();
+  store.mode="normal";
+  store.calendarExists=false;
+  store.etagCounter=0;
+  store.events.clear();
 }
 
 export function getE2ECalendarFixtureState():{
@@ -197,18 +210,18 @@ export function getE2ECalendarFixtureState():{
   events:E2ECalendarEvent[];
 }{
   return {
-    mode,
-    calendarExists,
-    events:Array.from(events.values())
+    mode:store.mode,
+    calendarExists:store.calendarExists,
+    events:Array.from(store.events.values())
       .map(({id,summary,startsAt,endsAt})=>({id,summary,startsAt,endsAt}))
       .sort((a,b)=>a.id.localeCompare(b.id)),
   };
 }
 
 export function setE2ECalendarFixtureMode(next:FixtureMode):void{
-  mode=next;
+  store.mode=next;
 }
 
 export function deleteE2ECalendarFixtureEvent(eventId:string):boolean{
-  return events.delete(eventId);
+  return store.events.delete(eventId);
 }
