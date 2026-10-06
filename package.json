@@ -29,7 +29,8 @@
     "react-dom": "^19.3.0",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.1.12",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "fast-xml-parser": "^5.11.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
