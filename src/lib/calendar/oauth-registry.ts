@@ -22,7 +22,14 @@ type OAuthRequestInput={
 };
 
 const TTL_MS=10*60*1000;
-const registry=new Map<string,RegisteredOAuthRequest>();
+
+type OAuthRegistryGlobal=typeof globalThis&{
+  __kairosCalendarOAuthRegistry?:Map<string,RegisteredOAuthRequest>;
+};
+
+const registryGlobal=globalThis as OAuthRegistryGlobal;
+const registry=registryGlobal.__kairosCalendarOAuthRegistry
+  ??(registryGlobal.__kairosCalendarOAuthRegistry=new Map<string,RegisteredOAuthRequest>());
 
 function randomBase64Url(bytes:number):string{
   return randomBytes(bytes).toString("base64url");
