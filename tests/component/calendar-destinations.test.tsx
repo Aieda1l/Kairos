@@ -11,6 +11,7 @@ const state=vi.hoisted(()=>({
   startGoogle:vi.fn(async()=>undefined),
   startMicrosoft:vi.fn(async()=>undefined),
   syncConnection:vi.fn(async()=>undefined),
+  syncAll:vi.fn(async()=>undefined),
   removeEvents:vi.fn(async()=>undefined),
   disconnect:vi.fn(async()=>undefined),
   phaseFor:vi.fn(()=> "idle"),
@@ -34,11 +35,22 @@ function connection(provider:CalendarConnection["provider"],id:string):CalendarC
 
 beforeEach(()=>{
   state.connections.length=0;
-  for(const fn of [state.testIcloud,state.connectIcloud,state.startGoogle,state.startMicrosoft,state.syncConnection,state.removeEvents,state.disconnect])fn.mockClear();
+  for(const fn of [state.testIcloud,state.connectIcloud,state.startGoogle,state.startMicrosoft,state.syncConnection,state.syncAll,state.removeEvents,state.disconnect])fn.mockClear();
   state.testIcloud.mockResolvedValue(true);
   state.connectIcloud.mockResolvedValue(true);
   state.phaseFor.mockReturnValue("idle");
   state.messageFor.mockReturnValue("");
+  vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const url=String(input);
+    if(url==="/api/settings/calendar"&&(init?.method??"GET")==="PUT"){
+      const body=JSON.parse(String(init?.body??"{}"));
+      return Response.json({hideSubmitted:body.hideSubmitted});
+    }
+    if(url==="/api/settings/calendar"){
+      return Response.json({hideSubmitted:true});
+    }
+    return Response.json({});
+  }));
 });
 
 describe("Calendar destinations",()=>{
@@ -52,6 +64,22 @@ describe("Calendar destinations",()=>{
     expect(screen.getByText(/Calendars\.ReadWrite/)).toBeVisible();
     expect(screen.getByRole("heading",{name:"Apple iCloud Calendar"})).toBeVisible();
     expect(screen.getByText(/Use an Apple app-specific password/i)).toBeVisible();
+  });
+
+  it("hides submitted assignments by default and resynchronizes when the preference changes",async()=>{
+    const user=userEvent.setup();
+    render(<CalendarDestinations/>);
+    const checkbox=await screen.findByRole("checkbox",{name:"Hide submitted assignments"});
+    expect(checkbox).toBeChecked();
+
+    await user.click(checkbox);
+
+    expect(checkbox).not.toBeChecked();
+    expect(fetch).toHaveBeenCalledWith("/api/settings/calendar",expect.objectContaining({
+      method:"PUT",
+      body:JSON.stringify({hideSubmitted:false}),
+    }));
+    expect(state.syncAll).toHaveBeenCalledTimes(1);
   });
 
   it("uses a password field for iCloud and clears the secret after connect",async()=>{
