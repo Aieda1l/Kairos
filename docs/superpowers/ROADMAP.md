@@ -84,6 +84,7 @@ Implemented:
 - outbound one-way synchronization from Kairos assignments to dedicated Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar destinations;
 - calendar destinations modeled separately from assignment sources so Canvas, Gradescope, and Ed provenance remains unchanged;
 - deterministic 15-minute deadline event projection with idempotent create/update/recreate behavior and no event for undated assignments;
+- default-on **Hide submitted assignments** calendar preference that removes Submitted, Graded, and Excused work from generated events and recreates events if work becomes active again;
 - Google OAuth authorization-code + PKCE using the narrow `calendar.app.created` scope;
 - Microsoft public-client authorization-code + PKCE using delegated `Calendars.ReadWrite` plus `offline_access`;
 - Apple iCloud CalDAV using an Apple Account email + app-specific password and validated Apple CalDAV host discovery/redirects;
@@ -97,9 +98,11 @@ Implemented:
 Automated validation:
 - feature CI has passed Vitest, lint, typecheck, Firefox extension build, Playwright E2E, production build, dynamic-dashboard verification, and credential/permission review on the implementation branch.
 
+Completed real-account validation:
+- Google Calendar connect/sync behavior;
+- Outlook / Microsoft 365 connect/sync behavior, secondary-calendar visibility, reconnect, and duplicate-prevention behavior.
+
 Pending before this milestone may be marked **Complete**:
-- real-account Google Calendar smoke;
-- real-account Outlook / Microsoft 365 smoke;
 - real-account Apple iCloud Calendar smoke.
 
 Primary docs:
