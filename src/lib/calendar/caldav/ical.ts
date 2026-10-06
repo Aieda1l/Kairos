@@ -28,8 +28,9 @@ export function caldavResourceName(syncKey:string):string{
 export function serializeCalendarEvent(
   projection:CalendarEventProjection,
   syncKey:string,
+  uidStem:string=hash(syncKey),
 ):string{
-  const uid=hash(syncKey)+"@kairos.local";
+  const uid=uidStem+"@kairos.local";
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
