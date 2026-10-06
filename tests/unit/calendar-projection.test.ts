@@ -32,6 +32,53 @@ describe("calendar assignment projection",()=>{
     expect(projectAssignment(assignment({dueAt:null}))).toBeNull();
   });
 
+  it("hides submitted and graded assignments when the preference is enabled",()=>{
+    expect(projectAssignment(assignment({status:"submitted"}),{hideSubmitted:true})).toBeNull();
+    expect(projectAssignment(assignment({status:"graded"}),{hideSubmitted:true})).toBeNull();
+    expect(projectAssignment(assignment({status:"submitted"}),{hideSubmitted:false})).not.toBeNull();
+  });
+
+  it("uses explicit submission status for calendar completion, including excused work",()=>{
+    const submitted=assignment({
+      status:"pending",
+      submissionStatus:{
+        state:"submitted",
+        isLate:false,
+        isMissing:false,
+        submittedAt:"2026-10-08T12:00:00.000Z",
+        checkedAt:"2026-10-08T12:01:00.000Z",
+        extractorVersion:"fixture",
+      },
+    });
+    expect(projectAssignment(submitted,{hideSubmitted:true})).toBeNull();
+
+    const excused=assignment({
+      status:"pending",
+      submissionStatus:{
+        state:"excused",
+        isLate:false,
+        isMissing:false,
+        submittedAt:null,
+        checkedAt:"2026-10-08T12:01:00.000Z",
+        extractorVersion:"fixture",
+      },
+    });
+    expect(projectAssignment(excused,{hideSubmitted:true})).toBeNull();
+
+    const explicitlyNotSubmitted=assignment({
+      status:"submitted",
+      submissionStatus:{
+        state:"not_submitted",
+        isLate:false,
+        isMissing:false,
+        submittedAt:null,
+        checkedAt:"2026-10-08T12:01:00.000Z",
+        extractorVersion:"fixture",
+      },
+    });
+    expect(projectAssignment(explicitlyNotSubmitted,{hideSubmitted:true})).not.toBeNull();
+  });
+
   it("creates an exact 15 minute deadline projection",()=>{
     expect(projectAssignment(assignment())).toEqual({
       assignmentId:"local-assignment-1",
