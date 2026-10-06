@@ -37,7 +37,11 @@ jobs:
           set -o pipefail
           npm test 2>&1 | tee vitest.log
       - run: npm run db:verify
-      - run: npm run lint
+      - name: Run lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee lint.log
       - name: Run typecheck
         shell: bash
         run: |
@@ -57,6 +61,7 @@ jobs:
           name: playwright-failure-${{ github.run_attempt }}
           path: |
             vitest.log
+            lint.log
             typecheck.log
             playwright-report
             test-results
