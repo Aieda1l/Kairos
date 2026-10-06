@@ -1,7 +1,7 @@
 import {z} from "zod";
 import {connectCaldavCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
-import {getCalendarRouteRuntime} from "@/lib/platform/calendar-runtime";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
 const schema=z.object({
   username:z.string().min(1),
@@ -20,7 +20,9 @@ export async function POST(request:Request){
     },{status:400});
   }
 
-  const runtime=await getCalendarRouteRuntime();
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   try{
     const connection=runtime.kind==="legacy"
       ?await connectCaldavCalendar(runtime.db,parsed.data)
