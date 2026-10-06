@@ -111,7 +111,7 @@ describe("Microsoft Calendar client",()=>{
     await client.updateEvent("calendar/id","event/id",projection);
     await client.deleteEvent("calendar/id","event/id");
     expect(calls.map(call=>[call.method,call.url])).toEqual([
-      ["GET","https://graph.microsoft.com/v1.0/me/calendars/calendar%2Fid/events/event%2Fid"],
+      ["GET",expect.stringContaining("https://graph.microsoft.com/v1.0/me/calendars/calendar%2Fid/events/event%2Fid?")],
       ["PATCH","https://graph.microsoft.com/v1.0/me/calendars/calendar%2Fid/events/event%2Fid"],
       ["DELETE","https://graph.microsoft.com/v1.0/me/calendars/calendar%2Fid/events/event%2Fid"],
     ]);
