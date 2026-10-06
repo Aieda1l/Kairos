@@ -17,7 +17,7 @@ type EdContextValue=SubmissionStatusSyncState<string>&{
   connect(token:string):Promise<boolean>;
   refreshCourses():Promise<void>;
   saveEnabledCourses(ids:string[]):Promise<void>;
-  syncNow():Promise<void>;
+  syncNow(options?:{deferCalendarSync?:boolean}):Promise<void>;
 };
 
 const Context=createContext<EdContextValue|null>(null);
@@ -144,10 +144,13 @@ export function EdProvider({
     }
   }
 
-  async function syncNow():Promise<void>{
+  async function syncNow(options?:{deferCalendarSync?:boolean}):Promise<void>{
     setPhase("syncing"); setMessage("");
     try{
-      const response=await fetch("/api/sources/ed/sync",{method:"POST"});
+      const response=await fetch("/api/sources/ed/sync",{
+        method:"POST",
+        ...(options?.deferCalendarSync?{headers:{"x-kairos-calendar-sync":"defer"}}:{}),
+      });
       const body=await readJson(response);
       if(typeof body.lastAttemptedAt==="string"||body.lastAttemptedAt===null){
         setSyncState({
