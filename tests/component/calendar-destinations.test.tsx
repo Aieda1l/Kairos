@@ -51,7 +51,7 @@ describe("Calendar destinations",()=>{
     expect(screen.getByRole("heading",{name:"Outlook \/ Microsoft 365"})).toBeVisible();
     expect(screen.getByText(/Calendars\.ReadWrite/)).toBeVisible();
     expect(screen.getByRole("heading",{name:"Apple iCloud Calendar"})).toBeVisible();
-    expect(screen.getByText(/app-specific password/i)).toBeVisible();
+    expect(screen.getByText(/Use an Apple app-specific password/i)).toBeVisible();
   });
 
   it("uses a password field for iCloud and clears the secret after connect",async()=>{
