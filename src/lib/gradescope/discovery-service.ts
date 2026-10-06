@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {SourceConnection} from "@/lib/assignments/types";
 import type {SourceCourse} from "@/lib/sources/types";
@@ -51,7 +51,7 @@ function discoveryFailureMessage(code:GradescopeSyncErrorCode):string{
 }
 
 export function startGradescopeDiscovery(
-  db:Database.Database,
+  db:LegacyDatabase,
   now?:Date,
 ):{requestId:string;protocolVersion:1};
 export function startGradescopeDiscovery(
@@ -60,7 +60,7 @@ export function startGradescopeDiscovery(
   now?:Date,
 ):Promise<{requestId:string;protocolVersion:1}>;
 export function startGradescopeDiscovery(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2?:Date|UserScope,
   arg3?:Date,
 ):{requestId:string;protocolVersion:1}|Promise<{requestId:string;protocolVersion:1}>{
@@ -92,7 +92,7 @@ export function startGradescopeDiscovery(
 }
 
 export function completeGradescopeDiscovery(
-  db:Database.Database,
+  db:LegacyDatabase,
   input:GradescopeDiscoverResultV1,
   now?:Date,
 ):{connection:ReturnType<SourceConnectionRepository["upsertGradescope"]>;courses:ReturnType<SourceCourseRepository["list"]>};
@@ -103,13 +103,13 @@ export function completeGradescopeDiscovery(
   now?:Date,
 ):Promise<{connection:Awaited<ReturnType<D1SourceConnectionRepository["upsertGradescope"]>>;courses:Awaited<ReturnType<D1SourceCourseRepository["list"]>>}>;
 export function completeGradescopeDiscovery(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:GradescopeDiscoverResultV1|UserScope,
   arg3?:Date|GradescopeDiscoverResultV1,
   arg4?:Date,
 ){
   if("requestId" in arg2){
-    const legacyDb=db as Database.Database;
+    const legacyDb=db as LegacyDatabase;
     const input=arg2;
     const now=arg3 instanceof Date?arg3:new Date();
     const registered=consumeGradescopeRequest(input.requestId,now.getTime());
@@ -183,7 +183,7 @@ export function completeGradescopeDiscovery(
 }
 
 export function replaceEnabledGradescopeCourses(
-  db:Database.Database,
+  db:LegacyDatabase,
   enabledCourseIds:string[],
 ):{connection:SourceConnection;courses:SourceCourse[]};
 export function replaceEnabledGradescopeCourses(
@@ -192,12 +192,12 @@ export function replaceEnabledGradescopeCourses(
   enabledCourseIds:string[],
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export function replaceEnabledGradescopeCourses(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string[]|UserScope,
   arg3?:string[],
 ):{connection:SourceConnection;courses:SourceCourse[]}|Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(Array.isArray(arg2)){
-    const legacyDb=db as Database.Database;
+    const legacyDb=db as LegacyDatabase;
     const connection=new SourceConnectionRepository(legacyDb).getByKind("gradescope");
     if(!connection){
       throw new GradescopeDiscoveryServiceError(
