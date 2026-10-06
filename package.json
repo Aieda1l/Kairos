@@ -17,7 +17,9 @@
     "dev:vinext": "vite dev --port 3001",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
-    "deploy:cloudflare": "npx @vinext/cloudflare deploy"
+    "deploy:cloudflare": "npx @vinext/cloudflare deploy",
+    "db:migrate:local": "npx wrangler d1 migrations apply kairos --local",
+    "db:verify": "node scripts/verify-d1-migrations.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
