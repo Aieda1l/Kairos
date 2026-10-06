@@ -113,7 +113,7 @@ type GradescopeContextValue=SubmissionStatusSyncState<GradescopeSyncErrorCode>&{
   message:string;
   discoverCourses:()=>Promise<void>;
   saveEnabledCourses:(ids:string[])=>Promise<void>;
-  syncNow:()=>Promise<void>;
+  syncNow:(options?:{deferCalendarSync?:boolean})=>Promise<void>;
 };
 
 const Context=createContext<GradescopeContextValue|null>(null);
@@ -272,7 +272,7 @@ export function GradescopeProvider({
     }
   },[router]);
 
-  const syncNow=useCallback(async()=>{
+  const syncNow=useCallback(async(options?:{deferCalendarSync?:boolean})=>{
     if(syncInFlightRef.current)return;
     syncInFlightRef.current=true;
     setPhase("syncing");
@@ -312,7 +312,10 @@ export function GradescopeProvider({
       const completed=syncCompleteSchema.parse(await expectJson(
         await fetch("/api/sources/gradescope/sync/complete",{
           method:"POST",
-          headers:{"content-type":"application/json"},
+          headers:{
+            "content-type":"application/json",
+            ...(options?.deferCalendarSync?{"x-kairos-calendar-sync":"defer"}:{}),
+          },
           body:JSON.stringify({requestId:started.requestId,batches,batchErrorCode}),
         }),
         "Gradescope sync could not be saved.",
