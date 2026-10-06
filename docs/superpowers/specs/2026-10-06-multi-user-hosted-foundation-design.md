@@ -605,7 +605,7 @@ That follow-up can cover:
 - onboarding and account-management polish;
 - production support/recovery documentation;
 - optional scheduled sync for server-capable providers;
-- an initial invite/beta rollout.
+- an open public-beta rollout with Google/Microsoft signup and no email-domain restriction.
 
 ## 21. External architecture constraints verified during design
 
