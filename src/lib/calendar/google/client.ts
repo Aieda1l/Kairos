@@ -49,7 +49,7 @@ export class GoogleCalendarClient{
   private async request(
     path:string,
     init:RequestInit={},
-    options:{allowNotFound?:boolean;allowNoContent?:boolean}={},
+    options:{allowNotFound?:boolean;allowNoContent?:boolean;allowConflict?:boolean}={},
   ):Promise<unknown|null>{
     let response:Response;
     try{
@@ -70,6 +70,7 @@ export class GoogleCalendarClient{
 
     if(options.allowNotFound&&response.status===404)return null;
     if(options.allowNoContent&&(response.status===204||response.status===404))return null;
+    if(options.allowConflict&&response.status===409)return null;
     if(!response.ok)throw mapHttpError(response.status);
     if(response.status===204)return null;
     try{return await response.json();}catch{
@@ -133,16 +134,26 @@ export class GoogleCalendarClient{
     projection:CalendarEventProjection,
     syncKey:string,
   ):Promise<RemoteCalendarEvent>{
+    const eventId=googleEventId(syncKey);
     const body=await this.request(
       `/calendars/${encodeURIComponent(calendarId)}/events`,
       {
         method:"POST",
         body:JSON.stringify({
-          id:googleEventId(syncKey),
+          id:eventId,
           ...this.eventBody(projection),
         }),
       },
+      {allowConflict:true},
     );
+    if(body===null){
+      const existing=await this.getEvent(calendarId,eventId);
+      if(existing)return existing;
+      throw new CalendarSyncError(
+        "CALENDAR_UPSTREAM_ERROR",
+        "Google Calendar could not confirm an existing event.",
+      );
+    }
     return this.parseEvent(body);
   }
 
