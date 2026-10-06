@@ -50,7 +50,6 @@
 ### Task 1: Calendar persistence model, repositories, and branch CI
 
 **Files:**
-- Modify: `.github/workflows/milestone-2-ci.yml`
 - Modify: `src/lib/db/migrate.ts`
 - Create: `src/lib/calendar/types.ts`
 - Create: `src/lib/db/repositories/calendar-connections.ts`
@@ -68,20 +67,13 @@
 - Produces `CalendarCredentialRepository.setOAuthRefreshToken(connectionId, token)`, `getOAuthRefreshToken(connectionId)`, `setCaldavCredentials(connectionId, username, secret)`, `getCaldavCredentials(connectionId)`, and `delete(connectionId)`.
 - Produces `CalendarEventLinkRepository.get(connectionId, assignmentId)`, `listByConnection(connectionId)`, `ensure(connectionId, assignmentId, syncKey, now?)`, `markSynced(id, remoteEventId, remoteEtag, contentHash, syncedAt)`, `markError(id, errorCode, at)`, and `delete(id)`.
 
-- [ ] **Step 1: Add the Milestone 5 branch to feature CI and verify the exact base is green**
+- [ ] **Step 1: Open a draft PR and verify the exact base is green**
 
-Add `feat/milestone-5-calendar-sync` to the workflow's `push.branches`.
+Open a draft PR from `feat/milestone-5-calendar-sync` to `main` before the first implementation commit. The existing workflow already runs on pull requests to `main`, so do not add another milestone-specific branch trigger.
 
-Commit:
+Require feature CI on the current docs-only head to pass before feature code begins.
 
-```bash
-git add .github/workflows/milestone-2-ci.yml
-git commit -m "ci: verify calendar sync branch"
-```
-
-Run the full existing workflow on that commit.
-
-Expected: existing tests, lint, typecheck, extension build, E2E, production build, dynamic-dashboard verification, and credential/permission review all pass before feature code begins.
+Expected: existing tests, lint, typecheck, extension build, E2E, production build, dynamic-dashboard verification, and credential/permission review all pass on the exact starting head.
 
 - [ ] **Step 2: Write failing schema/repository tests**
 
@@ -422,7 +414,7 @@ git commit -m "feat: add google calendar adapter"
 Assert:
 
 - fixed Microsoft identity endpoint with the configured tenant;
-- scopes include exactly the required calendar/offline capabilities (`offline_access`, `Calendars.ReadWrite`) plus protocol-required identity response settings, and do not request mail/contact/file scopes;
+- the requested scope set is exactly `offline_access Calendars.ReadWrite` and does not request mail/contact/file scopes;
 - PKCE S256 and state are present;
 - no client secret is required;
 - token refresh rotation returns a replacement refresh token when supplied;
@@ -437,7 +429,7 @@ Assert:
 - `testConnection()` checks the stored calendar ID and treats 404 as `CALENDAR_REMOTE_CALENDAR_MISSING`;
 - create event writes `transactionId=microsoftTransactionId(syncKey)`;
 - create/update bodies use UTC date-time values and `showAs:"free"`;
-- no attendees, location, online meeting, or invitation behavior is introduced;
+- no attendees, location, online meeting, invitation behavior, or reminder override is introduced;
 - repeated uncertain create retries reuse the same transaction ID;
 - update/delete use only stored calendar/event IDs;
 - provider errors map to shared codes.
@@ -518,7 +510,7 @@ Mock fetch and cover:
 - `ensureCalendar()` creates a dedicated `Kairos` collection with MKCALENDAR;
 - unsupported/not-writable creation maps to `CALDAV_NOT_WRITABLE`;
 - `testConnection()` sees a missing stored collection as `CALENDAR_REMOTE_CALENDAR_MISSING`;
-- create PUT uses deterministic resource name/UID and `If-None-Match: *`;
+- create PUT uses deterministic resource name/UID and `If-None-Match: *`, with no `VALARM` reminder block;
 - update uses stored ETag with `If-Match` when available;
 - delete treats 404 as already absent;
 - identical create retries target the same resource URL;
@@ -613,7 +605,7 @@ Cover:
 - returned authorization URL contains state/challenge but no verifier;
 - expired/replayed/mismatched state is rejected;
 - forged callback with an unknown state never calls a provider token endpoint;
-- OAuth code exchange response is persisted as refresh token but never returned;
+- OAuth code exchange response persists only the refresh token; the schema/repository has no durable access-token field and responses never return either token;
 - reconnect for a missing calendar can create a replacement only because reconnect is an explicit user action;
 - CalDAV connect stores fixture username/secret but response contains only safe connection metadata;
 - invalid CalDAV credential replacement does not destroy a previously working credential.
@@ -895,9 +887,8 @@ git commit -m "test: add calendar sync e2e coverage"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `.env.example` if present; otherwise create it only if provider configuration needs a documented template
+- Modify: `.env.example`
 - Modify: `docs/superpowers/ROADMAP.md`
-- Modify: `.github/workflows/milestone-2-ci.yml`
 - Modify: `tests/integration/secret-exposure.test.ts` only if final security review identifies a missing credential pattern
 
 **Interfaces:**
@@ -905,9 +896,16 @@ git commit -m "test: add calendar sync e2e coverage"
 - README states that SQLite calendar credentials are not encrypted at rest and that Kairos must be running to publish new upstream changes.
 - README documents disconnect vs **Remove generated events**.
 - Roadmap status is **Milestone 5 — Calendar destination sync — Implemented, real-account validation pending** until Google, Microsoft, and iCloud smoke checks are completed.
-- The temporary Milestone 5 push trigger is removed only after the exact final implementation head has a full successful feature-CI run; pull-request-to-main CI remains.
+- The draft PR remains the CI trigger throughout implementation; do not add a milestone-specific push trigger.
 
 - [ ] **Step 1: Update README/setup/privacy/acceptance documentation**
+
+Document these local configuration keys in `.env.example` without real values:
+
+- `GOOGLE_CALENDAR_CLIENT_ID=`
+- optional `GOOGLE_CALENDAR_CLIENT_SECRET=`
+- `MICROSOFT_CALENDAR_CLIENT_ID=`
+- `MICROSOFT_CALENDAR_TENANT=common`
 
 Document:
 
@@ -960,20 +958,18 @@ Expected: all commands exit 0.
 
 Push the exact head and require the GitHub feature workflow to complete successfully on the same SHA.
 
-- [ ] **Step 5: Commit docs/final branch cleanup state**
-
-After exact-head CI is green, remove the temporary `feat/milestone-5-calendar-sync` push trigger while preserving PR CI.
+- [ ] **Step 5: Commit docs and verify the final implementation head**
 
 Commit:
 
 ```bash
-git add README.md .env.example docs/superpowers/ROADMAP.md .github/workflows/milestone-2-ci.yml tests/integration/secret-exposure.test.ts
+git add README.md .env.example docs/superpowers/ROADMAP.md tests/integration/secret-exposure.test.ts
 git commit -m "docs: document calendar sync milestone"
 ```
 
-If `.env.example` or `tests/integration/secret-exposure.test.ts` did not change, omit them from `git add`.
+If `tests/integration/secret-exposure.test.ts` did not change, omit it from `git add`.
 
-Rerun the full verification suite and GitHub feature CI on this final cleanup head.
+Rerun the full verification suite and require the draft PR's GitHub feature CI to pass on this exact final head.
 
 ---
 
