@@ -5,6 +5,7 @@ import type {CalendarEventProjection} from "@/lib/calendar/projection";
 export type RemoteCalendarEvent={
   remoteEventId:string;
   etag:string|null;
+  managedAssignmentId?:string|null;
 };
 
 export interface CalendarDestinationAdapter{
@@ -12,6 +13,10 @@ export interface CalendarDestinationAdapter{
   testConnection():Promise<void>;
   ensureCalendar():Promise<{remoteCalendarId:string;name:string}>;
   getEvent(remoteCalendarId:string,remoteEventId:string):Promise<RemoteCalendarEvent|null>;
+  findEventByAssignment?(
+    remoteCalendarId:string,
+    assignmentId:string,
+  ):Promise<RemoteCalendarEvent|null>;
   createEvent(
     remoteCalendarId:string,
     projection:CalendarEventProjection,
