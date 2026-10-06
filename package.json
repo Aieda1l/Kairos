@@ -38,7 +38,9 @@
     "server-only": "^0.0.1",
     "fast-xml-parser": "^5.11.2",
     "vinext": "^1.0.0",
-    "react-server-dom-webpack": "^19.3.0"
+    "react-server-dom-webpack": "^19.3.0",
+    "next-auth": "5.0.0-beta.32",
+    "@auth/d1-adapter": "1.11.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
