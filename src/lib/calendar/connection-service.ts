@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import type {CalendarConnection,CalendarProvider} from "@/lib/calendar/types";
@@ -93,7 +93,7 @@ async function connectOAuthHosted(
 }
 
 export function connectOAuthCalendar(
-  db:Database.Database,
+  db:LegacyDatabase,
   input:OAuthConnectInput,
 ):Promise<CalendarConnection>;
 export function connectOAuthCalendar(
@@ -103,7 +103,7 @@ export function connectOAuthCalendar(
   input:OAuthConnectInput,
 ):Promise<CalendarConnection>;
 export async function connectOAuthCalendar(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:OAuthConnectInput|UserScope,
   arg3?:CredentialKeyring,
   arg4?:OAuthConnectInput,
@@ -113,7 +113,7 @@ export async function connectOAuthCalendar(
   }
 
   const input=arg2;
-  const legacyDb=db as Database.Database;
+  const legacyDb=db as LegacyDatabase;
   const connections=new CalendarConnectionRepository(legacyDb);
   const credentials=new CalendarCredentialRepository(legacyDb);
   const existing=input.connectionId?connections.getById(input.connectionId):null;
@@ -201,7 +201,7 @@ async function connectCaldavHosted(
 }
 
 export function connectCaldavCalendar(
-  db:Database.Database,
+  db:LegacyDatabase,
   input:CaldavConnectInput,
 ):Promise<CalendarConnection>;
 export function connectCaldavCalendar(
@@ -211,7 +211,7 @@ export function connectCaldavCalendar(
   input:CaldavConnectInput,
 ):Promise<CalendarConnection>;
 export async function connectCaldavCalendar(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:CaldavConnectInput|UserScope,
   arg3?:CredentialKeyring,
   arg4?:CaldavConnectInput,
@@ -221,7 +221,7 @@ export async function connectCaldavCalendar(
   }
 
   const input=arg2;
-  const legacyDb=db as Database.Database;
+  const legacyDb=db as LegacyDatabase;
   const connections=new CalendarConnectionRepository(legacyDb);
   const credentials=new CalendarCredentialRepository(legacyDb);
   const existing=input.connectionId?connections.getById(input.connectionId):null;
@@ -243,7 +243,7 @@ export async function connectCaldavCalendar(
 }
 
 export function disconnectCalendar(
-  db:Database.Database,
+  db:LegacyDatabase,
   connectionId:string,
 ):boolean;
 export function disconnectCalendar(
@@ -252,7 +252,7 @@ export function disconnectCalendar(
   connectionId:string,
 ):Promise<boolean>;
 export function disconnectCalendar(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string|UserScope,
   arg3?:string,
 ):boolean|Promise<boolean>{
@@ -268,7 +268,7 @@ export function disconnectCalendar(
     })();
   }
 
-  const connections=new CalendarConnectionRepository(db as Database.Database);
+  const connections=new CalendarConnectionRepository(db as LegacyDatabase);
   if(!connections.getById(arg2))return false;
   connections.delete(arg2);
   return true;
@@ -316,7 +316,7 @@ async function removeHosted(
 }
 
 export function removeManagedCalendarEvents(
-  db:Database.Database,
+  db:LegacyDatabase,
   connectionId:string,
   options?:RemoveOptions,
 ):Promise<{deletedCount:number;failedCount:number}>;
@@ -328,7 +328,7 @@ export function removeManagedCalendarEvents(
   options?:RemoveOptions,
 ):Promise<{deletedCount:number;failedCount:number}>;
 export async function removeManagedCalendarEvents(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string|UserScope,
   arg3?:RemoveOptions|CredentialKeyring,
   arg4?:string,
@@ -346,7 +346,7 @@ export async function removeManagedCalendarEvents(
 
   const connectionId=arg2;
   const options=(arg3 as RemoveOptions|undefined)??{};
-  const legacyDb=db as Database.Database;
+  const legacyDb=db as LegacyDatabase;
   const connections=new CalendarConnectionRepository(legacyDb);
   const connection=connections.getById(connectionId);
   if(!connection)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");
