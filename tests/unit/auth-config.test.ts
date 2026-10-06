@@ -11,7 +11,7 @@ const env={
 };
 
 function providersOf(config:ReturnType<typeof createAuthConfig>){
-  return config.providers as Array<Record<string,unknown>>;
+  return config.providers as unknown as Array<Record<string,unknown>>;
 }
 
 describe("hosted Auth.js configuration",()=>{

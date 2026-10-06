@@ -5,6 +5,7 @@ export type UserScope={
 type SessionLike={
   user?:{
     id?:string | null;
+    [key:string]:unknown;
   } | null;
 } | null;
 
