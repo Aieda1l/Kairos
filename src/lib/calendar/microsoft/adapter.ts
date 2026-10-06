@@ -33,8 +33,9 @@ export class MicrosoftCalendarAdapter implements CalendarDestinationAdapter{
     }
   }
 
-  ensureCalendar():Promise<{remoteCalendarId:string;name:string}>{
-    return this.client.createCalendar("Kairos");
+  async ensureCalendar():Promise<{remoteCalendarId:string;name:string}>{
+    const existing=await this.client.findCalendarByName("Kairos");
+    return existing??this.client.createCalendar("Kairos");
   }
 
   getEvent(remoteCalendarId:string,remoteEventId:string):Promise<RemoteCalendarEvent|null>{
