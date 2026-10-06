@@ -42,6 +42,13 @@ export class MicrosoftCalendarAdapter implements CalendarDestinationAdapter{
     return this.client.getEvent(remoteCalendarId,remoteEventId);
   }
 
+  findEventByAssignment(
+    remoteCalendarId:string,
+    assignmentId:string,
+  ):Promise<RemoteCalendarEvent|null>{
+    return this.client.findEventByAssignment(remoteCalendarId,assignmentId);
+  }
+
   createEvent(
     remoteCalendarId:string,
     projection:CalendarEventProjection,
