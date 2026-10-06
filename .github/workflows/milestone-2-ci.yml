@@ -38,7 +38,11 @@ jobs:
           npm test 2>&1 | tee vitest.log
       - run: npm run db:verify
       - run: npm run lint
-      - run: npm run typecheck
+      - name: Run typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee typecheck.log
       - name: Check vinext compatibility
         run: npx vinext check
       - name: Build vinext Workers target
@@ -53,6 +57,7 @@ jobs:
           name: playwright-failure-${{ github.run_attempt }}
           path: |
             vitest.log
+            typecheck.log
             playwright-report
             test-results
           if-no-files-found: ignore
