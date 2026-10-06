@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import type {CredentialKeyring} from "@/lib/security/credential-cipher";
@@ -17,7 +17,7 @@ export type SyncSummary={
 type SourceFactory=(url:URL)=>Pick<CanvasIcalSource,"sync"|"getLastParseReport">;
 
 export type LegacySyncDependencies={
-  db?:Database.Database;
+  db?:LegacyDatabase;
   now?:()=>Date;
   sourceFactory?:SourceFactory;
 };
