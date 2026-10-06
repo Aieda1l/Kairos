@@ -170,8 +170,6 @@ async function syncLegacyEdConnection(
   db:LegacyDatabase,
   options:SyncOptions={},
 ):Promise<EdSyncResult>{
-},
-):Promise<EdSyncResult>{
   const fetchImpl=options.fetchImpl??fetch;
   const now=options.now??new Date();
   const completedAt=now.toISOString();
