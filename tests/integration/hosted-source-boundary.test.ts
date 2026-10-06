@@ -6,6 +6,7 @@ import { D1SourceConnectionRepository } from "@/lib/db/d1/repositories/source-co
 import { D1SourceCredentialRepository } from "@/lib/db/d1/repositories/source-credentials";
 import { syncCanvasConnection } from "@/lib/sync/sync-source";
 import { connectEd } from "@/lib/ed/discovery-service";
+import {syncEdConnection} from "@/lib/ed/sync-service";
 import {
   completeGradescopeDiscovery,
   startGradescopeDiscovery,
@@ -102,6 +103,61 @@ describe("hosted source tenant boundary",()=>{
     ).get(ALICE.id,connected.connection.id) as {ed_api_token_envelope:string};
     expect(stored.ed_api_token_envelope).not.toContain("old-valid-token");
     expect(stored.ed_api_token_envelope).not.toContain("new-invalid-token");
+    close();
+  });
+
+  it("syncs Ed only inside the authenticated tenant",async()=>{
+    const {db,sqlite,close}=openD1TestDatabase();
+    await seedUsers(sqlite);
+    const alice={userId:ALICE.id};
+    const bob={userId:BOB.id};
+    const accountFetch=vi.fn(async()=>new Response(JSON.stringify({
+      user:{id:7},
+      courses:[{
+        course:{id:123,code:"CSE 331",name:"Software Design",year:"2026",session:"Autumn"},
+        role:{role:"student"},
+      }],
+    }),{status:200,headers:{"content-type":"application/json"}}));
+
+    const connected=await connectEd(
+      db,alice,keyring,"alice-ed-token",accountFetch as typeof fetch,
+      new Date("2026-10-06T04:00:00.000Z"),
+    );
+    await new D1SourceCourseRepository(db,alice)
+      .setEnabled(connected.connection.id,["123"]);
+
+    const lessonsFetch=vi.fn(async()=>new Response(JSON.stringify({
+      modules:[],
+      lessons:[{
+        id:10,
+        course_id:123,
+        title:"Tenant lesson",
+        status:"completed",
+        is_hidden:false,
+        is_unlisted:false,
+        effective_due_at:"2026-10-10T10:00:00Z",
+      }],
+    }),{status:200,headers:{"content-type":"application/json"}}));
+
+    await expect(syncEdConnection(
+      db,bob,keyring,{fetchImpl:lessonsFetch as typeof fetch},
+    )).rejects.toMatchObject({code:"ED_NOT_CONNECTED"});
+    expect(lessonsFetch).not.toHaveBeenCalled();
+
+    await expect(syncEdConnection(
+      db,alice,keyring,{
+        fetchImpl:lessonsFetch as typeof fetch,
+        now:new Date("2026-10-06T04:05:00.000Z"),
+      },
+    )).resolves.toMatchObject({
+      insertedCount:1,
+      failedCourseCount:0,
+      statusUpdatedCount:1,
+    });
+    await expect(new D1AssignmentRepository(db,bob).list({source:"ed"}))
+      .resolves.toEqual([]);
+    await expect(new D1AssignmentRepository(db,alice).list({source:"ed"}))
+      .resolves.toMatchObject([{title:"Tenant lesson"}]);
     close();
   });
 
