@@ -6,6 +6,7 @@ const MICROSOFT_SCOPE="offline_access Calendars.ReadWrite";
 
 export type MicrosoftCalendarConfig={
   clientId:string;
+  clientSecret:string|null;
   tenant:string;
 };
 
@@ -45,6 +46,7 @@ export function getMicrosoftCalendarConfig(
   }
   return {
     clientId,
+    clientSecret:env.MICROSOFT_CALENDAR_CLIENT_SECRET?.trim()||null,
     tenant:tenantSegment(env.MICROSOFT_CALENDAR_TENANT?.trim()||"common"),
   };
 }
@@ -132,34 +134,40 @@ export function exchangeMicrosoftAuthorizationCode(
   input:{
     clientId:string;
     tenant:string;
+    clientSecret?:string|null;
     code:string;
     codeVerifier:string;
     redirectUri:string;
   },
   fetchImpl:typeof fetch=fetch,
 ):Promise<MicrosoftTokenResult>{
-  return requestToken(input.tenant,new URLSearchParams({
+  const params=new URLSearchParams({
     client_id:input.clientId,
     grant_type:"authorization_code",
     scope:MICROSOFT_SCOPE,
     code:input.code,
     code_verifier:input.codeVerifier,
     redirect_uri:input.redirectUri,
-  }),fetchImpl);
+  });
+  if(input.clientSecret)params.set("client_secret",input.clientSecret);
+  return requestToken(input.tenant,params,fetchImpl);
 }
 
 export function refreshMicrosoftAccessToken(
   input:{
     clientId:string;
     tenant:string;
+    clientSecret?:string|null;
     refreshToken:string;
   },
   fetchImpl:typeof fetch=fetch,
 ):Promise<MicrosoftTokenResult>{
-  return requestToken(input.tenant,new URLSearchParams({
+  const params=new URLSearchParams({
     client_id:input.clientId,
     grant_type:"refresh_token",
     scope:MICROSOFT_SCOPE,
     refresh_token:input.refreshToken,
-  }),fetchImpl);
+  });
+  if(input.clientSecret)params.set("client_secret",input.clientSecret);
+  return requestToken(input.tenant,params,fetchImpl);
 }
