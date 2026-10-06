@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarEventLinkRepository} from "@/lib/db/repositories/calendar-event-links";
+import {SettingsRepository} from "@/lib/db/repositories/settings";
 import type {CalendarSyncStatus} from "@/lib/calendar/types";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {CalendarSyncError,type CalendarSyncErrorCode} from "@/lib/calendar/errors";
@@ -98,13 +99,14 @@ export async function reconcileCalendarConnection(
   }
 
   const assignments=new AssignmentRepository(db).list();
+  const hideSubmitted=new SettingsRepository(db).getCalendarHideSubmitted();
   const links=new CalendarEventLinkRepository(db);
   let cursor=0;
   const outcomes:Array<Outcome|undefined>=new Array(assignments.length);
 
   const reconcileOne=async(index:number):Promise<Outcome>=>{
     const assignment=assignments[index]!;
-    const projection=projectAssignment(assignment);
+    const projection=projectAssignment(assignment,{hideSubmitted});
     let link=links.get(connection.id,assignment.id);
 
     if(!projection){
