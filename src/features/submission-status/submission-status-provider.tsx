@@ -60,7 +60,7 @@ type SubmissionStatusContextValue = SubmissionStatusSyncState & {
   extensionVersion: string | null;
   canvasTabDetected: boolean | null;
   message: string;
-  syncNow: () => Promise<void>;
+  syncNow: (options?: { deferCalendarSync?: boolean }) => Promise<void>;
 };
 
 const SubmissionStatusContext = createContext<SubmissionStatusContextValue | null>(null);
@@ -138,10 +138,13 @@ async function completeSyncRequest(input: {
   requestId: string;
   results: SubmissionStatusResultV1[];
   batchErrorCode: SubmissionSyncErrorCode | null;
-}) {
+}, options?: { deferCalendarSync?: boolean }) {
   const response = await fetch("/api/sources/canvas/submission-status/complete", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(options?.deferCalendarSync ? { "x-kairos-calendar-sync": "defer" } : {}),
+    },
     body: JSON.stringify(input),
   });
   const body = await readJson(response);
@@ -209,7 +212,7 @@ export function SubmissionStatusProvider({
     return promise;
   }, []);
 
-  const syncNow = useCallback(async () => {
+  const syncNow = useCallback(async (options?: { deferCalendarSync?: boolean }) => {
     if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
     setPhase("syncing");
@@ -259,7 +262,7 @@ export function SubmissionStatusProvider({
         requestId: started.requestId,
         results,
         batchErrorCode,
-      });
+      }, options);
       const nextState: SubmissionStatusSyncState = {
         lastAttemptedAt: completed.lastAttemptedAt,
         lastSuccessfulAt: completed.lastSuccessfulAt,
