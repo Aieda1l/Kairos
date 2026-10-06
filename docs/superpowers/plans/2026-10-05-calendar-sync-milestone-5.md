@@ -660,9 +660,9 @@ git commit -m "feat: add calendar connection api"
 - Create: `tests/component/calendar-provider.test.tsx`
 
 **Interfaces:**
-- Produces `CalendarProvider` React context with `connections`, per-connection phase/message, `startGoogle(connectionId?)`, `startMicrosoft(connectionId?)`, `testIcloud(username,secret)`, `connectIcloud(username,secret)`, `syncConnection(id)`, `syncAll()`, `removeEvents(id)`, and `disconnect(id)`.
+- Produces the `CalendarSyncProvider` React context with `connections`, per-connection phase/message, `startGoogle(connectionId?)`, `startMicrosoft(connectionId?)`, `testIcloud(username,secret)`, `connectIcloud(username,secret)`, `syncConnection(id)`, `syncAll()`, `removeEvents(id)`, and `disconnect(id)`.
 - `syncAll()` returns/retains sanitized provider warnings for Task 9.
-- Dashboard layout loads initial `CalendarConnectionRepository.list()` and wraps the existing providers with `CalendarProvider`.
+- Dashboard layout loads initial `CalendarConnectionRepository.list()` and wraps the existing providers with `CalendarSyncProvider`.
 - Sources page renders assignment-source cards first, then a visually distinct **Calendar destinations** section.
 
 - [ ] **Step 1: Write failing UI tests**
