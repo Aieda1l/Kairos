@@ -82,14 +82,14 @@ export function CalendarSyncProvider({
   const phaseFor=(id:string):CalendarPhase=>states[id]?.phase??"idle";
   const messageFor=(id:string):string=>states[id]?.message??"";
 
-  function applySyncResult(row:Record<string,unknown>):void{
+  const applySyncResult=useCallback((row:Record<string,unknown>):void=>{
     if(typeof row.connectionId!=="string")return;
     const status=resultStatus(row.status);
     if(!status)return;
     const completedAt=typeof row.completedAt==="string"?row.completedAt:null;
     const errorCode=typeof row.errorCode==="string"?row.errorCode:null;
 
-    setConnections(current=>current.map(connection=>{
+    const nextConnections=connectionsRef.current.map(connection=>{
       if(connection.id!==row.connectionId)return connection;
       return {
         ...connection,
@@ -100,8 +100,10 @@ export function CalendarSyncProvider({
         lastSyncStatus:status,
         lastErrorCode:errorCode,
       };
-    }));
-  }
+    });
+    connectionsRef.current=nextConnections;
+    setConnections(nextConnections);
+  },[]);
 
   async function startOAuth(provider:"google"|"microsoft",connectionId?:string){
     const key=connectionId??provider;
@@ -263,7 +265,7 @@ export function CalendarSyncProvider({
         syncAllPromiseRef.current=null;
       }
     }
-  },[setLocal]);
+  },[applySyncResult,setLocal]);
 
   useEffect(()=>{
     const checkStale=()=>{
