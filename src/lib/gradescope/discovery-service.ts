@@ -1,16 +1,15 @@
 import "server-only";
-import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {UserScope} from "@/lib/auth/user-scope";
+import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
+import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
+import {D1SyncRequestRepository} from "@/lib/db/d1/repositories/sync-requests";
 import type {
   GradescopeDiscoverResultV1,
   GradescopeSyncErrorCode,
 } from "@/lib/extension-protocol/gradescope";
-import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
-import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
-import {
-  consumeGradescopeRequest,
-  registerGradescopeRequest,
-} from "./request-registry";
+
+const REQUEST_TTL_MS=10*60*1000;
 
 export class GradescopeDiscoveryServiceError extends Error{
   constructor(
@@ -28,17 +27,19 @@ export class GradescopeDiscoveryServiceError extends Error{
   }
 }
 
-export function startGradescopeDiscovery(
-  _db:Database.Database,
+export async function startGradescopeDiscovery(
+  db:D1DatabaseLike,
+  scope:UserScope,
   now:Date=new Date(),
-):{requestId:string;protocolVersion:1}{
+):Promise<{requestId:string;protocolVersion:1}>{
   const requestId=crypto.randomUUID();
-  registerGradescopeRequest({
+  const createdAt=now.toISOString();
+  await new D1SyncRequestRepository(db,scope).register({
     requestId,
-    kind:"discovery",
-    connectionId:null,
-    courseIds:[],
-    startedAt:now.toISOString(),
+    kind:"gradescope_discovery",
+    payload:{},
+    createdAt,
+    expiresAt:new Date(now.getTime()+REQUEST_TTL_MS).toISOString(),
   });
   return {requestId,protocolVersion:1};
 }
@@ -57,18 +58,21 @@ function discoveryFailureMessage(code:GradescopeSyncErrorCode):string{
   }
 }
 
-export function completeGradescopeDiscovery(
-  db:Database.Database,
+export async function completeGradescopeDiscovery(
+  db:D1DatabaseLike,
+  scope:UserScope,
   input:GradescopeDiscoverResultV1,
   now:Date=new Date(),
 ){
-  const registered=consumeGradescopeRequest(input.requestId,now.getTime());
-  if(!registered||registered.kind!=="discovery"){
+  const registered=await new D1SyncRequestRepository(db,scope)
+    .consume(input.requestId,"gradescope_discovery",now);
+  if(!registered){
     throw new GradescopeDiscoveryServiceError(
       "SYNC_REQUEST_NOT_FOUND",
       "This Gradescope discovery request is no longer active.",
     );
   }
+
   if(input.errorCode){
     throw new GradescopeDiscoveryServiceError(
       "GRADESCOPE_DISCOVERY_FAILED",
@@ -78,10 +82,10 @@ export function completeGradescopeDiscovery(
   }
 
   const seenAt=now.toISOString();
-  const connectionRepo=new SourceConnectionRepository(db);
-  const connection=connectionRepo.upsertGradescope("Gradescope");
-  const courseRepo=new SourceCourseRepository(db);
-  courseRepo.upsertDiscovered(
+  const connectionRepo=new D1SourceConnectionRepository(db,scope);
+  const connection=await connectionRepo.upsertGradescope("Gradescope");
+  const courseRepo=new D1SourceCourseRepository(db,scope);
+  await courseRepo.upsertDiscovered(
     connection.id,
     input.courses.map(course=>({
       externalCourseId:course.courseId,
@@ -92,14 +96,16 @@ export function completeGradescopeDiscovery(
     })),
     seenAt,
   );
-  return {connection,courses:courseRepo.list(connection.id)};
+  return {connection,courses:await courseRepo.list(connection.id)};
 }
 
-export function replaceEnabledGradescopeCourses(
-  db:Database.Database,
+export async function replaceEnabledGradescopeCourses(
+  db:D1DatabaseLike,
+  scope:UserScope,
   enabledCourseIds:string[],
 ){
-  const connection=new SourceConnectionRepository(db).getByKind("gradescope");
+  const connection=await new D1SourceConnectionRepository(db,scope)
+    .getByKind("gradescope");
   if(!connection){
     throw new GradescopeDiscoveryServiceError(
       "GRADESCOPE_NOT_CONFIGURED",
@@ -107,8 +113,8 @@ export function replaceEnabledGradescopeCourses(
     );
   }
 
-  const courseRepo=new SourceCourseRepository(db);
-  const discovered=courseRepo.list(connection.id);
+  const courseRepo=new D1SourceCourseRepository(db,scope);
+  const discovered=await courseRepo.list(connection.id);
   const known=new Set(discovered.map(course=>course.externalCourseId));
   if(enabledCourseIds.some(courseId=>!known.has(courseId))){
     throw new GradescopeDiscoveryServiceError(
@@ -117,6 +123,6 @@ export function replaceEnabledGradescopeCourses(
     );
   }
 
-  courseRepo.setEnabled(connection.id,enabledCourseIds);
-  return {connection,courses:courseRepo.list(connection.id)};
+  await courseRepo.setEnabled(connection.id,enabledCourseIds);
+  return {connection,courses:await courseRepo.list(connection.id)};
 }

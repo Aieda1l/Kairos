@@ -1,14 +1,16 @@
 import "server-only";
-import type Database from "better-sqlite3";
-import type { SourceConnection } from "@/lib/assignments/types";
-import type { SourceCourse } from "@/lib/sources/types";
-import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
-import { SourceCredentialRepository } from "@/lib/db/repositories/source-credentials";
-import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
-import { EdApiClient } from "@/lib/sources/ed/client";
-import { parseEdCourses } from "@/lib/sources/ed/parser";
+import type {SourceConnection} from "@/lib/assignments/types";
+import type {UserScope} from "@/lib/auth/user-scope";
+import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
+import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
+import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
+import type {CredentialKeyring} from "@/lib/security/credential-cipher";
+import type {SourceCourse} from "@/lib/sources/types";
+import {EdApiClient} from "@/lib/sources/ed/client";
+import {parseEdCourses} from "@/lib/sources/ed/parser";
 
-export type EdDiscoveryServiceCode =
+export type EdDiscoveryServiceCode=
   | "ED_NOT_CONNECTED"
   | "INVALID_COURSE_SELECTION";
 
@@ -27,8 +29,33 @@ export async function testEdConnection(
   return {ok:true,itemCount:parseEdCourses(payload).length};
 }
 
+async function requireConnectedEd(
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
+):Promise<{connection:SourceConnection;token:string}>{
+  const connection=await new D1SourceConnectionRepository(db,scope).getByKind("ed");
+  if(!connection){
+    throw new EdDiscoveryServiceError(
+      "ED_NOT_CONNECTED",
+      "Connect Ed before managing courses.",
+    );
+  }
+  const token=await new D1SourceCredentialRepository(db,scope,keyring)
+    .getEdApiToken(connection.id);
+  if(!token){
+    throw new EdDiscoveryServiceError(
+      "ED_NOT_CONNECTED",
+      "Connect Ed before managing courses.",
+    );
+  }
+  return {connection,token};
+}
+
 export async function connectEd(
-  db:Database.Database,
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
   token:string,
   fetchImpl:typeof fetch=fetch,
   now:Date=new Date(),
@@ -36,50 +63,41 @@ export async function connectEd(
   const payload=await new EdApiClient(token,fetchImpl).fetchUser();
   const discovered=parseEdCourses(payload);
   const seenAt=now.toISOString();
-  const connectionRepo=new SourceConnectionRepository(db);
-  const credentialRepo=new SourceCredentialRepository(db);
-  const courseRepo=new SourceCourseRepository(db);
-  let connection!:SourceConnection;
-  db.transaction(()=>{
-    connection=connectionRepo.upsertEd("Ed");
-    credentialRepo.setEdApiToken(connection.id,token);
-    courseRepo.upsertDiscovered(connection.id,discovered,seenAt);
-  })();
-  return {connection,courses:courseRepo.list(connection.id)};
-}
 
-function requireConnectedEd(db:Database.Database):{connection:SourceConnection;token:string}{
-  const connection=new SourceConnectionRepository(db).getByKind("ed");
-  if(!connection){
-    throw new EdDiscoveryServiceError("ED_NOT_CONNECTED","Connect Ed before managing courses.");
-  }
-  const token=new SourceCredentialRepository(db).getEdApiToken(connection.id);
-  if(!token){
-    throw new EdDiscoveryServiceError("ED_NOT_CONNECTED","Connect Ed before managing courses.");
-  }
-  return {connection,token};
+  const connectionRepo=new D1SourceConnectionRepository(db,scope);
+  const credentialRepo=new D1SourceCredentialRepository(db,scope,keyring);
+  const courseRepo=new D1SourceCourseRepository(db,scope);
+
+  const connection=await connectionRepo.upsertEd("Ed");
+  await credentialRepo.setEdApiToken(connection.id,token);
+  await courseRepo.upsertDiscovered(connection.id,discovered,seenAt);
+  return {connection,courses:await courseRepo.list(connection.id)};
 }
 
 export async function refreshEdCourses(
-  db:Database.Database,
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
   fetchImpl:typeof fetch=fetch,
   now:Date=new Date(),
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
-  const {connection,token}=requireConnectedEd(db);
+  const {connection,token}=await requireConnectedEd(db,scope,keyring);
   const payload=await new EdApiClient(token,fetchImpl).fetchUser();
   const discovered=parseEdCourses(payload);
-  const courseRepo=new SourceCourseRepository(db);
-  courseRepo.upsertDiscovered(connection.id,discovered,now.toISOString());
-  return {connection,courses:courseRepo.list(connection.id)};
+  const courseRepo=new D1SourceCourseRepository(db,scope);
+  await courseRepo.upsertDiscovered(connection.id,discovered,now.toISOString());
+  return {connection,courses:await courseRepo.list(connection.id)};
 }
 
-export function replaceEnabledEdCourses(
-  db:Database.Database,
+export async function replaceEnabledEdCourses(
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
   enabledCourseIds:string[],
-):{connection:SourceConnection;courses:SourceCourse[]}{
-  const {connection}=requireConnectedEd(db);
-  const courseRepo=new SourceCourseRepository(db);
-  const discovered=courseRepo.list(connection.id);
+):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
+  const {connection}=await requireConnectedEd(db,scope,keyring);
+  const courseRepo=new D1SourceCourseRepository(db,scope);
+  const discovered=await courseRepo.list(connection.id);
   const known=new Set(discovered.map(course=>course.externalCourseId));
   if(enabledCourseIds.some(courseId=>!known.has(courseId))){
     throw new EdDiscoveryServiceError(
@@ -87,6 +105,6 @@ export function replaceEnabledEdCourses(
       "Select only courses discovered from your Ed account.",
     );
   }
-  courseRepo.setEnabled(connection.id,enabledCourseIds);
-  return {connection,courses:courseRepo.list(connection.id)};
+  await courseRepo.setEnabled(connection.id,enabledCourseIds);
+  return {connection,courses:await courseRepo.list(connection.id)};
 }
