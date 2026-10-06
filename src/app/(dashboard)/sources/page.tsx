@@ -4,6 +4,7 @@ import {SourceConnectionRepository} from "@/lib/db/repositories/source-connectio
 import {CanvasSourceCard} from "@/features/sources/canvas-source-card";
 import {GradescopeSourceCard} from "@/features/sources/gradescope-source-card";
 import {EdSourceCard} from "@/features/sources/ed-source-card";
+import {CalendarDestinations} from "@/features/sources/calendar-destinations";
 
 export default function SourcesPage(){
   const db=getDatabase();
@@ -22,5 +23,6 @@ export default function SourcesPage(){
       <GradescopeSourceCard/>
       <EdSourceCard/>
     </div>
+    <CalendarDestinations/>
   </div>;
 }
