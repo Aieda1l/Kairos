@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {D1CalendarCredentialRepository} from "@/lib/db/d1/repositories/calendar-credentials";
@@ -23,7 +23,7 @@ type FactoryOptions={
 };
 
 function legacyFactory(
-  db:Database.Database,
+  db:LegacyDatabase,
   options:FactoryOptions={},
 ):CalendarAdapterFactory{
   const fetchImpl=options.fetchImpl??getCalendarRouteFetch();
@@ -129,7 +129,7 @@ function hostedFactory(
 }
 
 export function createCalendarAdapterFactory(
-  db:Database.Database,
+  db:LegacyDatabase,
   options?:FactoryOptions,
 ):CalendarAdapterFactory;
 export function createCalendarAdapterFactory(
@@ -139,7 +139,7 @@ export function createCalendarAdapterFactory(
   options?:FactoryOptions,
 ):CalendarAdapterFactory;
 export function createCalendarAdapterFactory(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2?:FactoryOptions|UserScope,
   arg3?:CredentialKeyring,
   arg4?:FactoryOptions,
@@ -147,5 +147,5 @@ export function createCalendarAdapterFactory(
   if(arg2 && "userId" in arg2){
     return hostedFactory(db as D1DatabaseLike,arg2,arg3!,arg4);
   }
-  return legacyFactory(db as Database.Database,arg2 as FactoryOptions|undefined);
+  return legacyFactory(db as LegacyDatabase,arg2 as FactoryOptions|undefined);
 }
