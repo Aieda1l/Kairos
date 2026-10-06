@@ -107,7 +107,7 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
 - `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
-## Milestone 6 — Multi-user hosted foundation — Approved, implementation not started
+## Milestone 6 — Multi-user hosted foundation — Implementation in progress — 6A foundation complete
 
 Planned:
 - production hosting at `https://mykairos.me` on Cloudflare Workers with D1 persistence;
