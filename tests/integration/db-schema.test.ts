@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { openDatabase } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
+import { openDatabase } from "../helpers/legacy-db";
+import { migrate } from "../helpers/legacy-db";
 
 describe("database schema", () => {
   it("creates the Kairos schema, submission-status tables, and default timezone", () => {
