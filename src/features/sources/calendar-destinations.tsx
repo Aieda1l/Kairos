@@ -87,6 +87,7 @@ export function CalendarDestinations(){
         <label className="flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"
+            aria-label="Hide submitted assignments"
             checked={hideSubmitted}
             disabled={savingPreference}
             onChange={event=>void updateHideSubmitted(event.target.checked)}
