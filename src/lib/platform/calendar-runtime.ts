@@ -14,7 +14,7 @@ export type CalendarRouteRuntime=
   |{kind:"legacy";db:Database.Database}
   |({kind:"hosted"}&CalendarRuntimeContext);
 
-export function useLegacyCalendarRuntime(
+export function shouldUseLegacyCalendarRuntime(
   env:Record<string,string|undefined>=process.env,
 ):boolean{
   return env.KAIROS_NEXT_COMPAT_BUILD==="1"
@@ -33,7 +33,7 @@ export function getCalendarRuntimeContext():Promise<CalendarRuntimeContext>{
 }
 
 export async function getCalendarRouteRuntime():Promise<CalendarRouteRuntime>{
-  if(useLegacyCalendarRuntime()){
+  if(shouldUseLegacyCalendarRuntime()){
     const [{getDatabase},{migrate}]=await Promise.all([
       import("@/lib/db/client"),
       import("@/lib/db/migrate"),
