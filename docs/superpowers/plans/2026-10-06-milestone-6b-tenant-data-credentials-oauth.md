@@ -16,7 +16,7 @@
 - Composite database constraints must reject cross-user relationships even if repository safeguards are bypassed.
 - Missing records and records owned by another user return the same normal not-found behavior.
 - Sensitive source/calendar credentials are encrypted before D1 persistence.
-- Ciphertext associated data binds owner, credential kind, and connection ID.
+- Ciphertext associated data binds owner, secret purpose, and context ID.
 - OAuth/browser request state is expiring, one-time, durable across Worker instances, and user-bound.
 - Source writes remain authoritative; calendar reconciliation failure does not roll them back.
 - Existing provider semantics and secret non-exposure requirements remain unchanged.
@@ -43,9 +43,9 @@
 **Interfaces:**
 - Consumes: server secret `KAIROS_CREDENTIAL_KEY_V1`.
 - Produces:
-  - `type CredentialKind = "canvas_feed_url" | "ed_api_token" | "google_refresh_token" | "microsoft_refresh_token" | "caldav_secret"`
-  - `encryptCredential(input:{plaintext:string;userId:string;kind:CredentialKind;connectionId:string}, keyring:CredentialKeyring): Promise<string>`
-  - `decryptCredential(input:{envelope:string;userId:string;kind:CredentialKind;connectionId:string}, keyring:CredentialKeyring): Promise<string>`
+  - `type SecretPurpose = "canvas_feed_url" | "ed_api_token" | "google_refresh_token" | "microsoft_refresh_token" | "caldav_secret" | "oauth_pkce_verifier"`
+  - `encryptCredential(input:{plaintext:string;userId:string;purpose:SecretPurpose;contextId:string}, keyring:CredentialKeyring): Promise<string>`
+  - `decryptCredential(input:{envelope:string;userId:string;purpose:SecretPurpose;contextId:string}, keyring:CredentialKeyring): Promise<string>`
   - versioned envelope `v1.<key-id>.<iv-base64url>.<ciphertext-base64url>`.
 
 - [ ] **Step 1: Write failing cipher tests**
@@ -53,7 +53,7 @@
 Assert:
 - encrypt/decrypt round trip;
 - same plaintext produces different ciphertext due to random IV;
-- wrong user, kind, connection, key, modified IV, or modified ciphertext rejects;
+- wrong user, purpose, context, key, modified IV, or modified ciphertext rejects;
 - plaintext never appears in envelope;
 - unknown envelope version/key ID fails closed.
 
@@ -64,7 +64,7 @@ Expected: FAIL because cipher does not exist.
 
 - [ ] **Step 3: Implement AES-256-GCM envelope**
 
-Use Web Crypto only. Bind AAD to `kairos:v1:<userId>:<kind>:<connectionId>`. Never log plaintext or envelopes.
+Use Web Crypto only. Bind AAD to `kairos:v1:<userId>:<purpose>:<contextId>`. Source/calendar values use their connection ID as `contextId`; OAuth PKCE state uses the stored state hash. Never log plaintext or envelopes.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -320,7 +320,7 @@ Expected: FAIL while state is process-local.
 
 - [ ] **Step 3: Implement D1 OAuth requests**
 
-Hash state using SHA-256; encrypt PKCE verifier with credential/cipher infrastructure using a dedicated OAuth-state purpose if needed. Validate `returnTo` as a same-origin application path.
+Hash state using SHA-256; encrypt the PKCE verifier with `purpose:"oauth_pkce_verifier"` and `contextId:stateHash`. Validate `returnTo` as a same-origin application path.
 
 - [ ] **Step 4: Update Microsoft hosted token exchange config**
 
@@ -347,6 +347,7 @@ git commit -m "feat: persist calendar oauth requests"
 - Modify: `src/lib/calendar/post-source-sync.ts`
 - Modify: `src/app/api/calendars/**/route.ts`
 - Modify: `src/app/api/settings/calendar/route.ts`
+- Modify: `src/app/api/settings/timezone/route.ts`
 - Modify: `tests/integration/calendar-api.test.ts`
 - Modify: `tests/integration/calendar-reconcile.test.ts`
 - Modify: `tests/integration/calendar-source-hooks.test.ts`
@@ -358,7 +359,7 @@ git commit -m "feat: persist calendar oauth requests"
 
 - [ ] **Step 1: Add failing Alice/Bob calendar service/API tests**
 
-Assert Bob cannot sync/disconnect/remove events from Alice destination even with exact ID; `sync-all` reconciles only the caller's destinations; source-triggered reconcile cannot cross users.
+Assert Bob cannot sync/disconnect/remove events from Alice destination even with exact ID; `sync-all` reconciles only the caller's destinations; source-triggered reconcile cannot cross users; timezone and calendar settings read/write only the caller's settings.
 
 - [ ] **Step 2: Run RED**
 
@@ -414,7 +415,7 @@ Expected: FAIL until pages are async/scoped and legacy client is removed.
 
 - [ ] **Step 3: Convert dashboard reads and delete legacy runtime**
 
-Resolve `requireUserScope()` before user-owned reads. Remove `better-sqlite3` from production dependencies (test-only use may remain only if still required by a legacy test; prefer removing it entirely).
+Resolve `requireUserScope()` before user-owned reads. Remove `better-sqlite3` from production dependencies (test-only use may remain only if still required by a legacy test; prefer removing it entirely). Change the default local `npm run dev` path to the D1-backed vinext development server; any traditional Next dev script retained is compatibility-only.
 
 - [ ] **Step 4: Run full 6B verification**
 

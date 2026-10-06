@@ -110,7 +110,7 @@ Create `tests/integration/d1-schema-contract.test.ts` that reads the migration S
 - `assignments` has a composite FK to `source_connections(user_id, id)`;
 - `calendar_connections`, `calendar_event_links`, `app_settings`, and request-state tables carry `user_id`;
 - `app_settings` has `PRIMARY KEY (user_id, key)`;
-- no credential column is named as if plaintext storage were intentionally permanent (credential envelopes are finalized in 6B).
+- the exact envelope columns above exist and no plaintext credential column from the local schema is recreated.
 
 - [ ] **Step 2: Run the test to verify RED**
 
@@ -128,6 +128,18 @@ In `0002_kairos_tenant_schema.sql`, create the tenant-owned equivalents of the c
 - settings;
 - durable browser-sync request state;
 - durable calendar OAuth request state.
+
+Pin sensitive persistence columns as versioned envelopes rather than plaintext:
+- `source_credentials.canvas_feed_url_envelope`
+- `source_credentials.ed_api_token_envelope`
+- `calendar_credentials.oauth_refresh_token_envelope`
+- `calendar_credentials.caldav_username`
+- `calendar_credentials.caldav_secret_envelope`
+- `oauth_requests.code_verifier_envelope`.
+
+Pin durable request tables to:
+- `sync_requests(user_id, request_id, kind, payload_json, created_at, expires_at, consumed_at)` with `PRIMARY KEY(user_id, request_id)`;
+- `oauth_requests(user_id, state_hash, provider, code_verifier_envelope, connection_id, return_to, redirect_uri, created_at, expires_at, consumed_at)` with `PRIMARY KEY(user_id, state_hash)`.
 
 Production starts from an empty D1 database; do not write a migration that imports local `.data` files.
 

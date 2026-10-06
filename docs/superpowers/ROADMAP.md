@@ -124,6 +124,11 @@ Planned:
 Primary design:
 - `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
 
+Implementation plans:
+- `docs/superpowers/plans/2026-10-06-milestone-6a-workers-d1-auth-foundation.md`
+- `docs/superpowers/plans/2026-10-06-milestone-6b-tenant-data-credentials-oauth.md`
+- `docs/superpowers/plans/2026-10-06-milestone-6c-production-boundary-deployment.md`
+
 ## Milestone 7 — Public beta readiness — Approved, implementation not started
 
 Planned:

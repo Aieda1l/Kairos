@@ -241,11 +241,11 @@ git commit -m "feat: allow hosted Kairos extension bridge"
 - Create: `docs/deployment/dns.md`
 
 **Interfaces:**
-- Produces `validateProductionConfig(env): ProductionConfig` that requires canonical URL, D1 binding, Auth.js secrets/provider IDs/secrets, calendar clients, and credential key identifiers without logging values.
+- Produces `validateProductionConfig(env): ProductionConfig` that requires canonical URL, `AUTH_URL=https://mykairos.me`, D1 binding, Auth.js provider configuration, calendar clients, and key identifiers without logging values.
 
 - [ ] **Step 1: Write failing production-config tests**
 
-Assert missing required names yield stable configuration errors containing variable names but never secret values. Assert preview/test configuration cannot reference the production D1 database ID in checked-in config.
+Assert missing required names yield stable configuration errors containing variable names but never configured values. Assert `AUTH_URL` and the canonical application URL are exactly `https://mykairos.me` in production. Assert preview/test configuration cannot reference the production D1 database ID in checked-in config.
 
 - [ ] **Step 2: Run RED**
 
