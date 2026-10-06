@@ -5,6 +5,7 @@ import {CalendarSyncError} from "@/lib/calendar/errors";
 import {MicrosoftCalendarAdapter} from "@/lib/calendar/microsoft/adapter";
 import {
   MicrosoftCalendarClient,
+  MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
   microsoftTransactionId,
 } from "@/lib/calendar/microsoft/client";
 
@@ -83,6 +84,10 @@ describe("Microsoft Calendar client",()=>{
         end:{dateTime:"2026-10-09T07:14:00.000",timeZone:"UTC"},
         showAs:"free",
         transactionId:expectedTransactionId,
+        singleValueExtendedProperties:[{
+          id:MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+          value:projection.assignmentId,
+        }],
       });
       expect(call.body).not.toHaveProperty("attendees");
       expect(call.body).not.toHaveProperty("location");
@@ -111,7 +116,51 @@ describe("Microsoft Calendar client",()=>{
       ["DELETE","https://graph.microsoft.com/v1.0/me/calendars/calendar%2Fid/events/event%2Fid"],
     ]);
     expect(calls[1]!.body).not.toHaveProperty("transactionId");
+    expect(calls[1]!.body).toMatchObject({
+      singleValueExtendedProperties:[{
+        id:MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+        value:projection.assignmentId,
+      }],
+    });
     expect(calls[1]!.body).not.toHaveProperty("isReminderOn");
+  });
+
+  it("reads and finds the hidden Kairos assignment identity on Microsoft events",async()=>{
+    const fetchMock=vi.fn(async(input:RequestInfo|URL)=>{
+      const url=String(input);
+      if(url.includes("/events/event%2Fid?")){
+        expect(url).toContain("%24expand=singleValueExtendedProperties");
+        return Response.json({
+          id:"event/id",
+          "@odata.etag":"etag-existing",
+          singleValueExtendedProperties:[{
+            id:MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+            value:projection.assignmentId,
+          }],
+        });
+      }
+      expect(url).toContain("/me/calendars/calendar%2Fid/events?");
+      expect(url).toContain("%24filter=singleValueExtendedProperties%2FAny");
+      return Response.json({value:[{
+        id:"event/id",
+        "@odata.etag":"etag-existing",
+        singleValueExtendedProperties:[{
+          id:MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+          value:projection.assignmentId,
+        }],
+      }]});
+    });
+    const client=new MicrosoftCalendarClient("fixture-access",fetchMock as typeof fetch);
+    await expect(client.getEvent("calendar/id","event/id")).resolves.toEqual({
+      remoteEventId:"event/id",
+      etag:"etag-existing",
+      managedAssignmentId:projection.assignmentId,
+    });
+    await expect(client.findEventByAssignment("calendar/id",projection.assignmentId)).resolves.toEqual({
+      remoteEventId:"event/id",
+      etag:"etag-existing",
+      managedAssignmentId:projection.assignmentId,
+    });
   });
 
   it("maps a missing stored calendar through the adapter without recreating it",async()=>{
