@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {SourceConnection} from "@/lib/assignments/types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -50,7 +50,7 @@ async function requireConnectedEdHosted(
 }
 
 function requireConnectedEdLegacy(
-  db:Database.Database,
+  db:LegacyDatabase,
 ):{connection:SourceConnection;token:string}{
   const connection=new SourceConnectionRepository(db).getByKind("ed");
   if(!connection){
@@ -64,7 +64,7 @@ function requireConnectedEdLegacy(
 }
 
 export function connectEd(
-  db:Database.Database,
+  db:LegacyDatabase,
   token:string,
   fetchImpl?:typeof fetch,
   now?:Date,
@@ -78,7 +78,7 @@ export function connectEd(
   now?:Date,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export async function connectEd(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string|UserScope,
   arg3?:typeof fetch|CredentialKeyring,
   arg4?:Date|string,
@@ -86,7 +86,7 @@ export async function connectEd(
   arg6?:Date,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(typeof arg2==="string"){
-    const legacyDb=db as Database.Database;
+    const legacyDb=db as LegacyDatabase;
     const token=arg2;
     const fetchImpl=(arg3 as typeof fetch|undefined)??fetch;
     const now=arg4 instanceof Date?arg4:new Date();
@@ -124,7 +124,7 @@ export async function connectEd(
 }
 
 export function refreshEdCourses(
-  db:Database.Database,
+  db:LegacyDatabase,
   fetchImpl?:typeof fetch,
   now?:Date,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
@@ -136,14 +136,14 @@ export function refreshEdCourses(
   now?:Date,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export async function refreshEdCourses(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2?:typeof fetch|UserScope,
   arg3?:Date|CredentialKeyring,
   arg4?:typeof fetch,
   arg5?:Date,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(typeof arg2==="function"||arg2===undefined){
-    const legacyDb=db as Database.Database;
+    const legacyDb=db as LegacyDatabase;
     const {connection,token}=requireConnectedEdLegacy(legacyDb);
     const payload=await new EdApiClient(token,arg2??fetch).fetchUser();
     const discovered=parseEdCourses(payload);
@@ -167,7 +167,7 @@ export async function refreshEdCourses(
 }
 
 export function replaceEnabledEdCourses(
-  db:Database.Database,
+  db:LegacyDatabase,
   enabledCourseIds:string[],
 ):{connection:SourceConnection;courses:SourceCourse[]};
 export function replaceEnabledEdCourses(
@@ -177,13 +177,13 @@ export function replaceEnabledEdCourses(
   enabledCourseIds:string[],
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export function replaceEnabledEdCourses(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:string[]|UserScope,
   arg3?:CredentialKeyring,
   arg4?:string[],
 ):{connection:SourceConnection;courses:SourceCourse[]}|Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(Array.isArray(arg2)){
-    const legacyDb=db as Database.Database;
+    const legacyDb=db as LegacyDatabase;
     const {connection}=requireConnectedEdLegacy(legacyDb);
     const courseRepo=new SourceCourseRepository(legacyDb);
     const discovered=courseRepo.list(connection.id);
