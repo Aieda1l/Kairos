@@ -143,6 +143,7 @@ export async function reconcileCalendarConnection(
             projection.assignmentId,
           );
           if(existing){
+            const recoveredCreate=Boolean(link.lastErrorCode);
             const adopted=await adapter.updateEvent(
               connection.remoteCalendarId!,
               existing.remoteEventId,
@@ -150,7 +151,7 @@ export async function reconcileCalendarConnection(
               existing.etag,
             );
             links.markSynced(link.id,adopted.remoteEventId,adopted.etag,hash,completedAt);
-            return {kind:"updated"};
+            return {kind:recoveredCreate?"created":"updated"};
           }
         }
         const created=await adapter.createEvent(connection.remoteCalendarId!,projection,link.syncKey);
