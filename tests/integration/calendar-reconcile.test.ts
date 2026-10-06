@@ -6,6 +6,7 @@ import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarEventLinkRepository} from "@/lib/db/repositories/calendar-event-links";
+import {SettingsRepository} from "@/lib/db/repositories/settings";
 import type {CalendarDestinationAdapter,RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
@@ -49,6 +50,44 @@ describe("calendar reconciliation",()=>{
   it("creates once then leaves an unchanged remote event alone",async()=>{const {db,c,adapter}=setup();expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1,failedCount:0});const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;expect(link.remoteEventId).toBeTruthy();expect(adapter.ensureCalls).toBe(0);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",unchangedCount:1,createdCount:0,updatedCount:0});expect(adapter.createCalls).toBe(1);expect(adapter.updateCalls).toBe(0);db.close();});
   it("updates the same event when the projection changes",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;db.prepare("UPDATE assignments SET title=?,due_at=?,source_status_text=? WHERE id=?").run("Homework revised","2026-10-10T06:59:00.000Z","Submitted",before.assignmentId);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",updatedCount:1});const after=links.get(c.id,before.assignmentId)!;expect(after.remoteEventId).toBe(before.remoteEventId);expect(after.contentHash).not.toBe(before.contentHash);expect(adapter.updateEtags).toEqual(["create-etag"]);db.close();});
   it("deletes only when the existing local assignment becomes undated",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;db.prepare("UPDATE assignments SET due_at=NULL WHERE id=?").run(link.assignmentId);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",deletedCount:1});expect(adapter.deleteCalls).toBe(1);expect(new CalendarEventLinkRepository(db).listByConnection(c.id)).toEqual([]);db.close();});
+  it("removes a generated event when an assignment becomes submitted by default, then restores it if reopened",async()=>{
+    const {db,c,adapter}=setup();
+    await run(db,c.id,adapter);
+    const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;
+    db.prepare("UPDATE assignments SET status='submitted',source_status_text='Submitted' WHERE id=?").run(link.assignmentId);
+    expect(await run(db,c.id,adapter)).toMatchObject({
+      status:"success",
+      deletedCount:1,
+      createdCount:0,
+    });
+    expect(new CalendarEventLinkRepository(db).listByConnection(c.id)).toEqual([]);
+    expect(adapter.events.size).toBe(0);
+
+    db.prepare("UPDATE assignments SET status='pending',source_status_text='Not submitted' WHERE id=?").run(link.assignmentId);
+    expect(await run(db,c.id,adapter)).toMatchObject({
+      status:"success",
+      createdCount:1,
+      deletedCount:0,
+    });
+    expect(adapter.events.size).toBe(1);
+    db.close();
+  });
+
+  it("keeps submitted assignment events when hide-submitted is disabled",async()=>{
+    const {db,c,adapter}=setup();
+    await run(db,c.id,adapter);
+    const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;
+    new SettingsRepository(db).setCalendarHideSubmitted(false);
+    db.prepare("UPDATE assignments SET status='submitted',source_status_text='Submitted' WHERE id=?").run(link.assignmentId);
+    expect(await run(db,c.id,adapter)).toMatchObject({
+      status:"success",
+      updatedCount:1,
+      deletedCount:0,
+    });
+    expect(adapter.events.size).toBe(1);
+    db.close();
+  });
+
   it("recreates a deleted event with the same sync key",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;adapter.events.delete(before.remoteEventId!);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1});const after=links.get(c.id,before.assignmentId)!;expect(after.syncKey).toBe(before.syncKey);expect(adapter.events.size).toBe(1);db.close();});
   it("converges after a lost create response without duplication",async()=>{const {db,c,adapter}=setup();adapter.loseNextCreate=true;expect(await run(db,c.id,adapter)).toMatchObject({status:"error",failedCount:1,errorCode:"CALENDAR_NETWORK_ERROR"});const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;expect(before.remoteEventId).toBeNull();expect(adapter.events.size).toBe(1);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1});expect(links.get(c.id,before.assignmentId)!.syncKey).toBe(before.syncKey);expect(adapter.events.size).toBe(1);db.close();});
   it("adopts an existing managed event when local links are lost instead of creating a duplicate",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const oldLink=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;const repo=new CalendarConnectionRepository(db);const replacement=repo.create({provider:"google",label:"Replacement"});repo.updateRemoteCalendar(replacement.id,"remote-calendar","Kairos");db.prepare("DELETE FROM calendar_event_links WHERE calendar_connection_id=?").run(c.id);expect(adapter.events.size).toBe(1);expect(await run(db,replacement.id,adapter)).toMatchObject({status:"success",createdCount:0,updatedCount:1});expect(adapter.createCalls).toBe(1);expect(adapter.events.size).toBe(1);const adopted=new CalendarEventLinkRepository(db).listByConnection(replacement.id)[0]!;expect(adopted.remoteEventId).toBe(oldLink.remoteEventId);db.close();});
