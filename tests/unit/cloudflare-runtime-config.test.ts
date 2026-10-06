@@ -21,6 +21,8 @@ describe("Cloudflare runtime configuration",()=>{
     const wrangler=read("wrangler.jsonc");
     expect(wrangler).toContain('"binding": "DB"');
     expect(wrangler).toContain('"database_name": "kairos"');
+    expect(wrangler).toContain('"main": "vinext/server/fetch-handler"');
+    expect(wrangler).toContain('"not_found_handling": "none"');
   });
 
   it("configures vinext with the Cloudflare Vite plugin",()=>{
@@ -29,6 +31,15 @@ describe("Cloudflare runtime configuration",()=>{
     const vite=read("vite.config.ts");
     expect(vite).toMatch(/vinext/i);
     expect(vite).toMatch(/cloudflare/i);
+  });
+
+  it("keeps Workers binding access lazy for the legacy Next compatibility build",()=>{
+    const auth=read("auth.ts");
+    expect(auth).not.toMatch(/^import\s+\{\s*env\s*\}\s+from\s+["']cloudflare:workers["']/m);
+    expect(auth).toContain('import("cloudflare:workers")');
+
+    const pkg=JSON.parse(read("package.json")) as {scripts?:Record<string,string>};
+    expect(pkg.scripts?.build).toContain("KAIROS_NEXT_COMPAT_BUILD=1");
   });
 
   it("keeps cloudflare:workers imports out of client-side modules",()=>{
