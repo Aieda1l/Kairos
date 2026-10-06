@@ -7,6 +7,9 @@ import {CalendarSyncError} from "@/lib/calendar/errors";
 
 const GRAPH_API="https://graph.microsoft.com/v1.0";
 
+export const MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID=
+  "String {2f7d7a8c-8936-4e44-a436-9d7878afc0b1} Name KairosAssignmentId";
+
 const calendarSchema=z.object({
   id:z.string().min(1),
   name:z.string().optional(),
@@ -17,10 +20,32 @@ const calendarListSchema=z.object({
   value:z.array(calendarSchema),
 }).passthrough();
 
+const extendedPropertySchema=z.object({
+  id:z.string().min(1),
+  value:z.string(),
+}).passthrough();
+
 const eventSchema=z.object({
   id:z.string().min(1),
   "@odata.etag":z.string().optional(),
+  singleValueExtendedProperties:z.array(extendedPropertySchema).optional(),
 }).passthrough();
+
+const eventListSchema=z.object({
+  value:z.array(eventSchema),
+}).passthrough();
+
+function odataString(value:string):string{
+  return value.replaceAll("'","''");
+}
+
+function assignmentPropertyExpand():string{
+  return `singleValueExtendedProperties($filter=id eq '${odataString(MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID)}')`;
+}
+
+function eventQuery(params:Record<string,string>):string{
+  return new URLSearchParams(params).toString();
+}
 
 export function microsoftTransactionId(syncKey:string):string{
   const hex=createHash("sha256").update(syncKey).digest("hex").slice(0,32);
@@ -155,13 +180,40 @@ export class MicrosoftCalendarClient{
   }
 
   async getEvent(calendarId:string,eventId:string):Promise<RemoteCalendarEvent|null>{
+    const query=eventQuery({"$expand":assignmentPropertyExpand()});
     const body=await this.request(
-      `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      `/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${query}`,
       {method:"GET"},
       {allowNotFound:true},
     );
     if(body===null)return null;
     return this.parseEvent(body);
+  }
+
+  async findEventByAssignment(
+    calendarId:string,
+    assignmentId:string,
+  ):Promise<RemoteCalendarEvent|null>{
+    const filter=
+      `singleValueExtendedProperties/Any(ep: ep/id eq '${odataString(MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID)}' and ep/value eq '${odataString(assignmentId)}')`;
+    const query=eventQuery({
+      "$filter":filter,
+      "$expand":assignmentPropertyExpand(),
+      "$top":"2",
+    });
+    const body=await this.request(
+      `/me/calendars/${encodeURIComponent(calendarId)}/events?${query}`,
+      {method:"GET"},
+    );
+    const parsed=eventListSchema.safeParse(body);
+    if(!parsed.success){
+      throw new CalendarSyncError(
+        "CALENDAR_UPSTREAM_ERROR",
+        "Microsoft Calendar returned an unexpected event list response.",
+      );
+    }
+    const event=parsed.data.value[0];
+    return event?this.parseEvent(event):null;
   }
 
   async createEvent(
@@ -179,7 +231,7 @@ export class MicrosoftCalendarClient{
         }),
       },
     );
-    return this.parseEvent(body);
+    return this.parseEvent(body,projection.assignmentId);
   }
 
   async updateEvent(
@@ -194,7 +246,7 @@ export class MicrosoftCalendarClient{
         body:JSON.stringify(this.eventBody(projection)),
       },
     );
-    return this.parseEvent(body);
+    return this.parseEvent(body,projection.assignmentId);
   }
 
   async deleteEvent(calendarId:string,eventId:string):Promise<void>{
@@ -213,10 +265,14 @@ export class MicrosoftCalendarClient{
       start:{dateTime:stripZ(projection.startsAt),timeZone:"UTC"},
       end:{dateTime:stripZ(projection.endsAt),timeZone:"UTC"},
       showAs:"free",
+      singleValueExtendedProperties:[{
+        id:MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+        value:projection.assignmentId,
+      }],
     };
   }
 
-  private parseEvent(body:unknown):RemoteCalendarEvent{
+  private parseEvent(body:unknown,fallbackAssignmentId?:string):RemoteCalendarEvent{
     const parsed=eventSchema.safeParse(body);
     if(!parsed.success){
       throw new CalendarSyncError(
@@ -224,9 +280,14 @@ export class MicrosoftCalendarClient{
         "Microsoft Calendar returned an unexpected event response.",
       );
     }
+    const property=parsed.data.singleValueExtendedProperties?.find(
+      item=>item.id===MICROSOFT_KAIROS_ASSIGNMENT_PROPERTY_ID,
+    );
+    const managedAssignmentId=property?.value??fallbackAssignmentId;
     return {
       remoteEventId:parsed.data.id,
       etag:parsed.data["@odata.etag"]??null,
+      ...(managedAssignmentId!==undefined?{managedAssignmentId}:{}),
     };
   }
 }
