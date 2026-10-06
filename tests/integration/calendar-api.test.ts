@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
-import {getDatabase,resetDatabaseSingletonForTests} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {getDatabase,resetDatabaseSingletonForTests} from "../helpers/legacy-db";
+import {migrate} from "../helpers/legacy-db";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
 
