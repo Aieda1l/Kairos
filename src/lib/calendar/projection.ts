@@ -59,7 +59,22 @@ function safeSourceUrl(raw:string|null):string|null{
   }
 }
 
-export function projectAssignment(assignment:Assignment):CalendarEventProjection|null{
+type CalendarProjectionOptions={
+  hideSubmitted?:boolean;
+};
+
+function isCalendarComplete(assignment:Assignment):boolean{
+  const submission=assignment.submissionStatus?.state;
+  if(submission==="submitted"||submission==="graded"||submission==="excused")return true;
+  if(submission==="not_submitted")return false;
+  return assignment.status==="submitted"||assignment.status==="graded";
+}
+
+export function projectAssignment(
+  assignment:Assignment,
+  options:CalendarProjectionOptions={},
+):CalendarEventProjection|null{
+  if(options.hideSubmitted&&isCalendarComplete(assignment))return null;
   if(!assignment.dueAt)return null;
   const due=new Date(assignment.dueAt);
   if(!Number.isFinite(due.getTime()))return null;
