@@ -21,6 +21,7 @@ describe("Google Calendar OAuth",()=>{
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/calendar.app.created");
     expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("prompt")).toBe("consent");
     expect(url.searchParams.get("code_challenge")).toBe("fixture-challenge");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.toString()).not.toContain("code_verifier");
