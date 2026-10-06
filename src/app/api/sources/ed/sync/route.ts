@@ -1,13 +1,18 @@
 import { getDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
+import { reconcileCalendarsAfterSourceWrite } from "@/lib/calendar/post-source-sync";
 import { EdSyncServiceError, syncEdConnection } from "@/lib/ed/sync-service";
 import { getEdRouteFetch } from "@/lib/ed/e2e-fixture-fetch";
 
-export async function POST(){
+export async function POST(request?:Request){
   const db=getDatabase();
   migrate(db);
   try{
     const result=await syncEdConnection(db,{fetchImpl:getEdRouteFetch()});
+    await reconcileCalendarsAfterSourceWrite(db,{
+      defer:request?.headers.get("x-kairos-calendar-sync")==="defer",
+      changed:result.insertedCount+result.updatedCount+result.statusUpdatedCount>0,
+    });
     const status=result.lastErrorCode==="ED_AUTH_INVALID"?401
       :result.lastErrorCode&&result.lastErrorCode!=="PARTIAL_SYNC"?502
       :200;
