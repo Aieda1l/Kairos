@@ -15,13 +15,20 @@ const apple:CalendarConnection={
   remoteCalendarId:"remote-apple",remoteCalendarName:"Kairos",enabled:true,
   lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
 };
+const microsoft:CalendarConnection={
+  id:"microsoft-1",provider:"microsoft",label:"Outlook / Microsoft 365",accountLabel:null,
+  remoteCalendarId:"remote-microsoft",remoteCalendarName:"Kairos",enabled:true,
+  lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
+};
 
 function Harness(){
   const calendar=useCalendarSync();
   return <div>
     <span data-testid="count">{calendar.connections.length}</span>
     <span data-testid="gmsg">{calendar.messageFor("google-1")}</span>
+    <span data-testid="mmsg">{calendar.messageFor("microsoft-1")}</span>
     <button onClick={()=>void calendar.syncConnection("google-1")}>sync google</button>
+    <button onClick={()=>void calendar.syncConnection("microsoft-1")}>sync microsoft</button>
     <button onClick={()=>void calendar.disconnect("apple-1")}>disconnect apple</button>
   </div>;
 }
@@ -56,6 +63,39 @@ it("updates one provider state without erasing other connections",async()=>{
   await user.click(screen.getByRole("button",{name:"disconnect apple"}));
   expect(screen.getByTestId("count")).toHaveTextContent("1");
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+
+it("reports reconciliation counts and names the secondary Outlook calendar",async()=>{
+  const user=userEvent.setup();
+  const fresh=new Date().toISOString();
+  const fetchMock=vi.fn(async(input:RequestInfo|URL)=>{
+    expect(String(input)).toMatch(/\/microsoft-1\/sync$/);
+    return Response.json({
+      connectionId:"microsoft-1",
+      status:"success",
+      createdCount:7,
+      updatedCount:2,
+      deletedCount:1,
+      unchangedCount:4,
+      failedCount:0,
+      completedAt:new Date().toISOString(),
+      errorCode:null,
+    });
+  });
+  vi.stubGlobal("fetch",fetchMock);
+
+  render(<CalendarSyncProvider initialConnections={[{
+    ...microsoft,
+    lastSyncCompletedAt:fresh,
+    lastSyncStatus:"success",
+  }]}><Harness/></CalendarSyncProvider>);
+
+  await user.click(screen.getByRole("button",{name:"sync microsoft"}));
+  expect(screen.getByTestId("mmsg")).toHaveTextContent(/7 created/i);
+  expect(screen.getByTestId("mmsg")).toHaveTextContent(/2 updated/i);
+  expect(screen.getByTestId("mmsg")).toHaveTextContent(/4 unchanged/i);
+  expect(screen.getByTestId("mmsg")).toHaveTextContent(/secondary Kairos calendar/i);
 });
 
 it("does not auto-sync when there are no calendar destinations",async()=>{
