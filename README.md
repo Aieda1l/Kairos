@@ -10,7 +10,7 @@ This is a personal tool, not an official University of Washington product. It do
 - npm 10 or newer
 - Firefox for Canvas submission-status and Gradescope browser-local sync
 - An Ed personal API token if you want to connect Ed
-- A Google OAuth desktop-app client ID if you want Google Calendar sync
+- A Google OAuth web-application client ID if you want Google Calendar sync
 - A Microsoft Entra public-client application ID if you want Outlook / Microsoft 365 Calendar sync
 - An Apple Account app-specific password if you want iCloud Calendar sync
 
@@ -119,17 +119,19 @@ The Ed API used by this connector is beta/unofficial and may change independentl
 
 Calendar destinations are outbound only: Canvas, Gradescope, and Ed bring assignments into Kairos, while Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar receive copies of Kairos deadlines. Calendar edits never change source assignments.
 
-Kairos creates or uses a dedicated **Kairos** calendar for each destination. Every assignment with a due date becomes a 15-minute transparent/free deadline marker beginning at the exact due timestamp. Repeated sync is idempotent, due-date changes update the existing event, and a manually deleted generated event is recreated on the next reconciliation. Assignments without a due date are not published; if a previously dated assignment becomes explicitly undated, its generated event is removed.
+Kairos creates or uses a dedicated **Kairos** calendar for each destination. Every eligible assignment with a due date becomes a 15-minute transparent/free deadline marker beginning at the exact due timestamp. Repeated sync is idempotent, due-date changes update the existing event, and a manually deleted generated event is recreated on the next reconciliation. Assignments without a due date are not published; if a previously dated assignment becomes explicitly undated, its generated event is removed.
+
+**Hide submitted assignments** is enabled by default under **Sources → Calendar destinations**. When enabled, Submitted, Graded, and Excused work is removed from generated calendar events; if an assignment becomes active/not-submitted again, its event is recreated. Turn the option off to keep completed deadlines visible in destination calendars. Changing the option immediately resynchronizes connected calendar destinations.
 
 Open **Sources → Calendar destinations** to connect a provider. **Sync All** refreshes assignment sources first, then performs one calendar reconciliation pass using the resulting local database state. While Kairos is open, a stale destination is reconciled when the app becomes visible if the last calendar sync is at least 15 minutes old. Kairos has no hosted background worker, so new upstream changes are not published continuously while the app is closed.
 
 ### Google Calendar
 
-1. In Google Cloud, create an OAuth 2.0 client for a **Desktop app**.
+1. In Google Cloud, create an OAuth 2.0 client for a **Web application**.
 2. Enable the Google Calendar API for that project.
-3. Put the client ID in `GOOGLE_CALENDAR_CLIENT_ID`. If the downloaded desktop-client configuration contains a client secret, put it in `GOOGLE_CALENDAR_CLIENT_SECRET`; otherwise leave that variable blank.
-4. Run Kairos on `http://localhost:3000` or another local `localhost` / `127.0.0.1` HTTP port.
-5. In **Sources → Calendar destinations**, choose **Connect Google Calendar** and complete Google consent.
+3. Add the exact local callback URI for the address you use, for example `http://localhost:3000/api/calendars/google/callback`. If you use the numeric loopback address, also add `http://127.0.0.1:3000/api/calendars/google/callback`.
+4. Put the client ID in `GOOGLE_CALENDAR_CLIENT_ID` and the client secret in `GOOGLE_CALENDAR_CLIENT_SECRET`.
+5. Run Kairos on the same local origin whose callback URI you registered, then choose **Connect Google Calendar** under **Sources → Calendar destinations** and complete Google consent.
 
 Kairos uses OAuth authorization-code flow with PKCE and a local loopback callback. It requests only `https://www.googleapis.com/auth/calendar.app.created`, which is scoped to secondary calendars created by the app and events on those calendars. Kairos does not request broad access to all calendars. Connect/reconnect explicitly requests consent so Google can issue a refresh token even when the account had previously authorized Kairos.
 
@@ -231,11 +233,11 @@ Ed:
 
 ### Calendar real-account acceptance smoke
 
-Calendar provider support remains validation-pending until each real-account smoke passes.
+Google Calendar and Outlook / Microsoft 365 have passed real-account smoke on this branch. Apple iCloud Calendar remains validation-pending before Milestone 5 can be marked complete.
 
 Google Calendar:
 
-1. Authorize with your local Google desktop OAuth application.
+1. Authorize with your local Google web OAuth application.
 2. Confirm Kairos creates a dedicated **Kairos** calendar and one event for a known due assignment.
 3. Sync again and confirm no duplicate is created.
 4. Change a due date in a source, refresh Kairos, and confirm the same generated event moves.
@@ -246,7 +248,8 @@ Google Calendar:
 Outlook / Microsoft 365:
 
 1. Complete the same create, repeat, due-date update, event-delete/recreate, whole-calendar-missing, and reconnect checks.
-2. Confirm the Microsoft consent screen grants calendar write/offline access only and does not request unrelated mail, files, or contacts permissions.
+2. After a local disconnect/reconnect, confirm the surviving remote **Kairos** calendar still has only one event per assignment; Kairos stores a hidden assignment identity on Microsoft events so reconnect can adopt them without duplication.
+3. Confirm the Microsoft consent screen grants calendar write/offline access only and does not request unrelated mail, files, or contacts permissions.
 
 Apple iCloud Calendar:
 
