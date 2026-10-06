@@ -117,11 +117,21 @@ export class CalDavClient{
     const existing=context.calendars.find(item=>item.name===name&&item.writable);
     if(existing)return {remoteCalendarId:existing.remoteCalendarId,name:existing.name};
     const target=resolveAppleDavUrl(context.home,"kairos/");
-    await this.request(target,{
-      method:"MKCALENDAR",
-      headers:{"content-type":"application/xml; charset=utf-8"},
-      body:CREATE_BODY,
-    });
+    try{
+      await this.request(target,{
+        method:"MKCALENDAR",
+        headers:{"content-type":"application/xml; charset=utf-8"},
+        body:CREATE_BODY,
+      });
+    }catch(error){
+      if(error instanceof CalendarSyncError&&error.code==="CALDAV_NOT_WRITABLE"){
+        throw new CalendarSyncError(
+          "CALDAV_NOT_WRITABLE",
+          "Apple accepted the credentials but would not create a new calendar through CalDAV. Create a calendar named Kairos in iCloud Calendar, then reconnect.",
+        );
+      }
+      throw error;
+    }
     return {remoteCalendarId:target.href,name};
   }
 
