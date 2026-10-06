@@ -177,7 +177,11 @@ export class CalDavClient{
     const response=await this.request(target,{
       method:"PUT",
       headers,
-      body:serializeCalendarEvent(projection,eventId.replace(/\.ics$/,"")),
+      body:serializeCalendarEvent(
+        projection,
+        eventId,
+        eventId.replace(/\.ics$/,""),
+      ),
     });
     return {remoteEventId:eventId,etag:response?.headers.get("etag")??null};
   }
