@@ -124,7 +124,7 @@ Planned:
 Primary design:
 - `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
 
-## Milestone 7 — Public beta readiness — Design approved in chat, written spec awaiting review
+## Milestone 7 — Public beta readiness — Approved, implementation not started
 
 Planned:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
