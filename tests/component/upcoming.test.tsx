@@ -28,6 +28,14 @@ vi.mock("@/features/submission-status/submission-status-provider",()=>({
     syncNow:statusSyncNow,
   }),
 }));
+vi.mock("@/features/calendars/calendar-provider",()=>({
+  useCalendarSync:()=>({
+    connections:[],
+    phaseFor:()=> "idle",
+    messageFor:()=> "",
+    syncAll:vi.fn(async()=>undefined),
+  }),
+}));
 
 const items:Assignment[]=[
   {id:"1",source:"canvas",externalId:"1",courseId:"1",courseName:"CSE 331",title:"Homework 3",releaseAt:null,dueAt:"2026-10-04T05:00:00Z",lateDueAt:null,status:"unknown",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://example.com/1",sourceUpdatedAt:null,firstSeenAt:"",lastSeenAt:"",submissionStatus:{state:"submitted",isLate:true,isMissing:false,submittedAt:null,checkedAt:"2026-10-03T20:00:00Z",extractorVersion:"canvas-html-v1"}},
