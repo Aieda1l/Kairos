@@ -34,6 +34,12 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run typecheck
+      - name: Check vinext compatibility
+        continue-on-error: true
+        run: npx vinext check
+      - name: Build vinext Workers target
+        continue-on-error: true
+        run: npm run build:vinext
       - run: npm run build:extension
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e
