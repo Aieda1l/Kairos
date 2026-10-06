@@ -13,7 +13,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "build:extension": "node scripts/build-firefox-extension.mjs"
+    "build:extension": "node scripts/build-firefox-extension.mjs",
+    "dev:vinext": "vite dev --port 3001",
+    "build:vinext": "vite build",
+    "start:vinext": "vite preview",
+    "deploy:cloudflare": "npx @vinext/cloudflare deploy"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -30,7 +34,9 @@
     "tailwind-merge": "^3.7.0",
     "zod": "^4.1.12",
     "server-only": "^0.0.1",
-    "fast-xml-parser": "^5.11.2"
+    "fast-xml-parser": "^5.11.2",
+    "vinext": "^1.0.0",
+    "react-server-dom-webpack": "^19.3.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -50,7 +56,11 @@
     "typescript": "^5.9.3",
     "vitest": "^5.0.3",
     "esbuild": "^0.28.2",
-    "@types/firefox-webext-browser": "^143.0.0"
+    "@types/firefox-webext-browser": "^143.0.0",
+    "@cloudflare/vite-plugin": "^1.62.4",
+    "@vitejs/plugin-rsc": "^0.5.35",
+    "vite": "^8.3.3",
+    "wrangler": "^4.147.0"
   },
   "type": "module"
 }

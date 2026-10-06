@@ -11,3 +11,6 @@ coverage/
 *.sqlite-wal
 *.sqlite-journal
 extension/firefox/dist/
+.cloudflare/
+.wrangler/
+.vinext/
