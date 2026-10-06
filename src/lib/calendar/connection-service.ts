@@ -11,6 +11,7 @@ import {MicrosoftCalendarClient} from "@/lib/calendar/microsoft/client";
 import {MicrosoftCalendarAdapter} from "@/lib/calendar/microsoft/adapter";
 import {CalDavClient} from "@/lib/calendar/caldav/client";
 import {createCalendarAdapterFactory} from "@/lib/calendar/provider-factory";
+import {getCalendarRouteFetch} from "@/lib/calendar/e2e-fixture-fetch";
 
 function pending(provider:CalendarProvider,label:string):CalendarConnection{
   return {
@@ -67,7 +68,7 @@ export async function connectOAuthCalendar(
 export async function testCaldavCredentials(
   username:string,
   secret:string,
-  fetchImpl:typeof fetch=fetch,
+  fetchImpl:typeof fetch=getCalendarRouteFetch(),
 ):Promise<{calendarCount:number}>{
   const client=new CalDavClient(username,secret,fetchImpl);
   const calendars=await client.discoverCalendars();
@@ -83,7 +84,7 @@ export async function connectCaldavCalendar(
   const existing=input.connectionId?connections.getById(input.connectionId):null;
   if(input.connectionId&&!existing)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");
   if(existing&&existing.provider!=="caldav")throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar provider does not match the connection.");
-  const client=new CalDavClient(input.username,input.secret,input.fetchImpl??fetch);
+  const client=new CalDavClient(input.username,input.secret,input.fetchImpl??getCalendarRouteFetch());
   let remote:{remoteCalendarId:string;name:string}|null=null;
   if(existing?.remoteCalendarId)remote=await client.getCalendar(existing.remoteCalendarId);
   if(!remote)remote=await client.createCalendar("Kairos");
