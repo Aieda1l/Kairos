@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {afterEach,beforeEach,expect,it} from "vitest";
-import {resetDatabaseSingletonForTests} from "@/lib/db/client";
+import {resetDatabaseSingletonForTests} from "../helpers/legacy-db";
 
 let dbPath:string;
 
