@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import { z } from "zod";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
@@ -77,7 +77,7 @@ export class GradescopeSyncServiceError extends Error{
 }
 
 export function startGradescopeSync(
-  db:Database.Database,
+  db:LegacyDatabase,
   now:Date=new Date(),
 ):GradescopeSyncStartResponse{
   const connection=new SourceConnectionRepository(db).getByKind("gradescope");
@@ -166,7 +166,7 @@ function overallErrorCode(
 }
 
 function recordInvalid(
-  db:Database.Database,
+  db:LegacyDatabase,
   registered:RegisteredGradescopeRequest,
   now:Date,
 ):never{
@@ -185,7 +185,7 @@ function recordInvalid(
 }
 
 export function completeGradescopeSync(
-  db:Database.Database,
+  db:LegacyDatabase,
   input:GradescopeSyncCompleteInput,
   now:Date=new Date(),
 ):GradescopeSyncCompleteResponse{
