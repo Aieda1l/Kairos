@@ -10,6 +10,11 @@ const GRAPH_API="https://graph.microsoft.com/v1.0";
 const calendarSchema=z.object({
   id:z.string().min(1),
   name:z.string().optional(),
+  canEdit:z.boolean().optional(),
+}).passthrough();
+
+const calendarListSchema=z.object({
+  value:z.array(calendarSchema),
 }).passthrough();
 
 const eventSchema=z.object({
@@ -22,7 +27,15 @@ export function microsoftTransactionId(syncKey:string):string{
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
 }
 
-function mapHttpError(status:number):CalendarSyncError{
+function safeProviderCode(body:unknown):string|null{
+  if(!body||typeof body!=="object"||Array.isArray(body))return null;
+  const error="error" in body?body.error:null;
+  if(!error||typeof error!=="object"||Array.isArray(error)||!("code" in error))return null;
+  const code=error.code;
+  return typeof code==="string"&&/^[A-Za-z0-9_.-]{1,80}$/.test(code)?code:null;
+}
+
+function mapHttpError(status:number,providerCode:string|null):CalendarSyncError{
   if(status===401||status===403){
     return new CalendarSyncError(
       "CALENDAR_AUTH_EXPIRED",
@@ -35,9 +48,10 @@ function mapHttpError(status:number):CalendarSyncError{
       "Microsoft Calendar is rate limiting requests.",
     );
   }
+  const suffix=providerCode?" (Microsoft Graph: "+providerCode+")":"";
   return new CalendarSyncError(
     "CALENDAR_UPSTREAM_ERROR",
-    "Microsoft Calendar request failed.",
+    "Microsoft Calendar request failed"+suffix+".",
   );
 }
 
@@ -71,7 +85,11 @@ export class MicrosoftCalendarClient{
 
     if(options.allowNotFound&&response.status===404)return null;
     if(options.allowNoContent&&(response.status===204||response.status===404))return null;
-    if(!response.ok)throw mapHttpError(response.status);
+    if(!response.ok){
+      let body:unknown=null;
+      try{body=await response.json();}catch{}
+      throw mapHttpError(response.status,safeProviderCode(body));
+    }
     if(response.status===204)return null;
     try{return await response.json();}catch{
       throw new CalendarSyncError(
@@ -79,6 +97,23 @@ export class MicrosoftCalendarClient{
         "Microsoft Calendar returned an unexpected response.",
       );
     }
+  }
+
+  async findCalendarByName(name:string):Promise<{remoteCalendarId:string;name:string}|null>{
+    const body=await this.request("/me/calendars",{method:"GET"});
+    const parsed=calendarListSchema.safeParse(body);
+    if(!parsed.success){
+      throw new CalendarSyncError(
+        "CALENDAR_UPSTREAM_ERROR",
+        "Microsoft Calendar returned an unexpected calendar list response.",
+      );
+    }
+    const match=parsed.data.value.find(calendar=>
+      calendar.name===name&&calendar.canEdit!==false
+    );
+    return match
+      ?{remoteCalendarId:match.id,name:match.name??name}
+      :null;
   }
 
   async createCalendar(name:string):Promise<{remoteCalendarId:string;name:string}>{
