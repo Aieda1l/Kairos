@@ -1,5 +1,6 @@
 import { getDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
+import { reconcileCalendarsAfterSourceWrite } from "@/lib/calendar/post-source-sync";
 import {
   completeGradescopeSync,
   gradescopeSyncCompleteInputSchema,
@@ -11,17 +12,28 @@ export async function POST(request:Request){
   try{
     body=await request.json();
   }catch{
-    return Response.json({code:"INVALID_RESULT",message:"The Gradescope sync result was invalid."},{status:400});
+    return Response.json(
+      {code:"INVALID_RESULT",message:"The Gradescope sync result was invalid."},
+      {status:400},
+    );
   }
   const parsed=gradescopeSyncCompleteInputSchema.safeParse(body);
   if(!parsed.success){
-    return Response.json({code:"INVALID_RESULT",message:"The Gradescope sync result was invalid."},{status:400});
+    return Response.json(
+      {code:"INVALID_RESULT",message:"The Gradescope sync result was invalid."},
+      {status:400},
+    );
   }
 
   const db=getDatabase();
   migrate(db);
   try{
-    return Response.json(completeGradescopeSync(db,parsed.data));
+    const result=completeGradescopeSync(db,parsed.data);
+    await reconcileCalendarsAfterSourceWrite(db,{
+      defer:request.headers.get("x-kairos-calendar-sync")==="defer",
+      changed:result.insertedCount+result.updatedCount+result.statusUpdatedCount>0,
+    });
+    return Response.json(result);
   }catch(error){
     if(error instanceof GradescopeSyncServiceError){
       return Response.json(
