@@ -178,6 +178,18 @@ describe("Apple iCloud CalDAV client",()=>{
     });
   });
 
+  it("reports rejected Apple credentials as reconnect-required rather than expired OAuth",async()=>{
+    const client=new CalDavClient(
+      "student@example.com",
+      "fixture-app-password",
+      vi.fn(async()=>new Response("unauthorized",{status:401})) as unknown as typeof fetch,
+    );
+    await expect(client.discoverCalendars()).rejects.toMatchObject({
+      code:"CALENDAR_AUTH_REQUIRED",
+      message:"Apple rejected the Apple Account email or app-specific password. Generate a new app-specific password and reconnect.",
+    });
+  });
+
   it.each([
     [403,"CALDAV_NOT_WRITABLE"],
     [429,"CALENDAR_RATE_LIMITED"],
