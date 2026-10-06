@@ -33,12 +33,18 @@ describe("Microsoft Calendar OAuth",()=>{
   it("requires a client id and defaults the tenant to common",()=>{
     expect(getMicrosoftCalendarConfig({MICROSOFT_CALENDAR_CLIENT_ID:"client"})).toEqual({
       clientId:"client",
+      clientSecret:null,
       tenant:"common",
     });
     expect(getMicrosoftCalendarConfig({
       MICROSOFT_CALENDAR_CLIENT_ID:"client",
       MICROSOFT_CALENDAR_TENANT:"organizations",
-    })).toEqual({clientId:"client",tenant:"organizations"});
+    })).toEqual({clientId:"client",clientSecret:null,tenant:"organizations"});
+    expect(getMicrosoftCalendarConfig({
+      MICROSOFT_CALENDAR_CLIENT_ID:"client",
+      MICROSOFT_CALENDAR_CLIENT_SECRET:"hosted-secret",
+      MICROSOFT_CALENDAR_TENANT:"organizations",
+    })).toEqual({clientId:"client",clientSecret:"hosted-secret",tenant:"organizations"});
     expect(()=>getMicrosoftCalendarConfig({})).toThrowError(expect.objectContaining({
       code:"CALENDAR_CONFIG_MISSING",
     }));
@@ -73,6 +79,27 @@ describe("Microsoft Calendar OAuth",()=>{
       expiresIn:3600,
       refreshToken:"fixture-refresh",
     });
+  });
+
+  it("sends a confidential client secret for hosted token redemption when configured",async()=>{
+    const fetchMock=vi.fn(async(_input:RequestInfo|URL,init?:RequestInit)=>{
+      const body=new URLSearchParams(String(init?.body));
+      expect(body.get("client_secret")).toBe("hosted-secret");
+      expect(body.get("code_verifier")).toBe("fixture-verifier");
+      return Response.json({
+        access_token:"fixture-access",
+        expires_in:3600,
+        refresh_token:"fixture-refresh",
+      });
+    });
+    await exchangeMicrosoftAuthorizationCode({
+      clientId:"client",
+      clientSecret:"hosted-secret",
+      tenant:"common",
+      code:"fixture-code",
+      codeVerifier:"fixture-verifier",
+      redirectUri:"https://mykairos.me/api/calendars/microsoft/callback",
+    },fetchMock as typeof fetch);
   });
 
   it("refreshes tokens and preserves provider refresh-token rotation",async()=>{
