@@ -1,4 +1,5 @@
 import "server-only";
+import type Database from "better-sqlite3";
 import {
   getSourceRuntimeContext,
   resolveSourceRuntimeContext,
@@ -8,6 +9,10 @@ import {
 
 export type CalendarRuntimeContext=SourceRuntimeContext;
 export type ResolveCalendarRuntimeInput=ResolveSourceRuntimeInput;
+
+export type CalendarRouteRuntime=
+  |{kind:"legacy";db:Database.Database}
+  |({kind:"hosted"}&CalendarRuntimeContext);
 
 export function useLegacyCalendarRuntime(
   env:Record<string,string|undefined>=process.env,
@@ -25,4 +30,17 @@ export function resolveCalendarRuntimeContext(
 
 export function getCalendarRuntimeContext():Promise<CalendarRuntimeContext>{
   return getSourceRuntimeContext();
+}
+
+export async function getCalendarRouteRuntime():Promise<CalendarRouteRuntime>{
+  if(useLegacyCalendarRuntime()){
+    const [{getDatabase},{migrate}]=await Promise.all([
+      import("@/lib/db/client"),
+      import("@/lib/db/migrate"),
+    ]);
+    const db=getDatabase();
+    migrate(db);
+    return {kind:"legacy",db};
+  }
+  return {kind:"hosted",...await getCalendarRuntimeContext()};
 }
