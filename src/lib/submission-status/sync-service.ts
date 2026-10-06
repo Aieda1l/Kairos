@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import { z } from "zod";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
@@ -56,7 +56,7 @@ export class SubmissionStatusSyncServiceError extends Error {
 }
 
 export function startCanvasSubmissionStatusSync(
-  db:Database.Database,
+  db:LegacyDatabase,
   now:Date=new Date(),
 ):SubmissionSyncStartResponse {
   const connection=new SourceConnectionRepository(db).getByKind("canvas");
@@ -81,7 +81,7 @@ function sameIdentity(a:CanvasAssignmentLocator,b:SubmissionStatusResultV1):bool
 }
 
 export function completeCanvasSubmissionStatusSync(
-  db:Database.Database,
+  db:LegacyDatabase,
   input:SubmissionSyncCompleteInput,
   now:Date=new Date(),
 ):SubmissionSyncCompleteResponse {
