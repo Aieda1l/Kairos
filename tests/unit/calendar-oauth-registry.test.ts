@@ -1,5 +1,5 @@
 import {createHash} from "node:crypto";
-import {beforeEach,describe,expect,it} from "vitest";
+import {beforeEach,describe,expect,it,vi} from "vitest";
 import {
   consumeOAuthRequest,
   registerOAuthRequest,
@@ -25,6 +25,23 @@ describe("calendar oauth request registry",()=>{
     const stored=consumeOAuthRequest(created.state,"google",new Date("2026-10-06T00:05:00.000Z"))!;
     expect(created.codeChallenge).toBe(challenge(stored.codeVerifier));
     expect(created.codeChallenge).not.toContain(stored.codeVerifier);
+  });
+
+  it("survives server module re-evaluation within the same process",async()=>{
+    const first=await import("@/lib/calendar/oauth-registry");
+    const created=first.registerOAuthRequest({
+      provider:"microsoft",
+      redirectUri:"http://localhost:3000/api/calendars/microsoft/callback",
+    },new Date("2026-10-06T00:00:00.000Z"));
+
+    vi.resetModules();
+    const reloaded=await import("@/lib/calendar/oauth-registry");
+    expect(reloaded.consumeOAuthRequest(
+      created.state,
+      "microsoft",
+      new Date("2026-10-06T00:01:00.000Z"),
+    )).not.toBeNull();
+    reloaded.resetOAuthRequestRegistryForTests();
   });
 
   it("is one-time, provider-bound, and expires after about ten minutes",()=>{
