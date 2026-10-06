@@ -131,12 +131,12 @@ Open **Sources → Calendar destinations** to connect a provider. **Sync All** r
 4. Run Kairos on `http://localhost:3000` or another local `localhost` / `127.0.0.1` HTTP port.
 5. In **Sources → Calendar destinations**, choose **Connect Google Calendar** and complete Google consent.
 
-Kairos uses OAuth authorization-code flow with PKCE and a local loopback callback. It requests only `https://www.googleapis.com/auth/calendar.app.created`, which is scoped to secondary calendars created by the app and events on those calendars. Kairos does not request broad access to all calendars.
+Kairos uses OAuth authorization-code flow with PKCE and a local loopback callback. It requests only `https://www.googleapis.com/auth/calendar.app.created`, which is scoped to secondary calendars created by the app and events on those calendars. Kairos does not request broad access to all calendars. Connect/reconnect explicitly requests consent so Google can issue a refresh token even when the account had previously authorized Kairos.
 
 ### Outlook / Microsoft 365
 
 1. Register an application in Microsoft Entra.
-2. Configure it as a **Mobile and desktop application / public client** with a localhost redirect and enable public-client flows.
+2. Configure it as a **Mobile and desktop application / public client**, enable public-client flows, and register the localhost callback path `http://localhost/api/calendars/microsoft/callback`. Microsoft ignores the port when matching localhost loopback redirects but still matches the path, so keep `/api/calendars/microsoft/callback` exact.
 3. Put the Application (client) ID in `MICROSOFT_CALENDAR_CLIENT_ID`.
 4. Leave `MICROSOFT_CALENDAR_TENANT=common` to support personal Microsoft accounts plus work/school accounts, or replace it with the tenant you intentionally target.
 5. In **Sources → Calendar destinations**, choose **Connect Microsoft Calendar** and complete Microsoft consent.
