@@ -107,6 +107,41 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
 - `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
+## Milestone 6 — Multi-user hosted foundation — Approved, implementation not started
+
+Planned:
+- production hosting at `https://mykairos.me` on Cloudflare Workers with D1 persistence;
+- Google and Microsoft account authentication through Auth.js;
+- strict per-user tenancy across sources, assignments, settings, credentials, calendar destinations, and OAuth transactions;
+- composite database constraints plus repository-level user scoping to prevent cross-tenant relationships and access;
+- application-level AES-GCM encryption for Canvas feed URLs, Ed tokens, calendar refresh tokens, and iCloud app-specific passwords;
+- durable, expiring, single-use Google/Microsoft calendar OAuth state suitable for serverless Workers;
+- hosted production callback URLs and production-safe session handling;
+- Firefox bridge support for `https://mykairos.me` while keeping exact-origin restrictions;
+- account deletion and clean production/local environment separation;
+- Workers/D1 build, migration, tenancy, credential, and hosted-provider acceptance gates.
+
+Primary design:
+- `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
+
+## Milestone 7 — Public beta readiness — Design approved in chat, written spec awaiting review
+
+Planned:
+- open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
+- UW-first product positioning and continued `canvas.uw.edu` browser integration rather than arbitrary Canvas institutions;
+- first-run onboarding with skippable source/calendar setup and targeted returning-user recovery;
+- Google production OAuth branding/verification and Microsoft production registration hardening;
+- Mozilla-signed Firefox extension distribution with current Manifest V3 data-collection declarations;
+- Cloudflare Turnstile plus per-user/provider sync/connect rate limits and duplicate-work controls;
+- privacy-preserving structured logs, health checks, deployment visibility, and free-tier capacity monitoring;
+- `support@mykairos.me` / `security@mykairos.me` inbound routing or documented equivalents;
+- finalized privacy/terms/revocation/account-deletion guidance;
+- incident response, production deployment, rollback, and two-account hosted acceptance;
+- final security and production-readiness go/no-go review before broad public announcement.
+
+Primary design:
+- `docs/superpowers/specs/2026-10-06-public-beta-readiness-design.md`
+
 ## Later extension follow-ups — Planned, not yet numbered
 
 - Chromium support for the Canvas submission-status extension
@@ -117,8 +152,6 @@ Primary docs:
 These remain intentionally deferred until the core aggregation/integration workflow proves reliable:
 - notifications
 - mobile-native app
-- cloud accounts or multi-device sync
-- application-level user authentication
 - AI planning/prioritization
 - analytics dashboards
 - collaboration/comments/notes
