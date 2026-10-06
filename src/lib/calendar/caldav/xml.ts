@@ -111,7 +111,11 @@ export function parseCalendarCollections(xml:string):CalDavCalendarCollection[]{
       if(!prop||typeof prop!=="object")continue;
       if(!hasKey((prop as Record<string,unknown>).resourcetype,"calendar"))continue;
       const name=textValue((prop as Record<string,unknown>).displayname)??"Calendar";
-      const writable=hasKey((prop as Record<string,unknown>)["current-user-privilege-set"],"write");
+      const privileges=(prop as Record<string,unknown>)["current-user-privilege-set"];
+      const writable=
+        hasKey(privileges,"all")
+        ||hasKey(privileges,"write")
+        ||(hasKey(privileges,"bind")&&hasKey(privileges,"write-content"));
       collections.push({href,name,writable});
       break;
     }
