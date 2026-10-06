@@ -146,7 +146,11 @@ Client requests must never choose the effective `userId`.
 
 A body/query/path field named `userId` must not be used to authorize access to user-owned data. If an administrative feature is introduced later, it requires a separate explicit authorization design.
 
-Session cookies must be secure in production, HTTP-only, and scoped to the canonical origin with an appropriate SameSite policy. Mutation routes remain same-origin and authenticated; Kairos does not enable wildcard CORS for application APIs.
+Sessions use Auth.js database-backed sessions in D1 rather than a process-local session store. This allows immediate session invalidation on sign-out/account deletion and keeps authorization tied to a durable user record.
+
+Kairos does **not** automatically merge Google and Microsoft identities merely because the providers report the same email address. A second provider identity that is not already linked to the signed-in user fails closed rather than silently joining accounts. Explicit account-linking UX is deferred until it has its own security design.
+
+Session cookies must be secure in production, HTTP-only, and scoped to the canonical origin with an appropriate SameSite policy. Mutation routes remain same-origin and authenticated; Kairos does not enable wildcard CORS for application APIs. State-changing application routes must reject cross-site browser requests instead of relying on session cookies alone.
 
 ## 5. Tenant-isolated persistence model
 
@@ -443,7 +447,7 @@ Milestone 6 also provides an account-deletion operation with explicit confirmati
 
 Deletion behavior:
 
-1. authenticate/reconfirm the current Kairos user;
+1. require the current authenticated session plus an explicit destructive-action confirmation; Milestone 6 does not require a second provider login solely for deletion;
 2. remove that user's local source/calendar credentials and OAuth transactions;
 3. cascade-delete their assignments, courses, source connections, event mappings, settings, and Auth.js-owned account/session data as appropriate;
 4. invalidate the current session;
@@ -583,6 +587,9 @@ Milestone 6 is complete only when all of the following are demonstrated:
 11. Account deletion removes only the current user's Kairos-held data.
 12. CI passes both the normal application suite and Workers/D1 deployment gates.
 13. A production or production-like Workers deployment successfully serves the application over HTTPS.
+14. Real Google and Microsoft Kairos sign-in complete successfully against hosted callbacks using non-production test accounts/configuration where possible.
+15. Google Calendar and Microsoft Calendar complete hosted real-account connect/reconnect/sync smoke tests after their redirect registrations move from localhost assumptions to production Web callbacks.
+16. iCloud/CalDAV completes a hosted connect/sync smoke proving the Workers runtime can perform the required DAV flow without exposing the app-specific password.
 
 ## 20. Follow-up milestone
 
