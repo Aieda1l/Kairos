@@ -8,6 +8,6 @@ export async function POST(request:Request){
   try{return Response.json({ok:true,...await testCaldavCredentials(parsed.data.username,parsed.data.secret)});}
   catch(error){
     const e=error instanceof CalendarSyncError?error:new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","Apple Calendar could not be tested.");
-    return Response.json({code:e.code,message:e.message},{status:e.code==="CALENDAR_AUTH_EXPIRED"?401:502});
+    return Response.json({code:e.code,message:e.message},{status:(e.code==="CALENDAR_AUTH_EXPIRED"||e.code==="CALENDAR_AUTH_REQUIRED")?401:502});
   }
 }
