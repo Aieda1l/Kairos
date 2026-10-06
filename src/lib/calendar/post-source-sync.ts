@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {createCalendarAdapterFactory} from "@/lib/calendar/provider-factory";
@@ -14,7 +14,7 @@ type PostSourceOptions={
 };
 
 export function reconcileCalendarsAfterSourceWrite(
-  db:Database.Database,
+  db:LegacyDatabase,
   options:PostSourceOptions,
 ):Promise<void>;
 export function reconcileCalendarsAfterSourceWrite(
@@ -24,7 +24,7 @@ export function reconcileCalendarsAfterSourceWrite(
   options:PostSourceOptions,
 ):Promise<void>;
 export async function reconcileCalendarsAfterSourceWrite(
-  db:Database.Database|D1DatabaseLike,
+  db:LegacyDatabase|D1DatabaseLike,
   arg2:PostSourceOptions|UserScope,
   arg3?:CredentialKeyring,
   arg4?:PostSourceOptions,
@@ -32,9 +32,9 @@ export async function reconcileCalendarsAfterSourceWrite(
   if("defer" in arg2){
     if(arg2.defer||!arg2.changed)return;
     try{
-      await reconcileAllCalendars(db as Database.Database,{
+      await reconcileAllCalendars(db as LegacyDatabase,{
         adapterFactory:arg2.adapterFactory??createCalendarAdapterFactory(
-          db as Database.Database,
+          db as LegacyDatabase,
         ),
       });
     }catch{
