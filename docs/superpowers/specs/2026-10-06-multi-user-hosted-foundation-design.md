@@ -1,7 +1,7 @@
 # Kairos Milestone 6 — Multi-user Hosted Foundation Design
 
 **Date:** 2026-10-06  
-**Status:** Awaiting written-spec review  
+**Status:** Approved design  
 **Branch:** `feat/milestone-6-multi-user-hosted-foundation`  
 **Production domain:** `https://mykairos.me`
 
