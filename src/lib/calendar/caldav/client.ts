@@ -18,7 +18,10 @@ const CALENDARS_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d=
 const CREATE_BODY=`<?xml version="1.0" encoding="UTF-8"?><c:mkcalendar xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:set><d:prop><d:displayname>Kairos</d:displayname><c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set></d:prop></d:set></c:mkcalendar>`;
 
 function mapHttp(status:number):CalendarSyncError{
-  if(status===401)return new CalendarSyncError("CALENDAR_AUTH_EXPIRED","Apple Calendar authorization is no longer valid.");
+  if(status===401)return new CalendarSyncError(
+    "CALENDAR_AUTH_REQUIRED",
+    "Apple rejected the Apple Account email or app-specific password. Generate a new app-specific password and reconnect.",
+  );
   if(status===403)return new CalendarSyncError("CALDAV_NOT_WRITABLE","Apple Calendar is not writable with this credential.");
   if(status===429)return new CalendarSyncError("CALENDAR_RATE_LIMITED","Apple Calendar is rate limiting requests.");
   return new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","Apple Calendar request failed.");
