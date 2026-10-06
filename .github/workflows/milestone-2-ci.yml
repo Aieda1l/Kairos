@@ -31,7 +31,11 @@ jobs:
           cache: npm
           cache-dependency-path: package.json
       - run: npm install --no-audit --no-fund
-      - run: npm test
+      - name: Run Vitest
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee vitest.log
       - run: npm run db:verify
       - run: npm run lint
       - run: npm run typecheck
@@ -50,6 +54,7 @@ jobs:
         with:
           name: playwright-failure-${{ github.run_attempt }}
           path: |
+            vitest.log
             playwright-report
             test-results
           if-no-files-found: ignore
