@@ -170,10 +170,17 @@ const fixtureFetch:typeof fetch=async(input,init)=>{
   if(url.href.startsWith(CALENDAR)&&url.pathname.endsWith(".ics")){
     if(!store.calendarExists)return empty(404);
     const id=url.pathname.split("/").at(-1)!;
-    if(method==="HEAD"){
+    if(method==="GET"){
       const event=store.events.get(id);
       return event
-        ?new Response(null,{status:200,headers:{etag:event.etag,"cache-control":"no-store"}})
+        ?new Response(event.raw,{
+          status:200,
+          headers:{
+            etag:event.etag,
+            "content-type":"text/calendar; charset=utf-8",
+            "cache-control":"no-store",
+          },
+        })
         :empty(404);
     }
     if(method==="PUT"){
