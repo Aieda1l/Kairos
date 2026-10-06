@@ -26,10 +26,11 @@ describe("calendar destination API",()=>{
   beforeEach(()=>{
     process.env.ASSIGNMENTS_DB_PATH=":memory:";
     resetDatabaseSingletonForTests();
-    calendarRuntime.get.mockImplementation(async()=>({
-      kind:"legacy" as const,
-      db:getDatabase(),
-    }));
+    calendarRuntime.get.mockImplementation(async()=>{
+      const db=getDatabase();
+      migrate(db);
+      return {kind:"legacy" as const,db};
+    });
   });
   afterEach(()=>{
     resetDatabaseSingletonForTests();

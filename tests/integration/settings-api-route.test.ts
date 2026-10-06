@@ -1,8 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {afterEach,beforeEach,expect,it} from "vitest";
-import {resetDatabaseSingletonForTests} from "../helpers/legacy-db";
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+import {
+  getDatabase,
+  migrate,
+  resetDatabaseSingletonForTests,
+} from "../helpers/legacy-db";
+
+const calendarRuntime=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock("@/lib/platform/calendar-runtime",()=>({
+  getCalendarRouteRuntime:calendarRuntime.get,
+}));
 
 let dbPath:string;
 
@@ -10,10 +19,16 @@ beforeEach(()=>{
   dbPath=path.join(os.tmpdir(),`settings-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   resetDatabaseSingletonForTests();
+  calendarRuntime.get.mockImplementation(async()=>{
+    const db=getDatabase();
+    migrate(db);
+    return {kind:"legacy" as const,db};
+  });
 });
 
 afterEach(()=>{
   resetDatabaseSingletonForTests();
+  vi.restoreAllMocks();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
 });
 

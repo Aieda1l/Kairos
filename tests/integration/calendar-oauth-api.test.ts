@@ -28,10 +28,11 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     process.env.MICROSOFT_CALENDAR_CLIENT_ID="fixture-ms-client";
     process.env.MICROSOFT_CALENDAR_TENANT="common";
     resetDatabaseSingletonForTests();
-    calendarRuntime.get.mockImplementation(async()=>({
-      kind:"legacy" as const,
-      db:getDatabase(),
-    }));
+    calendarRuntime.get.mockImplementation(async()=>{
+      const db=getDatabase();
+      migrate(db);
+      return {kind:"legacy" as const,db};
+    });
     resetOAuthRequestRegistryForTests();
   });
   afterEach(()=>{
