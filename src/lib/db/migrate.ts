@@ -99,6 +99,50 @@ CREATE TABLE IF NOT EXISTS assignment_links (
   UNIQUE(assignment_a_id, assignment_b_id, relationship)
 );
 
+CREATE TABLE IF NOT EXISTS calendar_connections (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL CHECK(provider IN ('google','microsoft','caldav')),
+  label TEXT NOT NULL,
+  account_label TEXT,
+  remote_calendar_id TEXT,
+  remote_calendar_name TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+  last_sync_started_at TEXT,
+  last_sync_completed_at TEXT,
+  last_sync_status TEXT NOT NULL DEFAULT 'never' CHECK(last_sync_status IN ('never','success','partial','error')),
+  last_error_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS calendar_connections_provider_enabled_idx
+  ON calendar_connections(provider, enabled);
+
+CREATE TABLE IF NOT EXISTS calendar_credentials (
+  calendar_connection_id TEXT PRIMARY KEY REFERENCES calendar_connections(id) ON DELETE CASCADE,
+  oauth_refresh_token TEXT,
+  caldav_username TEXT,
+  caldav_secret TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calendar_event_links (
+  id TEXT PRIMARY KEY,
+  calendar_connection_id TEXT NOT NULL REFERENCES calendar_connections(id) ON DELETE CASCADE,
+  assignment_id TEXT NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+  sync_key TEXT NOT NULL,
+  remote_event_id TEXT,
+  remote_etag TEXT,
+  content_hash TEXT,
+  last_synced_at TEXT,
+  last_error_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(calendar_connection_id, assignment_id),
+  UNIQUE(calendar_connection_id, sync_key)
+);
+CREATE INDEX IF NOT EXISTS calendar_event_links_connection_idx
+  ON calendar_event_links(calendar_connection_id);
+
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
@@ -141,6 +185,11 @@ export function migrate(db: Database.Database): void {
   db.prepare(`
     INSERT INTO app_settings(key, value, updated_at)
     VALUES ('timezone', 'America/Los_Angeles', ?)
+    ON CONFLICT(key) DO NOTHING
+  `).run(now);
+  db.prepare(`
+    INSERT INTO app_settings(key, value, updated_at)
+    VALUES ('calendar_hide_submitted', '1', ?)
     ON CONFLICT(key) DO NOTHING
   `).run(now);
 }

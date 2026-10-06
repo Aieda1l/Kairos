@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-05
+**Updated:** 2026-10-06
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -77,6 +77,35 @@ Completed validation:
 Primary docs:
 - `docs/superpowers/specs/2026-10-05-ed-connector-design.md`
 - `docs/superpowers/plans/2026-10-05-ed-connector-milestone-4.md`
+
+## Milestone 5 — Calendar destination sync — Complete
+
+Implemented:
+- outbound one-way synchronization from Kairos assignments to dedicated Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar destinations;
+- calendar destinations modeled separately from assignment sources so Canvas, Gradescope, and Ed provenance remains unchanged;
+- deterministic 15-minute deadline event projection with idempotent create/update/recreate behavior and no event for undated assignments;
+- default-on **Hide submitted assignments** calendar preference that removes Submitted, Graded, and Excused work from generated events and recreates events if work becomes active again;
+- Google OAuth authorization-code + PKCE using the narrow `calendar.app.created` scope;
+- Microsoft public-client authorization-code + PKCE using delegated `Calendars.ReadWrite` plus `offline_access`;
+- Apple iCloud CalDAV using an Apple Account email + app-specific password and validated Apple CalDAV host discovery/redirects;
+- local server-side SQLite storage for refresh tokens/app-specific credentials, with no credential echo and no claim of encryption at rest;
+- provider-isolated reconciliation with durable assignment↔remote-event mappings, partial/error health, and no rollback of successful source synchronization;
+- source-triggered best-effort reconciliation plus one final calendar pass in the Upcoming **Sync All** workflow;
+- stale-on-visible reconciliation while Kairos is open, without a hosted 24/7 background worker;
+- explicit **Remove generated events**, **Disconnect**, and provider reconnect behavior;
+- deterministic unit, repository/integration, component, and Playwright E2E coverage including idempotency, due-date updates, user-deleted event recreation, provider failure isolation, and secret non-exposure.
+
+Automated validation:
+- feature CI has passed Vitest, lint, typecheck, Firefox extension build, Playwright E2E, production build, dynamic-dashboard verification, and credential/permission review on the implementation branch.
+
+Completed real-account validation:
+- Google Calendar connect/sync behavior;
+- Outlook / Microsoft 365 connect/sync behavior, secondary-calendar visibility, reconnect, and duplicate-prevention behavior;
+- Apple iCloud Calendar connect/sync behavior, writable Kairos calendar creation, repeat/idempotency, due-date update, event-delete/recreate behavior, and app-specific-password non-exposure.
+
+Primary docs:
+- `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
+- `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
 ## Later extension follow-ups — Planned, not yet numbered
 
