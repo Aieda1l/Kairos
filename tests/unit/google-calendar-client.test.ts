@@ -88,6 +88,38 @@ describe("Google Calendar client",()=>{
     }
   });
 
+  it("recovers an already-created deterministic event after a duplicate-ID retry",async()=>{
+    const syncKey="lost-response-sync-key";
+    const eventId=googleEventId(syncKey);
+    const calls:Array<{url:string;method:string}>=[];
+    const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+      const url=String(input);
+      const method=init?.method??"GET";
+      calls.push({url,method});
+      if(method==="POST"){
+        return new Response(JSON.stringify({
+          error:{code:409,message:"The requested identifier already exists."},
+        }),{status:409,headers:{"content-type":"application/json"}});
+      }
+      return Response.json({id:eventId,etag:"existing-etag"});
+    });
+    const client=new GoogleCalendarClient("fixture-access",fetchMock as typeof fetch);
+    await expect(client.createEvent("calendar/id",projection,syncKey)).resolves.toEqual({
+      remoteEventId:eventId,
+      etag:"existing-etag",
+    });
+    expect(calls).toEqual([
+      {
+        method:"POST",
+        url:"https://www.googleapis.com/calendar/v3/calendars/calendar%2Fid/events",
+      },
+      {
+        method:"GET",
+        url:`https://www.googleapis.com/calendar/v3/calendars/calendar%2Fid/events/${eventId}`,
+      },
+    ]);
+  });
+
   it("gets, updates, and deletes only the stored calendar/event IDs",async()=>{
     const calls:Array<{url:string;method:string;body?:Record<string,unknown>}>= [];
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
