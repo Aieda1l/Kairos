@@ -151,7 +151,8 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
     ).__gradescopeCapture?.syncRequests??0);
   }).toBeGreaterThan(0);
 
-  await page.goto("/assignments");
+  await page.getByRole("link",{name:"All Assignments"}).click();
+  await expect(page).toHaveURL(/\/assignments$/);
   await expect(page.getByText("Gradescope Graded Homework").first()).toBeVisible();
   await expect(page.getByText("8.5 / 10").first()).toBeVisible();
   await expect(page.getByText("Gradescope Open Homework").first()).toBeVisible();
@@ -164,7 +165,8 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
     "https://www.gradescope.com/courses/123/assignments/457",
   );
 
-  await page.goto("/upcoming");
+  await page.getByRole("link",{name:"Upcoming"}).click();
+  await expect(page).toHaveURL(/\/upcoming$/);
   await expect(page.getByText("Gradescope Graded Homework")).toHaveCount(0);
   await expect(page.getByText("Gradescope Open Homework").first()).toBeVisible();
 
