@@ -102,7 +102,7 @@ describe("Apple iCloud CalDAV client",()=>{
   });
 
   it("validates authenticated redirects manually before retrying",async()=>{
-    const fetchMock=vi.fn(async()=>new Response(null,{status:302,headers:{location:"https://evil.example/redirect"}}));
+    const fetchMock=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(null,{status:302,headers:{location:"https://evil.example/redirect"}}));
     const client=new CalDavClient("student@example.com","fixture-app-password",fetchMock as unknown as typeof fetch);
     await expect(client.discoverCalendars()).rejects.toMatchObject({code:"CALDAV_DISCOVERY_FAILED"});
     expect(fetchMock).toHaveBeenCalledTimes(1);
