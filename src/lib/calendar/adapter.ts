@@ -21,6 +21,7 @@ export interface CalendarDestinationAdapter{
     remoteCalendarId:string,
     remoteEventId:string,
     projection:CalendarEventProjection,
+    remoteEtag?:string|null,
   ):Promise<RemoteCalendarEvent>;
   deleteEvent(remoteCalendarId:string,remoteEventId:string):Promise<void>;
 }
