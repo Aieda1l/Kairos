@@ -164,6 +164,8 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
     "href",
     "https://www.gradescope.com/courses/123/assignments/457",
   );
+  await page.getByRole("button",{name:"Close dialog"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.getByRole("link",{name:"Upcoming"}).click();
   await expect(page).toHaveURL(/\/upcoming$/);
