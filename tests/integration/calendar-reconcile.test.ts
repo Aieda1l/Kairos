@@ -16,6 +16,7 @@ class FakeAdapter implements CalendarDestinationAdapter{
   events=new Map<string,{event:RemoteCalendarEvent;projection:CalendarEventProjection;syncKey:string}>();
   byKey=new Map<string,string>();
   ensureCalls=0; createCalls=0; updateCalls=0; deleteCalls=0; active=0; maxActive=0;
+  updateEtags:Array<string|null|undefined>=[];
   calendarMissing=false; loseNextCreate=false; failAll=false; failTitles=new Set<string>();
   async testConnection(){if(this.calendarMissing)throw new CalendarSyncError("CALENDAR_REMOTE_CALENDAR_MISSING","missing");}
   async ensureCalendar(){this.ensureCalls++;return {remoteCalendarId:"remote-calendar",name:"Kairos"};}
@@ -27,8 +28,8 @@ class FakeAdapter implements CalendarDestinationAdapter{
     const id="remote-"+key.slice(0,16);const event={remoteEventId:id,etag:"create-etag"};this.byKey.set(key,id);this.events.set(id,{event,projection:p,syncKey:key});
     if(this.loseNextCreate){this.loseNextCreate=false;throw new CalendarSyncError("CALENDAR_NETWORK_ERROR","lost response");}return event;
   }finally{leave();}}
-  async updateEvent(_c:string,id:string,p:CalendarEventProjection){const leave=await this.enter();try{
-    this.updateCalls++;if(this.failAll||this.failTitles.has(p.title))throw new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","update failed");
+  async updateEvent(_c:string,id:string,p:CalendarEventProjection,etag?:string|null){const leave=await this.enter();try{
+    this.updateCalls++;this.updateEtags.push(etag);if(this.failAll||this.failTitles.has(p.title))throw new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","update failed");
     const old=this.events.get(id)!;const event={remoteEventId:id,etag:"update-"+this.updateCalls};this.events.set(id,{event,projection:p,syncKey:old.syncKey});return event;
   }finally{leave();}}
   async deleteEvent(_c:string,id:string){this.deleteCalls++;this.events.delete(id);}
@@ -40,7 +41,7 @@ const run=(db:Database.Database,id:string,a:FakeAdapter,extra:{concurrency?:numb
 
 describe("calendar reconciliation",()=>{
   it("creates once then leaves an unchanged remote event alone",async()=>{const {db,c,adapter}=setup();expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1,failedCount:0});const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;expect(link.remoteEventId).toBeTruthy();expect(adapter.ensureCalls).toBe(0);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",unchangedCount:1,createdCount:0,updatedCount:0});expect(adapter.createCalls).toBe(1);expect(adapter.updateCalls).toBe(0);db.close();});
-  it("updates the same event when the projection changes",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;db.prepare("UPDATE assignments SET title=?,due_at=?,source_status_text=? WHERE id=?").run("Homework revised","2026-10-10T06:59:00.000Z","Submitted",before.assignmentId);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",updatedCount:1});const after=links.get(c.id,before.assignmentId)!;expect(after.remoteEventId).toBe(before.remoteEventId);expect(after.contentHash).not.toBe(before.contentHash);db.close();});
+  it("updates the same event when the projection changes",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;db.prepare("UPDATE assignments SET title=?,due_at=?,source_status_text=? WHERE id=?").run("Homework revised","2026-10-10T06:59:00.000Z","Submitted",before.assignmentId);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",updatedCount:1});const after=links.get(c.id,before.assignmentId)!;expect(after.remoteEventId).toBe(before.remoteEventId);expect(after.contentHash).not.toBe(before.contentHash);expect(adapter.updateEtags).toEqual(["create-etag"]);db.close();});
   it("deletes only when the existing local assignment becomes undated",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const link=new CalendarEventLinkRepository(db).listByConnection(c.id)[0]!;db.prepare("UPDATE assignments SET due_at=NULL WHERE id=?").run(link.assignmentId);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",deletedCount:1});expect(adapter.deleteCalls).toBe(1);expect(new CalendarEventLinkRepository(db).listByConnection(c.id)).toEqual([]);db.close();});
   it("recreates a deleted event with the same sync key",async()=>{const {db,c,adapter}=setup();await run(db,c.id,adapter);const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;adapter.events.delete(before.remoteEventId!);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1});const after=links.get(c.id,before.assignmentId)!;expect(after.syncKey).toBe(before.syncKey);expect(adapter.events.size).toBe(1);db.close();});
   it("converges after a lost create response without duplication",async()=>{const {db,c,adapter}=setup();adapter.loseNextCreate=true;expect(await run(db,c.id,adapter)).toMatchObject({status:"error",failedCount:1,errorCode:"CALENDAR_NETWORK_ERROR"});const links=new CalendarEventLinkRepository(db);const before=links.listByConnection(c.id)[0]!;expect(before.remoteEventId).toBeNull();expect(adapter.events.size).toBe(1);expect(await run(db,c.id,adapter)).toMatchObject({status:"success",createdCount:1});expect(links.get(c.id,before.assignmentId)!.syncKey).toBe(before.syncKey);expect(adapter.events.size).toBe(1);db.close();});
