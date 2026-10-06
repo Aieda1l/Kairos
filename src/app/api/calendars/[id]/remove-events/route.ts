@@ -1,13 +1,15 @@
 import {removeManagedCalendarEvents} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
-import {getCalendarRouteRuntime} from "@/lib/platform/calendar-runtime";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
 export async function POST(
   _request:Request,
   {params}:{params:Promise<{id:string}>},
 ){
   const {id}=await params;
-  const runtime=await getCalendarRouteRuntime();
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   try{
     const result=runtime.kind==="legacy"
       ?await removeManagedCalendarEvents(runtime.db,id)
