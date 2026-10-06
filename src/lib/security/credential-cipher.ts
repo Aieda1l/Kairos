@@ -87,10 +87,16 @@ function rawKey(keyring:CredentialKeyring,keyId:string,forDecrypt:boolean):Uint8
   return key;
 }
 
+function toArrayBuffer(bytes:Uint8Array):ArrayBuffer{
+  const copy=new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 async function importAesKey(bytes:Uint8Array,usage:KeyUsage):Promise<CryptoKey>{
   return crypto.subtle.importKey(
     "raw",
-    bytes as BufferSource,
+    toArrayBuffer(bytes),
     {name:"AES-GCM"},
     false,
     [usage],
@@ -110,9 +116,13 @@ export async function encryptCredential(
   const iv=crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const plaintext=new TextEncoder().encode(input.plaintext);
   const encrypted=await crypto.subtle.encrypt(
-    {name:"AES-GCM",iv,additionalData:aad(input)},
+    {
+      name:"AES-GCM",
+      iv:toArrayBuffer(iv),
+      additionalData:toArrayBuffer(aad(input)),
+    },
     key,
-    plaintext,
+    toArrayBuffer(plaintext),
   );
 
   return [
@@ -142,9 +152,13 @@ export async function decryptCredential(
 
     const key=await importAesKey(rawKey(keyring,keyId,true),"decrypt");
     const decrypted=await crypto.subtle.decrypt(
-      {name:"AES-GCM",iv,additionalData:aad(input)},
+      {
+        name:"AES-GCM",
+        iv:toArrayBuffer(iv),
+        additionalData:toArrayBuffer(aad(input)),
+      },
       key,
-      ciphertext,
+      toArrayBuffer(ciphertext),
     );
     return new TextDecoder().decode(decrypted);
   }catch(error){
