@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-05
+**Updated:** 2026-10-06
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -78,7 +78,7 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-ed-connector-design.md`
 - `docs/superpowers/plans/2026-10-05-ed-connector-milestone-4.md`
 
-## Milestone 5 — Calendar destination sync — Implemented, real-account validation pending
+## Milestone 5 — Calendar destination sync — Complete
 
 Implemented:
 - outbound one-way synchronization from Kairos assignments to dedicated Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar destinations;
@@ -100,10 +100,8 @@ Automated validation:
 
 Completed real-account validation:
 - Google Calendar connect/sync behavior;
-- Outlook / Microsoft 365 connect/sync behavior, secondary-calendar visibility, reconnect, and duplicate-prevention behavior.
-
-Pending before this milestone may be marked **Complete**:
-- real-account Apple iCloud Calendar smoke.
+- Outlook / Microsoft 365 connect/sync behavior, secondary-calendar visibility, reconnect, and duplicate-prevention behavior;
+- Apple iCloud Calendar connect/sync behavior, writable Kairos calendar creation, repeat/idempotency, due-date update, event-delete/recreate behavior, and app-specific-password non-exposure.
 
 Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`

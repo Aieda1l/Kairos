@@ -233,7 +233,7 @@ Ed:
 
 ### Calendar real-account acceptance smoke
 
-Google Calendar and Outlook / Microsoft 365 have passed real-account smoke on this branch. Apple iCloud Calendar remains validation-pending before Milestone 5 can be marked complete.
+Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar have passed real-account smoke on this branch.
 
 Google Calendar:
 
