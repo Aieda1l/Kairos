@@ -51,6 +51,7 @@ export function buildGoogleAuthorizationUrl(input:{
   url.searchParams.set("response_type","code");
   url.searchParams.set("scope",GOOGLE_CALENDAR_SCOPE);
   url.searchParams.set("access_type","offline");
+  url.searchParams.set("prompt","consent");
   url.searchParams.set("state",input.state);
   url.searchParams.set("code_challenge",input.codeChallenge);
   url.searchParams.set("code_challenge_method","S256");
