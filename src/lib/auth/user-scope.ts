@@ -3,10 +3,7 @@ export type UserScope={
 };
 
 type SessionLike={
-  user?:{
-    id?:string | null;
-    [key:string]:unknown;
-  } | null;
+  user?:object | null;
 } | null;
 
 type SessionGetter=()=>Promise<SessionLike>;
@@ -25,11 +22,20 @@ async function getCurrentSession():Promise<SessionLike>{
   return auth();
 }
 
+function sessionUserId(session:SessionLike):string | null{
+  const user=session?.user;
+  if(!user || !("id" in user)){
+    return null;
+  }
+
+  const id=(user as {id?:unknown}).id;
+  return typeof id==="string" && id.trim().length>0 ? id.trim() : null;
+}
+
 export async function requireUserScope(
   getSession:SessionGetter=getCurrentSession,
 ):Promise<UserScope>{
-  const session=await getSession();
-  const userId=session?.user?.id?.trim();
+  const userId=sessionUserId(await getSession());
 
   if(!userId){
     throw new AuthenticationRequiredError();
