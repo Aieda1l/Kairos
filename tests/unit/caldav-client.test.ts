@@ -118,7 +118,7 @@ describe("Apple iCloud CalDAV client",()=>{
         headers:new Headers(init?.headers),
         body:String(init?.body??""),
       });
-      if((init?.method??"GET")==="HEAD")return new Response(null,{status:200,headers:{etag:"etag-current"}});
+      if((init?.method??"GET")==="GET")return new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",{status:200,headers:{etag:"etag-current"}});
       if(init?.method==="DELETE")return new Response(null,{status:204});
       return new Response(null,{status:201,headers:{etag:"etag-next"}});
     });
