@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type { SubmissionStatusWrite } from "@/lib/submission-status/types";
 import { normalizeSourceAssignment } from "@/lib/assignments/normalize";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
@@ -43,7 +43,7 @@ type SyncOptions={
 };
 
 export async function syncEdConnection(
-  db:Database.Database,
+  db:LegacyDatabase,
   options:SyncOptions={},
 ):Promise<EdSyncResult>{
   const fetchImpl=options.fetchImpl??fetch;
