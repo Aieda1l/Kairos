@@ -1,15 +1,19 @@
-import { getDatabase } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
+import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 import {
   startCanvasSubmissionStatusSync,
   SubmissionStatusSyncServiceError,
 } from "@/lib/submission-status/sync-service";
 
 export async function POST(){
-  const db=getDatabase();
-  migrate(db);
+  const resolved=await resolveSourceApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
+
   try{
-    return Response.json(startCanvasSubmissionStatusSync(db));
+    const result=runtime.kind==="legacy"
+      ?startCanvasSubmissionStatusSync(runtime.db)
+      :await startCanvasSubmissionStatusSync(runtime.db,runtime.scope);
+    return Response.json(result);
   }catch(error){
     if(error instanceof SubmissionStatusSyncServiceError){
       return Response.json(
