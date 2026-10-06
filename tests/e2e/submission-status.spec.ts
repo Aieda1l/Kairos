@@ -123,6 +123,10 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
 
   await page.getByRole("button",{name:"Sync All"}).click();
   await expect.poll(()=>startRequests).toBe(2);
+  await expect.poll(async()=>page.evaluate(()=>{
+    const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;
+    return capture?.syncRequests??0;
+  })).toBe(2);
   await expect(page.getByText("Fixture Homework")).toHaveCount(0);
 
   const bridgeCapture=await page.evaluate(()=>{
