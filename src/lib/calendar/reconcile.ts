@@ -137,6 +137,22 @@ export async function reconcileCalendarConnection(
     const hash=hashCalendarProjection(projection);
     try{
       if(!link.remoteEventId){
+        if(adapter.findEventByAssignment){
+          const existing=await adapter.findEventByAssignment(
+            connection.remoteCalendarId!,
+            projection.assignmentId,
+          );
+          if(existing){
+            const adopted=await adapter.updateEvent(
+              connection.remoteCalendarId!,
+              existing.remoteEventId,
+              projection,
+              existing.etag,
+            );
+            links.markSynced(link.id,adopted.remoteEventId,adopted.etag,hash,completedAt);
+            return {kind:"updated"};
+          }
+        }
         const created=await adapter.createEvent(connection.remoteCalendarId!,projection,link.syncKey);
         links.markSynced(link.id,created.remoteEventId,created.etag,hash,completedAt);
         return {kind:"created"};
@@ -144,12 +160,32 @@ export async function reconcileCalendarConnection(
 
       const remote=await adapter.getEvent(connection.remoteCalendarId!,link.remoteEventId);
       if(!remote){
+        if(adapter.findEventByAssignment){
+          const existing=await adapter.findEventByAssignment(
+            connection.remoteCalendarId!,
+            projection.assignmentId,
+          );
+          if(existing){
+            const adopted=await adapter.updateEvent(
+              connection.remoteCalendarId!,
+              existing.remoteEventId,
+              projection,
+              existing.etag,
+            );
+            links.markSynced(link.id,adopted.remoteEventId,adopted.etag,hash,completedAt);
+            return {kind:"updated"};
+          }
+        }
         const created=await adapter.createEvent(connection.remoteCalendarId!,projection,link.syncKey);
         links.markSynced(link.id,created.remoteEventId,created.etag,hash,completedAt);
         return {kind:"created"};
       }
 
-      if(link.contentHash===hash){
+      const needsManagedIdentity=
+        Boolean(adapter.findEventByAssignment)
+        &&remote.managedAssignmentId!==projection.assignmentId;
+
+      if(link.contentHash===hash&&!needsManagedIdentity){
         return {kind:"unchanged"};
       }
 
