@@ -4,6 +4,11 @@ import {migrate} from "../helpers/legacy-db";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
 
+const calendarRuntime=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock("@/lib/platform/calendar-runtime",()=>({
+  getCalendarRouteRuntime:calendarRuntime.get,
+}));
+
 async function getRoute(){return import("@/app/api/calendars/route");}
 async function syncOneRoute(){return import("@/app/api/calendars/[id]/sync/route");}
 async function disconnectRoute(){return import("@/app/api/calendars/[id]/disconnect/route");}
@@ -21,6 +26,10 @@ describe("calendar destination API",()=>{
   beforeEach(()=>{
     process.env.ASSIGNMENTS_DB_PATH=":memory:";
     resetDatabaseSingletonForTests();
+    calendarRuntime.get.mockImplementation(async()=>({
+      kind:"legacy" as const,
+      db:getDatabase(),
+    }));
   });
   afterEach(()=>{
     resetDatabaseSingletonForTests();

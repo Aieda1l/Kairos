@@ -5,6 +5,11 @@ import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-conne
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
 import {resetOAuthRequestRegistryForTests} from "@/lib/calendar/oauth-registry";
 
+const calendarRuntime=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock("@/lib/platform/calendar-runtime",()=>({
+  getCalendarRouteRuntime:calendarRuntime.get,
+}));
+
 async function googleStart(){return import("@/app/api/calendars/google/start/route");}
 async function googleCallback(){return import("@/app/api/calendars/google/callback/route");}
 async function microsoftStart(){return import("@/app/api/calendars/microsoft/start/route");}
@@ -23,6 +28,10 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     process.env.MICROSOFT_CALENDAR_CLIENT_ID="fixture-ms-client";
     process.env.MICROSOFT_CALENDAR_TENANT="common";
     resetDatabaseSingletonForTests();
+    calendarRuntime.get.mockImplementation(async()=>({
+      kind:"legacy" as const,
+      db:getDatabase(),
+    }));
     resetOAuthRequestRegistryForTests();
   });
   afterEach(()=>{
