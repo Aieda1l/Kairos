@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
-import { useSubmissionStatusSync } from "@/features/submission-status/submission-status-provider";
-import { useGradescope } from "@/features/gradescope/gradescope-provider";
-import { useEd } from "@/features/ed/ed-provider";
+import {useState} from "react";
+import {useRouter} from "next/navigation";
+import {RefreshCw} from "lucide-react";
+import {Button} from "@/components/ui/button";
+import {Alert} from "@/components/ui/alert";
+import {useSubmissionStatusSync} from "@/features/submission-status/submission-status-provider";
+import {useGradescope} from "@/features/gradescope/gradescope-provider";
+import {useEd} from "@/features/ed/ed-provider";
+import {useCalendarSync} from "@/features/calendars/calendar-provider";
 
 async function responseMessage(response:Response,fallback:string):Promise<string>{
   try{
@@ -25,6 +26,7 @@ export function ConnectedSourceSyncControls({
   const submission=useSubmissionStatusSync();
   const gradescope=useGradescope();
   const ed=useEd();
+  const calendars=useCalendarSync();
   const [running,setRunning]=useState(false);
   const [canvasError,setCanvasError]=useState("");
 
@@ -42,7 +44,7 @@ export function ConnectedSourceSyncControls({
 
   if(!hasAnySource)return null;
 
-  const warnings=[
+  const sourceWarnings=[
     canvasError&&"Canvas deadlines: "+canvasError,
     canvasConnected&&["error","partial"].includes(submission.phase)&&submission.message
       ?"Canvas submissions: "+submission.message
@@ -55,6 +57,14 @@ export function ConnectedSourceSyncControls({
       :"",
   ].filter(Boolean) as string[];
 
+  const calendarWarnings=calendars.connections.flatMap(connection=>{
+    const phase=calendars.phaseFor(connection.id);
+    const message=calendars.messageFor(connection.id);
+    return phase==="error"&&message
+      ?["Calendar destinations: "+message]
+      :[];
+  });
+
   async function syncAll(){
     if(running||sourceBusy)return;
     setRunning(true);
@@ -63,7 +73,10 @@ export function ConnectedSourceSyncControls({
     try{
       if(canvasConnected){
         try{
-          const response=await fetch("/api/sources/canvas/sync",{method:"POST"});
+          const response=await fetch("/api/sources/canvas/sync",{
+            method:"POST",
+            headers:{"x-kairos-calendar-sync":"defer"},
+          });
           if(!response.ok){
             setCanvasError(await responseMessage(response,"Canvas deadline sync failed."));
           }
@@ -71,12 +84,17 @@ export function ConnectedSourceSyncControls({
           setCanvasError("Canvas deadline sync failed.");
         }
 
-        await submission.syncNow();
+        await submission.syncNow({deferCalendarSync:true});
       }
 
-      if(gradescopeEligible)await gradescope.syncNow();
-      if(edEligible)await ed.syncNow();
+      if(gradescopeEligible){
+        await gradescope.syncNow({deferCalendarSync:true});
+      }
+      if(edEligible){
+        await ed.syncNow({deferCalendarSync:true});
+      }
 
+      await calendars.syncAll();
       router.refresh();
     }finally{
       setRunning(false);
@@ -94,9 +112,14 @@ export function ConnectedSourceSyncControls({
       <RefreshCw size={17} className={syncing?"animate-spin":""} aria-hidden="true"/>
       {syncing?"Syncing…":"Sync All"}
     </Button>
-    {warnings.length>0&&(
+    {sourceWarnings.length>0&&(
       <Alert className="basis-full">
-        {warnings.join(" · ")}
+        {sourceWarnings.join(" · ")}
+      </Alert>
+    )}
+    {calendarWarnings.length>0&&(
+      <Alert className="basis-full">
+        {calendarWarnings.join(" · ")}
       </Alert>
     )}
   </div>;
