@@ -129,13 +129,62 @@ describe("Microsoft Calendar client",()=>{
     );
   });
 
-  it("lets explicit connect create the Kairos calendar",async()=>{
-    const fetchMock=vi.fn(async()=>Response.json({id:"new-calendar",name:"Kairos"}));
+  it("reuses an existing Kairos calendar before creating another on reconnect",async()=>{
+    const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+      expect(String(input)).toBe("https://graph.microsoft.com/v1.0/me/calendars");
+      expect(init?.method??"GET").toBe("GET");
+      return Response.json({value:[
+        {id:"other-calendar",name:"Personal"},
+        {id:"existing-kairos",name:"Kairos"},
+      ]});
+    });
+    const adapter=new MicrosoftCalendarAdapter(
+      connection({remoteCalendarId:null,remoteCalendarName:null}),
+      new MicrosoftCalendarClient("fixture-access",fetchMock as typeof fetch),
+    );
+    await expect(adapter.ensureCalendar()).resolves.toEqual({
+      remoteCalendarId:"existing-kairos",
+      name:"Kairos",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates the Kairos calendar only when no exact existing calendar is present",async()=>{
+    const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+      if((init?.method??"GET")==="GET"){
+        return Response.json({value:[{id:"other-calendar",name:"Personal"}]});
+      }
+      expect(String(input)).toBe("https://graph.microsoft.com/v1.0/me/calendars");
+      expect(init?.method).toBe("POST");
+      return Response.json({id:"new-calendar",name:"Kairos"},{status:201});
+    });
     const adapter=new MicrosoftCalendarAdapter(
       connection({remoteCalendarId:null,remoteCalendarName:null}),
       new MicrosoftCalendarClient("fixture-access",fetchMock as typeof fetch),
     );
     await expect(adapter.ensureCalendar()).resolves.toEqual({remoteCalendarId:"new-calendar",name:"Kairos"});
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces a safe Microsoft Graph error code without echoing provider messages",async()=>{
+    const client=new MicrosoftCalendarClient(
+      "fixture-access",
+      vi.fn(async()=>Response.json({
+        error:{
+          code:"MailboxNotEnabledForRESTAPI",
+          message:"private provider diagnostic that should not be echoed",
+        },
+      },{status:400})) as unknown as typeof fetch,
+    );
+    try{
+      await client.createCalendar("Kairos");
+      throw new Error("expected rejection");
+    }catch(error){
+      expect(error).toBeInstanceOf(CalendarSyncError);
+      expect(error).toMatchObject({code:"CALENDAR_UPSTREAM_ERROR"});
+      expect((error as Error).message).toContain("MailboxNotEnabledForRESTAPI");
+      expect((error as Error).message).not.toContain("private provider diagnostic");
+    }
   });
 
   it.each([
