@@ -4,10 +4,12 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
 import { GradescopeProvider } from "@/features/gradescope/gradescope-provider";
 import { EdProvider } from "@/features/ed/ed-provider";
+import { CalendarSyncProvider } from "@/features/calendars/calendar-provider";
 import { getDatabase } from "@/lib/db/client";
 import { migrate } from "@/lib/db/migrate";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
+import { CalendarConnectionRepository } from "@/lib/db/repositories/calendar-connections";
 import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
 import { parseCanvasAssignmentLocator } from "@/lib/submission-status/canvas-locator";
@@ -45,6 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const connections = new SourceConnectionRepository(db);
   const statuses = new SubmissionStatusRepository(db);
+  const calendarConnections = new CalendarConnectionRepository(db).list();
 
   const canvasConnection = connections.getByKind("canvas");
   const canvasAssignments = new AssignmentRepository(db).list({ source: "canvas" });
@@ -73,6 +76,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <ThemeProvider>
+      <CalendarSyncProvider initialConnections={calendarConnections}>
       <EdProvider connection={edConnection} initialCourses={edCourses} initialSyncState={edSyncState}>
       <GradescopeProvider
         connection={gradescopeConnection}
@@ -87,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </SubmissionStatusProvider>
       </GradescopeProvider>
       </EdProvider>
+      </CalendarSyncProvider>
     </ThemeProvider>
   );
 }
