@@ -187,4 +187,9 @@ export function migrate(db: Database.Database): void {
     VALUES ('timezone', 'America/Los_Angeles', ?)
     ON CONFLICT(key) DO NOTHING
   `).run(now);
+  db.prepare(`
+    INSERT INTO app_settings(key, value, updated_at)
+    VALUES ('calendar_hide_submitted', '1', ?)
+    ON CONFLICT(key) DO NOTHING
+  `).run(now);
 }
