@@ -11,6 +11,8 @@ export interface LegacyStatement{
 
 export interface LegacyDatabase{
   prepare(sql:string):LegacyStatement;
-  transaction<T extends (...args:never[])=>unknown>(fn:T):T;
+  transaction<Args extends unknown[],Result>(
+    fn:(...args:Args)=>Result,
+  ):(...args:Args)=>Result;
   exec(sql:string):unknown;
 }
