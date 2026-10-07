@@ -1,5 +1,6 @@
 import "server-only";
 import NextAuth from "next-auth";
+import {NextRequest} from "next/server";
 import {
   createAuthConfig,
   type AuthDatabase,
@@ -31,3 +32,27 @@ const runtimeEnv=await loadRuntimeEnvironment();
 export const {handlers,auth,signIn,signOut}=NextAuth(
   createAuthConfig(runtimeEnv.DB,runtimeEnv),
 );
+
+function requestOrigin(headers:Headers):string{
+  const forwardedHost=headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host=forwardedHost||headers.get("host")?.trim()||"localhost";
+  const forwardedProto=headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol=forwardedProto==="http"||forwardedProto==="https"
+    ?forwardedProto
+    :/^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host)
+      ?"http"
+      :"https";
+  return `${protocol}://${host}`;
+}
+
+export async function getAuthSessionFromHeaders(
+  input:Headers,
+):Promise<unknown|null>{
+  const headers=new Headers(input);
+  const response=await handlers.GET(new NextRequest(
+    `${requestOrigin(headers)}/api/auth/session`,
+    {headers},
+  ));
+  if(!response.ok)return null;
+  return response.json();
+}

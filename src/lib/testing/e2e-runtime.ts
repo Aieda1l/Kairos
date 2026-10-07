@@ -1,11 +1,12 @@
 import "server-only";
+import {
+  AuthenticationRequiredError,
+  requireUserScope,
+} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
-
-export const DEFAULT_E2E_USER_ID="kairos-e2e-user";
 
 export type E2EFixtureRuntime={
   db:D1DatabaseLike;
-  userId:string;
 };
 
 export async function getE2EFixtureRuntime():Promise<E2EFixtureRuntime|null>{
@@ -24,14 +25,19 @@ export async function getE2EFixtureRuntime():Promise<E2EFixtureRuntime|null>{
   const db=workerEnv.DB as D1DatabaseLike|undefined;
   if(!db)throw new Error("E2E fixture D1 binding is unavailable.");
 
-  const configured=
-    process.env.KAIROS_E2E_USER_ID
-    ??(typeof workerEnv.KAIROS_E2E_USER_ID==="string"
-      ?workerEnv.KAIROS_E2E_USER_ID
-      :undefined);
+  return {db};
+}
 
-  return {
-    db,
-    userId:configured?.trim()||DEFAULT_E2E_USER_ID,
-  };
+export async function getAuthenticatedE2EFixtureRuntime():Promise<
+  (E2EFixtureRuntime&{userId:string})|null
+>{
+  const runtime=await getE2EFixtureRuntime();
+  if(!runtime)return null;
+  try{
+    const scope=await requireUserScope();
+    return {...runtime,userId:scope.userId};
+  }catch(error){
+    if(error instanceof AuthenticationRequiredError)return null;
+    throw error;
+  }
 }

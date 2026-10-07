@@ -1,5 +1,5 @@
 import {expect,test} from "@playwright/test";
-import {waitForAppHydration} from "./helpers";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type FixtureEvent={
   id:string;
@@ -14,9 +14,9 @@ type FixtureState={
   events:FixtureEvent[];
 };
 
-test("publishes Canvas deadlines to iCloud idempotently without exposing calendar credentials",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("publishes Canvas deadlines to iCloud idempotently without exposing calendar credentials",async({page,context})=>{
+  await prepareFixtureUser(context);
+  const request=context.request;
 
   const canvasSecret="fixture-secret-never-echo";
   const appPassword="fixture-app-password-never-echo";

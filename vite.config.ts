@@ -25,8 +25,14 @@ export default defineConfig({
           vars:{
             ...config.vars,
             E2E_FIXTURES:"1",
-            KAIROS_E2E_USER_ID:process.env.KAIROS_E2E_USER_ID??"kairos-e2e-user",
             KAIROS_CREDENTIAL_KEY_V1:process.env.KAIROS_CREDENTIAL_KEY_V1??"",
+            AUTH_SECRET:process.env.AUTH_SECRET??"kairos-e2e-auth-secret",
+            AUTH_GOOGLE_ID:process.env.AUTH_GOOGLE_ID??"kairos-e2e-google-id",
+            AUTH_GOOGLE_SECRET:process.env.AUTH_GOOGLE_SECRET??"kairos-e2e-google-secret",
+            AUTH_MICROSOFT_ENTRA_ID_ID:
+              process.env.AUTH_MICROSOFT_ENTRA_ID_ID??"kairos-e2e-microsoft-id",
+            AUTH_MICROSOFT_ENTRA_ID_SECRET:
+              process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET??"kairos-e2e-microsoft-secret",
           },
         }
         :{},

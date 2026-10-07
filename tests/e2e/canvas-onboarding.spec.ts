@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
-import {waitForAppHydration} from "./helpers";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
-test("connect Canvas, sync once, and see one assignment in every view",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("connect Canvas, sync once, and see one assignment in every view",async({page,context})=>{
+  await prepareFixtureUser(context);
 
   const secret="fixture-secret-never-echo";
   const responseBodies:string[]=[];

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {waitForAppHydration} from "./helpers";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type BridgeCapture = {
   messages: string[];
@@ -7,9 +7,8 @@ type BridgeCapture = {
   releaseFirstSync: () => void;
 };
 
-test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,context})=>{
+  await prepareFixtureUser(context);
   const apiBodies:string[]=[];
   let startRequests=0;
 

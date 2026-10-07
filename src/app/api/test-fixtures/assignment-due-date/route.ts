@@ -1,11 +1,11 @@
 import {z} from "zod";
-import {getE2EFixtureRuntime} from "@/lib/testing/e2e-runtime";
+import {getAuthenticatedE2EFixtureRuntime} from "@/lib/testing/e2e-runtime";
 
 const schema=z.object({dueAt:z.string().datetime()}).strict();
 const FIXTURE_EXTERNAL_ID="event-assignment-4242";
 
 export async function POST(request:Request){
-  const runtime=await getE2EFixtureRuntime();
+  const runtime=await getAuthenticatedE2EFixtureRuntime();
   if(!runtime){
     return new Response("Not found",{status:404});
   }

@@ -17,31 +17,12 @@ export class AuthenticationRequiredError extends Error{
   }
 }
 
-async function getE2EFixtureUserId():Promise<string|null>{
-  if(process.env.E2E_FIXTURES==="1"){
-    return process.env.KAIROS_E2E_USER_ID?.trim()||"kairos-e2e-user";
-  }
-
-  try{
-    const {env}=await import("cloudflare:workers");
-    if(env.E2E_FIXTURES==="1"){
-      const configured=typeof env.KAIROS_E2E_USER_ID==="string"
-        ?env.KAIROS_E2E_USER_ID.trim()
-        :"";
-      return configured||"kairos-e2e-user";
-    }
-  }catch{
-    // Non-Workers compatibility and unit-test environments have no binding module.
-  }
-  return null;
-}
-
 async function getCurrentSession():Promise<SessionLike>{
-  const fixtureUserId=await getE2EFixtureUserId();
-  if(fixtureUserId)return {user:{id:fixtureUserId}};
-
-  const {auth}=await import("../../../auth");
-  return auth();
+  const [{headers},{getAuthSessionFromHeaders}]=await Promise.all([
+    import("next/headers"),
+    import("../../../auth"),
+  ]);
+  return getAuthSessionFromHeaders(new Headers(await headers())) as Promise<SessionLike>;
 }
 
 function sessionUserId(session:SessionLike):string | null{

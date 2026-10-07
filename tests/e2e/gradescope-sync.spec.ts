@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {waitForAppHydration} from "./helpers";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type GradescopeCapture={
   messages:string[];
@@ -7,9 +7,8 @@ type GradescopeCapture={
   syncRequests:number;
 };
 
-test("discovers and syncs Gradescope without exposing authenticated page data",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("discovers and syncs Gradescope without exposing authenticated page data",async({page,context})=>{
+  await prepareFixtureUser(context);
 
   const apiBodies:string[]=[];
   page.on("request",req=>{

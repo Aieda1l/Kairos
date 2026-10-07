@@ -18,14 +18,13 @@ export default defineConfig({
     env:{
       ...process.env,
       E2E_FIXTURES:"1",
-      KAIROS_E2E_USER_ID:"kairos-e2e-user",
       KAIROS_CREDENTIAL_KEY_V1:e2eCredentialKey,
     },
   },
   projects:[
     {
       name:"chromium",
-      testMatch:/(canvas-onboarding|ed-sync|calendar-sync)\.spec\.ts/,
+      testMatch:/(canvas-onboarding|ed-sync|calendar-sync|multi-user-isolation)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
