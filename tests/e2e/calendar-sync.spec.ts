@@ -1,4 +1,5 @@
 import {expect,test} from "@playwright/test";
+import {waitForAppHydration} from "./helpers";
 
 type FixtureEvent={
   id:string;
@@ -30,6 +31,7 @@ test("publishes Canvas deadlines to iCloud idempotently without exposing calenda
   });
 
   await page.goto("/sources");
+  await waitForAppHydration(page);
   const canvasCard=page.locator("section").filter({
     has:page.getByRole("heading",{name:"Canvas",exact:true}),
   });

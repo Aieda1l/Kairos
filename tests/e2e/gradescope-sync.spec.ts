@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import {waitForAppHydration} from "./helpers";
 
 type GradescopeCapture={
   messages:string[];
@@ -139,6 +140,7 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
   });
 
   await page.goto("/sources");
+  await waitForAppHydration(page);
   await page.getByRole("button",{name:"Discover courses"}).click();
   await expect(page.getByRole("checkbox",{name:/CSE 331/})).toBeVisible();
 
@@ -150,6 +152,8 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
       window as Window&{__gradescopeCapture?:GradescopeCapture}
     ).__gradescopeCapture?.syncRequests??0);
   }).toBeGreaterThan(0);
+  await expect(page.getByText(/Last successful/)).toBeVisible();
+  await page.waitForLoadState("networkidle");
 
   await page.getByRole("link",{name:"All Assignments"}).click();
   await expect(page).toHaveURL(/\/assignments$/);

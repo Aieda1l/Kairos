@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import {waitForAppHydration} from "./helpers";
 
 test("connect Canvas, sync once, and see one assignment in every view",async({page,request})=>{
   const reset=await request.post("/api/test-fixtures/reset");
@@ -13,6 +14,7 @@ test("connect Canvas, sync once, and see one assignment in every view",async({pa
   });
 
   await page.goto("/sources");
+  await waitForAppHydration(page);
   const canvasCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Canvas",exact:true})});
   const feedUrl=`http://127.0.0.1:3000/api/test-fixtures/canvas-feed?token=${secret}`;
   await canvasCard.getByLabel("Canvas calendar feed URL").fill(feedUrl);

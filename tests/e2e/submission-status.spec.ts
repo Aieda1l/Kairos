@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import {waitForAppHydration} from "./helpers";
 
 type BridgeCapture = {
   messages: string[];
@@ -98,6 +99,7 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
 
   const secret="fixture-secret-never-echo";
   await page.goto("/sources");
+  await waitForAppHydration(page);
   const canvasCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Canvas",exact:true})});
   const feedUrl=`http://127.0.0.1:3000/api/test-fixtures/canvas-feed?token=${secret}`;
   await canvasCard.getByLabel("Canvas calendar feed URL").fill(feedUrl);

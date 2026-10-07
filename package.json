@@ -20,6 +20,7 @@
     "deploy:cloudflare": "npx @vinext/cloudflare deploy",
     "db:migrate:local": "npx wrangler d1 migrations apply kairos --local",
     "db:verify": "node scripts/verify-d1-migrations.mjs",
+    "verify:hosted": "node scripts/verify-production-safety.mjs",
     "dev:next-compat": "next dev"
   },
   "dependencies": {

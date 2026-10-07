@@ -36,7 +36,6 @@ jobs:
         run: |
           set -o pipefail
           npm test 2>&1 | tee vitest.log
-      - run: npm run db:verify
       - name: Run lint
         shell: bash
         run: |
@@ -47,10 +46,7 @@ jobs:
         run: |
           set -o pipefail
           npm run typecheck 2>&1 | tee typecheck.log
-      - name: Check vinext compatibility
-        run: npx vinext check
-      - name: Build vinext Workers target
-        run: npm run build:vinext
+      - run: npm run db:verify
       - run: npm run build:extension
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e
@@ -67,9 +63,20 @@ jobs:
             test-results
           if-no-files-found: ignore
       - run: npm run build
+      - name: Check vinext compatibility
+        run: npx vinext check
+      - name: Build vinext Workers target
+        run: npm run build:vinext
       - run: node scripts/verify-dynamic-dashboard-build.mjs
+      - run: npm run verify:hosted
       - name: Review prohibited credential/permission patterns
-        run: git grep -nE '(cookies.*permission|<all_urls>|webRequest|authorization.*:|password.*(canvas|gradescope)|(canvas\.uw\.edu|gradescope\.com).*cookie|csrf.*gradescope)' -- extension src tests ':!tests/fixtures/**' || true
+        shell: bash
+        run: |
+          npm test -- tests/integration/secret-exposure.test.ts extension/firefox/tests/manifest.test.ts
+          if git grep -nE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AIza[0-9A-Za-z_-]{30,}|ghp_[0-9A-Za-z]{30,}|sk-[0-9A-Za-z]{20,}' -- src extension ':!extension/firefox/dist/**'; then
+            echo "Potential committed credential pattern detected."
+            exit 1
+          fi
       - name: Publish feature CI status
         if: always()
         env:
