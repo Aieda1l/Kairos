@@ -12,6 +12,7 @@ import { resetSubmissionSyncRequestRegistryForTests } from "@/lib/submission-sta
 let dbPath:string;
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-submission-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   resetDatabaseSingletonForTests();
@@ -19,6 +20,7 @@ beforeEach(()=>{
 });
 
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   resetDatabaseSingletonForTests();
   resetSubmissionSyncRequestRegistryForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
