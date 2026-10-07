@@ -11,12 +11,14 @@ import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
 let dbPath:string;
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-ed-sync-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   process.env.E2E_FIXTURES="0";
   resetDatabaseSingletonForTests();
 });
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   vi.unstubAllGlobals();
   resetDatabaseSingletonForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
