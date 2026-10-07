@@ -9,6 +9,23 @@ function read(relativePath:string):string{
 }
 
 describe("Cloudflare runtime configuration",()=>{
+  it("uses D1-backed vinext as the default local development runtime",()=>{
+    const pkg=JSON.parse(read("package.json")) as {
+      scripts?:Record<string,string>;
+      dependencies?:Record<string,string>;
+    };
+    expect(pkg.scripts?.dev).toMatch(/vite/);
+    expect(pkg.scripts?.dev).not.toMatch(/next dev/);
+    expect(pkg.scripts?.["dev:next-compat"]).toMatch(/next dev/);
+    expect(pkg.dependencies?.["better-sqlite3"]).toBeUndefined();
+
+    const playwright=read("playwright.config.ts");
+    expect(playwright).toContain("db:migrate:local");
+    expect(playwright).toContain("dev:vinext");
+    expect(playwright).not.toContain("ASSIGNMENTS_DB_PATH");
+    expect(playwright).not.toContain("e2e.sqlite");
+  });
+
   it("defines vinext development and build scripts",()=>{
     const pkg=JSON.parse(read("package.json")) as {scripts?:Record<string,string>};
     expect(pkg.scripts?.["dev:vinext"]).toBeTypeOf("string");
