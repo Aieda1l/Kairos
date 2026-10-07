@@ -2,12 +2,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 
 const persistTo=mkdtempSync(path.join(tmpdir(),"kairos-d1-"));
-const npx=process.platform==="win32"?"npx.cmd":"npx";
+const require=createRequire(import.meta.url);
+const wranglerPackageJson=require.resolve("wrangler/package.json");
+const wranglerCli=path.join(path.dirname(wranglerPackageJson),"bin","wrangler.js");
 
 function wrangler(args,{allowFailure=false}={}){
-  const result=spawnSync(npx,["wrangler",...args],{
+  const result=spawnSync(process.execPath,[wranglerCli,...args],{
     cwd:process.cwd(),
     encoding:"utf8",
     env:{...process.env,CI:"1",NO_D1_WARNING:"true"},

@@ -107,7 +107,13 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
 - `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
-## Milestone 6 — Multi-user hosted foundation — Implementation in progress — 6A foundation complete
+## Milestone 6 — Multi-user hosted foundation — Implementation in progress — 6A–6B complete; 6C next
+
+Completed through 6B:
+- Cloudflare Workers/vinext, D1, Auth.js, and tenant schema foundation;
+- AES-GCM hosted credential encryption plus durable, user-bound browser-sync and calendar-OAuth request state;
+- tenant-scoped D1 repositories, services, APIs, calendar reconciliation, and dashboard reads;
+- production runtime removal of legacy SQLite, with `better-sqlite3` retained only for test harnesses.
 
 Planned:
 - production hosting at `https://mykairos.me` on Cloudflare Workers with D1 persistence;
