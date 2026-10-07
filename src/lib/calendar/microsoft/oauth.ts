@@ -44,9 +44,16 @@ export function getMicrosoftCalendarConfig(
       "Microsoft Calendar client configuration is missing.",
     );
   }
+  const clientSecret=env.MICROSOFT_CALENDAR_CLIENT_SECRET?.trim()||null;
+  if(env.KAIROS_APP_URL?.trim()&&!clientSecret){
+    throw new CalendarSyncError(
+      "CALENDAR_CONFIG_MISSING",
+      "Microsoft Calendar hosted client secret is missing.",
+    );
+  }
   return {
     clientId,
-    clientSecret:env.MICROSOFT_CALENDAR_CLIENT_SECRET?.trim()||null,
+    clientSecret,
     tenant:tenantSegment(env.MICROSOFT_CALENDAR_TENANT?.trim()||"common"),
   };
 }

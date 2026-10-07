@@ -6,8 +6,17 @@ import {
   getMicrosoftCalendarConfig,
   refreshMicrosoftAccessToken,
 } from "@/lib/calendar/microsoft/oauth";
+import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 
 describe("Microsoft Calendar OAuth",()=>{
+  it("uses the exact production origin for Microsoft callbacks",()=>{
+    expect(getOAuthRedirectUri(
+      "https://forwarded-host.example/api/calendars/microsoft/start",
+      "/api/calendars/microsoft/callback",
+      {KAIROS_APP_URL:"https://mykairos.me"},
+    )).toBe("https://mykairos.me/api/calendars/microsoft/callback");
+  });
+
   it("uses the public-client PKCE flow with only offline calendar write scopes",()=>{
     const url=buildMicrosoftAuthorizationUrl({
       clientId:"fixture-ms-client",
@@ -45,6 +54,15 @@ describe("Microsoft Calendar OAuth",()=>{
       MICROSOFT_CALENDAR_CLIENT_SECRET:"hosted-secret",
       MICROSOFT_CALENDAR_TENANT:"organizations",
     })).toEqual({clientId:"client",clientSecret:"hosted-secret",tenant:"organizations"});
+    expect(()=>getMicrosoftCalendarConfig({
+      KAIROS_APP_URL:"https://mykairos.me",
+      MICROSOFT_CALENDAR_CLIENT_ID:"client",
+    })).toThrowError(expect.objectContaining({code:"CALENDAR_CONFIG_MISSING"}));
+    expect(getMicrosoftCalendarConfig({
+      KAIROS_APP_URL:"https://mykairos.me",
+      MICROSOFT_CALENDAR_CLIENT_ID:"client",
+      MICROSOFT_CALENDAR_CLIENT_SECRET:"hosted-secret",
+    })).toEqual({clientId:"client",clientSecret:"hosted-secret",tenant:"common"});
     expect(()=>getMicrosoftCalendarConfig({})).toThrowError(expect.objectContaining({
       code:"CALENDAR_CONFIG_MISSING",
     }));

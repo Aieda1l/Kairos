@@ -27,6 +27,7 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     delete process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
     process.env.MICROSOFT_CALENDAR_CLIENT_ID="fixture-ms-client";
     process.env.MICROSOFT_CALENDAR_TENANT="common";
+    delete process.env.KAIROS_APP_URL;
     resetDatabaseSingletonForTests();
     calendarRuntime.get.mockImplementation(async()=>{
       const db=getDatabase();
@@ -43,6 +44,8 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     delete process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
     delete process.env.MICROSOFT_CALENDAR_CLIENT_ID;
     delete process.env.MICROSOFT_CALENDAR_TENANT;
+    delete process.env.MICROSOFT_CALENDAR_CLIENT_SECRET;
+    delete process.env.KAIROS_APP_URL;
   });
 
   it("starts Google OAuth only from a loopback origin and never returns the verifier",async()=>{
@@ -68,6 +71,23 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     const url=new URL(body.authorizationUrl);
     expect(url.hostname).toBe("login.microsoftonline.com");
     expect(url.searchParams.get("scope")).toBe("offline_access Calendars.ReadWrite");
+  });
+
+  it("constructs hosted callback URLs from the canonical app URL instead of the request host",async()=>{
+    process.env.KAIROS_APP_URL="https://mykairos.me";
+    process.env.MICROSOFT_CALENDAR_CLIENT_SECRET="fixture-ms-secret";
+
+    const google=await googleStart();
+    const googleResponse=await google.POST(post("https://attacker.example/api/calendars/google/start"));
+    expect(googleResponse.status).toBe(200);
+    expect(new URL((await googleResponse.json()).authorizationUrl).searchParams.get("redirect_uri"))
+      .toBe("https://mykairos.me/api/calendars/google/callback");
+
+    const microsoft=await microsoftStart();
+    const microsoftResponse=await microsoft.POST(post("https://attacker.example/api/calendars/microsoft/start"));
+    expect(microsoftResponse.status).toBe(200);
+    expect(new URL((await microsoftResponse.json()).authorizationUrl).searchParams.get("redirect_uri"))
+      .toBe("https://mykairos.me/api/calendars/microsoft/callback");
   });
 
   it("rejects unknown or replayed Google state before any token request",async()=>{

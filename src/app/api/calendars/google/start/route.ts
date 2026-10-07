@@ -3,7 +3,7 @@ import {
   buildGoogleAuthorizationUrl,
   getGoogleCalendarConfig,
 } from "@/lib/calendar/google/oauth";
-import {getLocalOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
+import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 import {registerOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
@@ -26,9 +26,11 @@ export async function POST(request:Request){
     const resolved=await resolveCalendarApiRuntime();
     if(!resolved.ok)return resolved.response;
     const runtime=resolved.runtime;
-    const redirectUri=runtime.kind==="legacy"
-      ?getLocalOAuthRedirectUri(request.url,"/api/calendars/google/callback")
-      :"https://mykairos.me/api/calendars/google/callback";
+    const redirectUri=getOAuthRedirectUri(
+      request.url,
+      "/api/calendars/google/callback",
+      process.env,
+    );
     const input={
       provider:"google" as const,
       redirectUri,

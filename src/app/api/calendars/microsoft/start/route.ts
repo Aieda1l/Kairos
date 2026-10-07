@@ -3,7 +3,7 @@ import {
   buildMicrosoftAuthorizationUrl,
   getMicrosoftCalendarConfig,
 } from "@/lib/calendar/microsoft/oauth";
-import {getLocalOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
+import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 import {registerOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
@@ -26,9 +26,11 @@ export async function POST(request:Request){
     const resolved=await resolveCalendarApiRuntime();
     if(!resolved.ok)return resolved.response;
     const runtime=resolved.runtime;
-    const redirectUri=runtime.kind==="legacy"
-      ?getLocalOAuthRedirectUri(request.url,"/api/calendars/microsoft/callback")
-      :"https://mykairos.me/api/calendars/microsoft/callback";
+    const redirectUri=getOAuthRedirectUri(
+      request.url,
+      "/api/calendars/microsoft/callback",
+      process.env,
+    );
     const input={
       provider:"microsoft" as const,
       redirectUri,
