@@ -1,6 +1,4 @@
 import "server-only";
-import {getDatabase} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {SourceCredentialRepository} from "@/lib/db/repositories/source-credentials";
@@ -26,8 +24,7 @@ async function syncLegacy(
 ):Promise<SyncSummary>{
   const release=acquireSyncLock(connectionId);
   if(!release)throw new SyncServiceError("SYNC_IN_PROGRESS","A Canvas sync is already running.");
-  const db=deps.db??getDatabase();
-  migrate(db);
+  const db=deps.db;
   const now=deps.now??(()=>new Date());
   const connections=new SourceConnectionRepository(db);
   const credentials=new SourceCredentialRepository(db);
@@ -112,7 +109,7 @@ async function syncHosted(
 
 export function syncCanvasConnection(
   connectionId:string,
-  deps:SyncDependencies={},
+  deps:SyncDependencies,
 ):Promise<SyncSummary>{
   return isHostedSyncDependencies(deps)
     ?syncHosted(connectionId,deps)

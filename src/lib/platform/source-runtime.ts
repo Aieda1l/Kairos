@@ -58,8 +58,13 @@ export async function resolveSourceRuntimeContext(
 export async function getSourceRuntimeContext():Promise<SourceRuntimeContext>{
   const {env}=await import("cloudflare:workers");
   const runtime=env as unknown as SourceWorkerEnvironment;
+  const encodedKey=runtime.KAIROS_CREDENTIAL_KEY_V1
+    ??process.env.KAIROS_CREDENTIAL_KEY_V1;
+  if(!encodedKey){
+    throw new Error("KAIROS_CREDENTIAL_KEY_V1 is required.");
+  }
   return resolveSourceRuntimeContext({
     db:runtime.DB,
-    keyring:credentialKeyringFromEnvironment(runtime.KAIROS_CREDENTIAL_KEY_V1),
+    keyring:credentialKeyringFromEnvironment(encodedKey),
   });
 }

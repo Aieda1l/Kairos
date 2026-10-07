@@ -17,7 +17,7 @@ export type SyncSummary={
 type SourceFactory=(url:URL)=>Pick<CanvasIcalSource,"sync"|"getLastParseReport">;
 
 export type LegacySyncDependencies={
-  db?:LegacyDatabase;
+  db:LegacyDatabase;
   now?:()=>Date;
   sourceFactory?:SourceFactory;
 };
