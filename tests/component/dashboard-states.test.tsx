@@ -18,6 +18,17 @@ it("renders an actionable safe error",()=>{
 });
 
 describe("hosted dashboard data boundary",()=>{
+  it("redirects unauthenticated dashboard access before repository reads",()=>{
+    const source=fs.readFileSync(
+      path.join(process.cwd(),"src/app/(dashboard)/layout.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("AuthenticationRequiredError");
+    expect(source).toContain('redirect("/sign-in?returnTo=/upcoming")');
+    expect(source.indexOf("getSourceRuntimeContext()"))
+      .toBeLessThan(source.indexOf("new D1SourceConnectionRepository"));
+  });
+
   it("does not load dashboard pages through the legacy SQLite runtime",()=>{
     const files=[
       "src/app/(dashboard)/layout.tsx",

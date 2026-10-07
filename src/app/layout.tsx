@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Kairos",
-  description: "A local-first dashboard for your course deadlines.",
+  description: "A coursework dashboard for assignments and deadlines.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

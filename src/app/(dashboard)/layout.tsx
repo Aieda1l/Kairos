@@ -1,4 +1,5 @@
 import { connection as waitForRequest } from "next/server";
+import {redirect} from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
@@ -11,6 +12,7 @@ import { D1CalendarConnectionRepository } from "@/lib/db/d1/repositories/calenda
 import { D1SourceCourseRepository } from "@/lib/db/d1/repositories/source-courses";
 import { D1SubmissionStatusRepository } from "@/lib/db/d1/repositories/submission-status";
 import { getSourceRuntimeContext } from "@/lib/platform/source-runtime";
+import {AuthenticationRequiredError} from "@/lib/auth/user-scope";
 import { parseCanvasAssignmentLocator } from "@/lib/submission-status/canvas-locator";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 import type { GradescopeSyncErrorCode } from "@/lib/extension-protocol/gradescope";
@@ -41,7 +43,16 @@ const emptyGradescopeSyncState: SubmissionStatusSyncState<GradescopeSyncErrorCod
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await waitForRequest();
-  const {db,scope}=await getSourceRuntimeContext();
+  let runtime:Awaited<ReturnType<typeof getSourceRuntimeContext>>;
+  try{
+    runtime=await getSourceRuntimeContext();
+  }catch(error){
+    if(error instanceof AuthenticationRequiredError){
+      redirect("/sign-in?returnTo=/upcoming");
+    }
+    throw error;
+  }
+  const {db,scope}=runtime;
 
   const connections=new D1SourceConnectionRepository(db,scope);
   const statuses=new D1SubmissionStatusRepository(db,scope);

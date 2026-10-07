@@ -1,4 +1,5 @@
 import "server-only";
+import {isSafeReturnTo,safeReturnTo} from "@/lib/auth/return-to";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarProvider} from "@/lib/calendar/types";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -38,7 +39,6 @@ type Row={
 };
 
 const TTL_MS=10*60*1000;
-const CANONICAL_ORIGIN="https://mykairos.me";
 
 function base64Url(bytes:Uint8Array):string{
   let binary="";
@@ -62,21 +62,11 @@ async function sha256Base64Url(value:string):Promise<string>{
 }
 
 function validateReturnTo(value:string|undefined):string{
-  const returnTo=value??"/sources";
-  if(
-    !returnTo.startsWith("/")
-    || returnTo.startsWith("//")
-    || returnTo.includes("\\")
-    || /[\u0000-\u001f\u007f]/.test(returnTo)
-  ){
+  const requested=value??"/sources";
+  if(!isSafeReturnTo(requested)){
     throw new Error("OAuth return target must be a safe internal path.");
   }
-
-  const url=new URL(returnTo,CANONICAL_ORIGIN);
-  if(url.origin!==CANONICAL_ORIGIN){
-    throw new Error("OAuth return target must be a safe internal path.");
-  }
-  return `${url.pathname}${url.search}${url.hash}`;
+  return safeReturnTo(requested,"/sources");
 }
 
 export class D1OAuthRequestRepository{

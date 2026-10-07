@@ -1,5 +1,6 @@
 import "server-only";
 import {createHash,randomBytes} from "node:crypto";
+import {isSafeReturnTo,safeReturnTo} from "@/lib/auth/return-to";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarProvider} from "@/lib/calendar/types";
 import {
@@ -72,11 +73,15 @@ export function registerOAuthRequest(
   const state=randomBase64Url(32);
   const codeVerifier=randomBase64Url(48);
   const expiresAt=new Date(now.getTime()+TTL_MS);
+  const requestedReturnTo=input.returnTo??"/sources";
+  if(!isSafeReturnTo(requestedReturnTo)){
+    throw new Error("OAuth return target must be a safe internal path.");
+  }
   registry.set(state,{
     provider:input.provider,
     codeVerifier,
     redirectUri:input.redirectUri,
-    returnTo:input.returnTo??"/sources",
+    returnTo:safeReturnTo(requestedReturnTo,"/sources"),
     connectionId:input.connectionId??null,
     createdAt:now.toISOString(),
     expiresAt:expiresAt.toISOString(),
