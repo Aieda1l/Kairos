@@ -17,12 +17,14 @@ const enrollment=(id:number,code:string,name:string)=>({
 });
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-ed-connect-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   process.env.E2E_FIXTURES="0";
   resetDatabaseSingletonForTests();
 });
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   vi.unstubAllGlobals();
   resetDatabaseSingletonForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
