@@ -26,6 +26,12 @@ Open `http://localhost:3000`. The root route is the public Kairos homepage; auth
 
 Local development uses the D1-backed vinext runtime and applies local D1 migrations before startup.
 
+## Milestone 6 hosted status
+
+The automated implementation for the multi-user hosted foundation is complete. Production deployment and real-account hosted acceptance at `https://mykairos.me` are still pending, so Milestone 6 is not yet marked complete.
+
+The hosted acceptance gate uses two independent users and verifies production Google/Microsoft sign-in, strict cross-user isolation, Google/Microsoft/iCloud calendar flows, the Firefox bridge on the exact production origin, account deletion isolation, credential non-exposure, and rollback. The checklist is in `docs/deployment/acceptance-milestone-6.md`.
+
 ## Load the Firefox extension
 
 Build the extension first:
@@ -198,12 +204,16 @@ Then run the verification suite:
 npm test
 npm run lint
 npm run typecheck
+npm run db:verify
 npm run build:extension
 npm run test:e2e
 npm run build
+npm run build:vinext
+node scripts/verify-dynamic-dashboard-build.mjs
+node scripts/verify-production-safety.mjs
 ```
 
-The Chromium E2E project covers Canvas iCal onboarding, deterministic Ed API onboarding/sync fixtures, and deterministic iCloud/CalDAV calendar create-repeat-update-delete/recreate behavior. Firefox E2E tests use deterministic page-level extension bridge shims for Canvas submission status and Gradescope discovery/sync. CI never depends on live Canvas, Gradescope, Ed, Google, Microsoft, or iCloud sessions or real credentials.
+The Chromium E2E project covers Canvas iCal onboarding, deterministic Ed API onboarding/sync fixtures, deterministic iCloud/CalDAV calendar create-repeat-update-delete/recreate behavior, and two independent authenticated users with tenant-isolation checks. Firefox E2E tests use deterministic page-level extension bridge shims for Canvas submission status and Gradescope discovery/sync. CI never depends on live Canvas, Gradescope, Ed, Google, Microsoft, or iCloud sessions or real credentials.
 
 ### Real-browser acceptance smoke
 
