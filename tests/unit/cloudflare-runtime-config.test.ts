@@ -14,7 +14,8 @@ describe("Cloudflare runtime configuration",()=>{
       scripts?:Record<string,string>;
       dependencies?:Record<string,string>;
     };
-    expect(pkg.scripts?.dev).toMatch(/vite/);
+    expect(pkg.scripts?.dev).toContain("dev:vinext");
+    expect(pkg.scripts?.["dev:vinext"]).toMatch(/vite/);
     expect(pkg.scripts?.dev).not.toMatch(/next dev/);
     expect(pkg.scripts?.["dev:next-compat"]).toMatch(/next dev/);
     expect(pkg.dependencies?.["better-sqlite3"]).toBeUndefined();
