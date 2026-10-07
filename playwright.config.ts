@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const e2eDb=".data/e2e.sqlite";
-const resetE2eDb=`node -e "const fs=require('node:fs');for(const s of ['','-wal','-shm']){try{fs.rmSync('${e2eDb}'+s)}catch{}}"`;
+const resetLocalD1=`node -e "require('node:fs').rmSync('.wrangler/state',{recursive:true,force:true})"`;
+const e2eCredentialKey="FxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxc";
 
 export default defineConfig({
   testDir:"./tests/e2e",
@@ -12,13 +12,14 @@ export default defineConfig({
     trace:"retain-on-failure",
   },
   webServer:{
-    command:`${resetE2eDb} && npm run dev -- --hostname 127.0.0.1 --port 3000`,
+    command:`${resetLocalD1} && npm run db:migrate:local && npm run dev:vinext -- --host 127.0.0.1`,
     url:"http://127.0.0.1:3000",
     reuseExistingServer:!process.env.CI,
     env:{
       ...process.env,
       E2E_FIXTURES:"1",
-      ASSIGNMENTS_DB_PATH:e2eDb,
+      KAIROS_E2E_USER_ID:"kairos-e2e-user",
+      KAIROS_CREDENTIAL_KEY_V1:e2eCredentialKey,
     },
   },
   projects:[

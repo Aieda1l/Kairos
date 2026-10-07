@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run db:migrate:local && npm run dev:vinext",
     "build": "npm run build:extension && cross-env KAIROS_NEXT_COMPAT_BUILD=1 next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -14,15 +14,15 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "build:extension": "node scripts/build-firefox-extension.mjs",
-    "dev:vinext": "vite dev --port 3001",
+    "dev:vinext": "vite dev --port 3000",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
     "deploy:cloudflare": "npx @vinext/cloudflare deploy",
     "db:migrate:local": "npx wrangler d1 migrations apply kairos --local",
-    "db:verify": "node scripts/verify-d1-migrations.mjs"
+    "db:verify": "node scripts/verify-d1-migrations.mjs",
+    "dev:next-compat": "next dev"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -65,7 +65,8 @@
     "@vitejs/plugin-rsc": "^0.5.35",
     "vite": "^8.3.3",
     "wrangler": "^4.147.0",
-    "cross-env": "^10.1.0"
+    "cross-env": "^10.1.0",
+    "better-sqlite3": "^13.0.3"
   },
   "type": "module"
 }
