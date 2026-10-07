@@ -1,6 +1,6 @@
 # Kairos
 
-Kairos is a local-first assignment dashboard for a UW Seattle student. It combines Canvas deadlines, Canvas submission status, a direct read-only Gradescope connector, a direct read-only Ed connector, and outbound calendar synchronization to Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar.
+Kairos is an assignment dashboard for students. It combines Canvas deadlines, Canvas submission status, a direct read-only Gradescope connector, a direct read-only Ed connector, and outbound calendar synchronization to Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar.
 
 This is a personal tool, not an official University of Washington product. It does not use UW logos and never asks for your UW NetID, Canvas, or Gradescope password.
 
@@ -22,9 +22,9 @@ npm run build:extension
 npm run dev
 ```
 
-Open `http://localhost:3000`. The root route sends you to **Upcoming**.
+Open `http://localhost:3000`. The root route is the public Kairos homepage; authenticated dashboard routes live under **Upcoming**, **Calendar**, **Assignments**, **Sources**, and **Settings**.
 
-By default the local SQLite database is `.data/assignments.sqlite`. You can override it with `ASSIGNMENTS_DB_PATH`; see `.env.example`.
+Local development uses the D1-backed vinext runtime and applies local D1 migrations before startup.
 
 ## Load the Firefox extension
 
@@ -43,7 +43,9 @@ Then in Firefox:
 
 Temporary Firefox add-ons are removed when Firefox restarts, so reload the extension after a restart.
 
-The extension requests only `tabs` plus explicit Kairos, Canvas, and Gradescope host access. It does **not** request cookie, history, downloads, `<all_urls>`, or webRequest interception permissions.
+The extension requests only `tabs` plus explicit Kairos, Canvas, and Gradescope host access. Its page bridge accepts exactly `http://localhost:3000`, `http://127.0.0.1:3000`, and `https://mykairos.me`; it does **not** request cookie, history, downloads, `<all_urls>`, or webRequest interception permissions.
+
+Milestone 6 keeps Firefox installation development/manual: load the extension as a temporary add-on for local or hosted acceptance testing. Mozilla-signed public distribution is planned separately for public-beta readiness.
 
 ## Connect Canvas deadlines
 

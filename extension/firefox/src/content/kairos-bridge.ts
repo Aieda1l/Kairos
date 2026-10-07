@@ -4,9 +4,23 @@ import {
   kairosBridgeResponseV1Schema,
 } from "@/lib/extension-protocol/bridge";
 
-const allowedOrigins=new Set(["http://localhost:3000","http://127.0.0.1:3000"]);
+export const KAIROS_BRIDGE_ORIGINS=[
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://mykairos.me",
+] as const;
 
-if(allowedOrigins.has(window.location.origin)){
+const allowedOrigins=new Set<string>(KAIROS_BRIDGE_ORIGINS);
+
+export function isAllowedKairosOrigin(origin:string):boolean{
+  return allowedOrigins.has(origin);
+}
+
+if(
+  typeof window!=="undefined"
+  && typeof browser!=="undefined"
+  && isAllowedKairosOrigin(window.location.origin)
+){
   window.addEventListener("message",(event:MessageEvent)=>{
     if(event.source!==window||event.origin!==window.location.origin)return;
     const parsed=kairosBridgeRequestV1Schema.safeParse(event.data);
