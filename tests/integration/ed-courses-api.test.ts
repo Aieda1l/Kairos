@@ -12,12 +12,14 @@ let dbPath:string;
 const enrollment=(id:number,code:string,name:string)=>({course:{id,code,name,year:"2026",session:"Autumn"},role:{role:"student"}});
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-ed-courses-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   process.env.E2E_FIXTURES="0";
   resetDatabaseSingletonForTests();
 });
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   vi.unstubAllGlobals();
   resetDatabaseSingletonForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
