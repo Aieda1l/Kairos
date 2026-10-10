@@ -13,6 +13,7 @@ vi.mock("@/lib/platform/calendar-runtime",()=>({
 async function googleStart(){return import("@/app/api/calendars/google/start/route");}
 async function googleCallback(){return import("@/app/api/calendars/google/callback/route");}
 async function microsoftStart(){return import("@/app/api/calendars/microsoft/start/route");}
+async function microsoftCallback(){return import("@/app/api/calendars/microsoft/callback/route");}
 async function caldavTest(){return import("@/app/api/calendars/caldav/test/route");}
 async function caldavConnect(){return import("@/app/api/calendars/caldav/connect/route");}
 
@@ -25,7 +26,7 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     process.env.ASSIGNMENTS_DB_PATH=":memory:";
     process.env.GOOGLE_CALENDAR_CLIENT_ID="fixture-google-client";
     delete process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-    process.env.MICROSOFT_CALENDAR_CLIENT_ID="fixture-ms-client";
+    process.env.MICROSOFT_CALENDAR_CLIENT_ID="f27ee34d-f693-4ce9-87cd-b438f914ae0d";
     process.env.MICROSOFT_CALENDAR_TENANT="common";
     delete process.env.KAIROS_APP_URL;
     resetDatabaseSingletonForTests();
@@ -88,6 +89,71 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     expect(microsoftResponse.status).toBe(200);
     expect(new URL((await microsoftResponse.json()).authorizationUrl).searchParams.get("redirect_uri"))
       .toBe("https://mykairos.me/api/calendars/microsoft/callback");
+  });
+
+  it("returns to Sources after a failed Microsoft callback without exposing the authorization code",async()=>{
+    const start=await microsoftStart();
+    const started=await start.POST(post("http://127.0.0.1:3000/api/calendars/microsoft/start"));
+    const authorization=new URL((await started.json()).authorizationUrl);
+    const state=authorization.searchParams.get("state")!;
+    const secret="fixture-authorization-code-never-echo";
+    const fetchMock=vi.fn(async()=>Response.json({
+      error:"invalid_client",
+      error_description:`Provider detail containing ${secret}`,
+    },{status:401}));
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    vi.stubGlobal("fetch",fetchMock);
+    try{
+      const callback=await microsoftCallback();
+      const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/microsoft/callback?state=${state}&code=${secret}`));
+      expect(response.status).toBe(303);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const destination=new URL(response.headers.get("location")!);
+      expect(destination.origin+destination.pathname).toBe("http://127.0.0.1:3000/sources");
+      expect(destination.searchParams.get("calendarError")).toBe("CALENDAR_CONFIG_MISSING");
+      expect(destination.searchParams.get("calendarProvider")).toBe("microsoft");
+      expect(destination.searchParams.get("calendarStage")).toBe("token_exchange");
+      expect(response.headers.get("location")).not.toContain(secret);
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }finally{
+      warning.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("distinguishes a completed Microsoft token exchange from denied Graph calendar access",async()=>{
+    const start=await microsoftStart();
+    const started=await start.POST(post("http://127.0.0.1:3000/api/calendars/microsoft/start"));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get("state")!;
+    const secret="fixture-microsoft-code-never-echo";
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const fetchMock=vi.fn(async(input:RequestInfo|URL)=>{
+      if(String(input).startsWith("https://login.microsoftonline.com/")){
+        return Response.json({access_token:"fixture-access",refresh_token:"fixture-refresh",expires_in:3600});
+      }
+      if(String(input)==="https://graph.microsoft.com/v1.0/me/calendars"){
+        return Response.json({error:{code:"ErrorAccessDenied",message:secret}},{status:403});
+      }
+      throw new Error("unexpected upstream request");
+    });
+    vi.stubGlobal("fetch",fetchMock);
+    try{
+      const callback=await microsoftCallback();
+      const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/microsoft/callback?state=${state}&code=${secret}`));
+      expect(response.status).toBe(303);
+      const location=response.headers.get("location")!;
+      expect(new URL(location).searchParams.get("calendarError")).toBe("CALENDAR_PERMISSION_DENIED");
+      expect(new URL(location).searchParams.get("calendarStage")).toBe("calendar_setup");
+      expect(location).not.toContain(secret);
+      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Calendar connection failed",{
+        stage:"calendar_setup",code:"CALENDAR_PERMISSION_DENIED",
+      });
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+    }finally{
+      vi.unstubAllGlobals();
+      warning.mockRestore();
+    }
   });
 
   it("rejects unknown or replayed Google state before any token request",async()=>{

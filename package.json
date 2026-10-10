@@ -9,7 +9,7 @@
     "dev": "npm run db:migrate:local && npm run dev:vinext",
     "build": "npm run build:extension && cross-env KAIROS_NEXT_COMPAT_BUILD=1 next build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -21,6 +21,7 @@
     "db:migrate:local": "npx wrangler d1 migrations apply kairos --local",
     "db:verify": "node scripts/verify-d1-migrations.mjs",
     "verify:hosted": "node scripts/verify-production-safety.mjs",
+    "verify:workerd": "node scripts/verify-workerd-integrations.mjs",
     "dev:next-compat": "next dev"
   },
   "dependencies": {
@@ -69,5 +70,9 @@
     "cross-env": "^10.1.0",
     "better-sqlite3": "^13.0.3"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "fflate": "^0.8.3",
+    "sharp": "^0.35.5"
+  }
 }

@@ -20,6 +20,9 @@ export default defineConfig({
   plugins: [
     vinext(),
     cloudflare({
+      persistState:process.env.KAIROS_E2E_PERSIST_PATH
+        ?{path:process.env.KAIROS_E2E_PERSIST_PATH}
+        :true,
       config:config=>process.env.E2E_FIXTURES==="1"
         ?{
           vars:{

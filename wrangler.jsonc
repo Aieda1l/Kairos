@@ -5,6 +5,10 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "observability": {
+    "enabled": false,
+    "redact_query_string": true
+  },
   "d1_databases": [
     {
       "binding": "DB",

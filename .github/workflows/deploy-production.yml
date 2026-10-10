@@ -17,8 +17,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: package.json
-      - run: npm install --no-audit --no-fund
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npm run verify:hosted
       - name: Prepare temporary production Wrangler config
         shell: bash
@@ -31,6 +31,17 @@ jobs:
           if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error("Production D1 database ID is missing or invalid.");
           const config=JSON.parse(fs.readFileSync("wrangler.jsonc","utf8"));
           config.env.production.d1_databases[0].database_id=id;
+          // The Cloudflare Vite plugin emits a module graph under dist/server.
+          // Keep wrangler.jsonc's source entry for Vite dev/build, but point
+          // Wrangler's production upload at the compiled Worker entry.
+          config.main="dist/server/index.js";
+          config.no_bundle=true;
+          config.rules=[{type:"ESModule",globs:["**/*.js","**/*.mjs"]}];
+          config.env.production.routes=[{
+            pattern:"mykairos.me",zone_name:"mykairos.me",custom_domain:true,
+          }];
+          config.env.production.workers_dev=true;
+          config.env.production.preview_urls=true;
           fs.writeFileSync(".wrangler.production.jsonc",JSON.stringify(config,null,2));
           NODE
       - name: Apply production D1 migrations

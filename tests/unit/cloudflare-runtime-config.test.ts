@@ -21,7 +21,8 @@ describe("Cloudflare runtime configuration",()=>{
     expect(pkg.dependencies?.["better-sqlite3"]).toBeUndefined();
 
     const playwright=read("playwright.config.ts");
-    expect(playwright).toContain("db:migrate:local");
+    expect(playwright).toContain("wrangler d1 migrations apply kairos --local --persist-to");
+    expect(playwright).toContain("e2ePersistPath");
     expect(playwright).toContain("dev:vinext");
     expect(playwright).not.toContain("ASSIGNMENTS_DB_PATH");
     expect(playwright).not.toContain("e2e.sqlite");

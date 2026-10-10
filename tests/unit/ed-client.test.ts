@@ -5,6 +5,15 @@ import { EdSourceError } from "@/lib/sources/ed/errors";
 const token="fixture-ed-token-never-echo";
 
 describe("EdApiClient",()=>{
+  it("uses receiver-free fetch with a Workers-compatible redirect",async()=>{
+    const fetchImpl=function(this:unknown,_input:RequestInfo|URL,init?:RequestInit){
+      if(this!==undefined)throw new TypeError("Illegal invocation");
+      expect(init?.redirect).toBe("manual");
+      return Promise.resolve(Response.json({user:{id:1}}));
+    } as typeof fetch;
+    await expect(new EdApiClient(token,fetchImpl).fetchUser()).resolves.toEqual({user:{id:1}});
+  });
+
   it("fetches the current user from the fixed Ed API origin with bearer auth",async()=>{
     const fetchImpl=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       expect(String(input)).toBe("https://us.edstem.org/api/user");
@@ -47,10 +56,34 @@ describe("EdApiClient",()=>{
   });
 
   it("maps network failures without leaking the token",async()=>{
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
     const fetchImpl=vi.fn(async()=>{throw new Error(`socket failed ${token}`);});
-    const error=await new EdApiClient(token,fetchImpl as typeof fetch).fetchUser().catch(value=>value);
-    expect(error).toBeInstanceOf(EdSourceError);
-    expect(error).toMatchObject({code:"ED_NETWORK_ERROR"});
-    expect(String(error)).not.toContain(token);
+    try{
+      const error=await new EdApiClient(token,fetchImpl as typeof fetch).fetchUser().catch(value=>value);
+      expect(error).toBeInstanceOf(EdSourceError);
+      expect(error).toMatchObject({code:"ED_NETWORK_ERROR"});
+      expect(String(error)).not.toContain(token);
+      expect(JSON.stringify(warning.mock.calls)).toContain('"reason":"transport"');
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(token);
+    }finally{
+      warning.mockRestore();
+    }
+  });
+
+  it("distinguishes an Ed timeout from other request failures without logging tokens",async()=>{
+    const timeout=vi.spyOn(AbortSignal,"timeout").mockReturnValue(AbortSignal.abort());
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    try{
+      const fetchImpl=vi.fn(async()=>{throw new Error(`timeout ${token}`);});
+      const error=await new EdApiClient(token,fetchImpl as typeof fetch).fetchUser().catch(value=>value);
+      expect(error).toMatchObject({code:"ED_NETWORK_ERROR"});
+      expect(String(error)).toContain("15 seconds");
+      const diagnostic=JSON.stringify(warning.mock.calls);
+      expect(diagnostic).toContain('"reason":"timeout"');
+      expect(diagnostic).not.toContain(token);
+    }finally{
+      timeout.mockRestore();
+      warning.mockRestore();
+    }
   });
 });

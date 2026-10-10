@@ -19,6 +19,8 @@ describe("hosted Auth.js configuration",()=>{
     const config=createAuthConfig({} as never,env);
     expect(config.adapter).toBeTruthy();
     expect(config.session?.strategy).toBe("database");
+    expect(config.pages?.signIn).toBe("/sign-in");
+    expect(config.logger?.error).toBeTypeOf("function");
     expect(providersOf(config).map(provider=>provider.id)).toEqual([
       "google",
       "microsoft-entra-id",

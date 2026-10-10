@@ -52,8 +52,9 @@ export class GoogleCalendarClient{
     options:{allowNotFound?:boolean;allowNoContent?:boolean;allowConflict?:boolean}={},
   ):Promise<unknown|null>{
     let response:Response;
+    const fetchImpl=this.fetchImpl;
     try{
-      response=await this.fetchImpl(GOOGLE_CALENDAR_API+path,{
+      response=await fetchImpl(GOOGLE_CALENDAR_API+path,{
         ...init,
         headers:{
           authorization:`Bearer ${this.accessToken}`,

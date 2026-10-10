@@ -1,4 +1,5 @@
 import { EdSourceError } from "./errors";
+import {reportSourceRequestFailure} from "@/lib/sources/upstream-diagnostics";
 
 const ED_API_BASE="https://us.edstem.org/api/";
 const DECIMAL_ID=/^\d+$/;
@@ -23,20 +24,29 @@ export class EdApiClient{
   private async request(path:string,notFoundCode:"ED_UPSTREAM_ERROR"|"ED_COURSE_UNAVAILABLE"):Promise<unknown>{
     const url=new URL(path,ED_API_BASE);
     let response:Response;
+    const timeout=AbortSignal.timeout(15_000);
+    const fetchImpl=this.fetchImpl;
     try{
-      response=await this.fetchImpl(url,{
+      response=await fetchImpl(url,{
         method:"GET",
         headers:{
           Authorization:`Bearer ${this.token}`,
           Accept:"application/json",
         },
-        redirect:"error",
-        signal:AbortSignal.timeout(15_000),
+        redirect:"manual",
+        signal:timeout,
       });
     }catch{
-      throw new EdSourceError("ED_NETWORK_ERROR","Ed could not be reached. Try again.");
+      reportSourceRequestFailure("ed",timeout.aborted?"timeout":"transport");
+      throw new EdSourceError(
+        "ED_NETWORK_ERROR",
+        timeout.aborted
+          ?"Ed did not respond within 15 seconds. Try again."
+          :"Ed could not be reached from Kairos. Try again.",
+      );
     }
 
+    if(!response.ok)reportSourceRequestFailure("ed","http",response.status);
     if(response.status===401||response.status===403){
       throw new EdSourceError("ED_AUTH_INVALID","Ed rejected the API token. Update it and try again.");
     }

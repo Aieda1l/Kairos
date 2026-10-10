@@ -24,6 +24,10 @@ test("connect Canvas, sync once, and see one assignment in every view",async({pa
   await expect(page.getByText("Fixture Homework").first()).toBeVisible();
 
   expect(await page.locator("body").innerText()).not.toContain(secret);
+  expect(await page.content()).not.toContain(secret);
+  const renderedSources=await context.request.get("/sources");
+  expect(renderedSources.ok()).toBe(true);
+  expect(await renderedSources.text()).not.toContain(secret);
   expect(responseBodies.join("\n")).not.toContain(secret);
 
   await page.getByRole("link",{name:"Calendar"}).click();
@@ -34,7 +38,12 @@ test("connect Canvas, sync once, and see one assignment in every view",async({pa
 
   await page.getByRole("link",{name:"Sources"}).click();
   await expect(page.getByText(/Connected/)).toBeVisible();
+  const syncCompleted=page.waitForResponse(response=>
+    response.url().endsWith("/api/sources/canvas/sync")&&response.request().method()==="POST",
+  );
   await page.getByRole("button",{name:"Sync Now"}).click();
+  expect((await syncCompleted).ok()).toBe(true);
+  await expect(page.getByRole("button",{name:"Sync Now"})).toBeEnabled();
 
   await page.getByRole("link",{name:"All Assignments"}).click();
   await expect(page.locator("table").getByText("Fixture Homework")).toHaveCount(1);

@@ -74,7 +74,7 @@ Complete these checks for a signed-in test user, then confirm the other user can
 ### Apple iCloud Calendar
 
 - [ ] Connect iCloud CalDAV using a test Apple Account email and app-specific password entered only in the product UI.
-- [ ] Confirm a dedicated writable Kairos calendar is created and synchronized.
+- [ ] First create a writable calendar named **Kairos** in iCloud Calendar, then connect using the app-specific password. Confirm Kairos discovers that calendar and synchronizes events; Cloudflare Workers cannot issue the CalDAV `MKCALENDAR` method.
 - [ ] Repeat sync and confirm no duplicate event is created.
 - [ ] Change a source due date and confirm the existing generated event moves.
 - [ ] Confirm the app-specific password is cleared from the form after capture and never rendered back.
@@ -84,6 +84,7 @@ Complete these checks for a signed-in test user, then confirm the other user can
 Inspect production behavior without copying secret values into the acceptance record.
 
 - [ ] D1 credential columns contain encrypted envelopes where durable secrets are expected; no plaintext Canvas feed URL, Ed token, OAuth refresh token, or iCloud app-specific password is visible.
+- Read-only production evidence on October 10: every present Canvas, Ed, calendar refresh-token, and OAuth PKCE value matched the expected versioned envelope structure; only aggregate counts were returned. No iCloud password rows were present to inspect. This establishes stored format for present values, not the remaining API/page/log non-exposure checks.
 - [ ] Normal source/calendar/status APIs never return stored credentials.
 - [ ] Rendered pages never contain stored credentials.
 - [ ] Worker/application logs do not contain stored credentials, authorization headers, session cookies, OAuth tokens, PKCE verifiers, or private provider response bodies.
@@ -110,6 +111,28 @@ Before promotion, record the non-secret identifier of the current known-good Wor
 - [ ] Record the failed deployment identifier, restored deployment identifier, time, and pass/fail outcome without recording credentials.
 
 ## Acceptance result
+
+### Evidence recorded on October 10, 2026
+
+- The production user confirmed Canvas and Microsoft Calendar connections work after the feed-header and personal-account authority fixes.
+- The user reports calendar synchronization works and subsequently confirmed that the requested edge cases were checked and seem clean. Record the calendar functional/edge-case results as user-attested passes; no fabricated provider/user matrix is supplied.
+- Sign out is available in the desktop sidebar (including its collapsed state) and mobile navigation menu. Browser tests use the real Auth.js sign-out endpoint with isolated test database sessions: signing out clears the current session, rejects replay of its old cookie, removes protected-route/API access, preserves tenant data, and leaves the other user signed in. The user subsequently confirmed hosted sign-in and logout work.
+
+### Subsequent hosted results reported by the user
+
+The user explicitly reported: “Two user isolation passes and works. Sign in and logout works. Account deletion works. Sources and Firefox extension work.” Record these as functional acceptance passes based on the user's production tests, without inventing a provider/user matrix or separate results for unreported security probes.
+
+| Area | Current evidence |
+| --- | --- |
+| Sign-in and logout | User-confirmed hosted pass |
+| Two-user isolation | User-confirmed hosted pass |
+| Sources and Firefox extension | User-confirmed hosted pass |
+| Account deletion | User-confirmed hosted pass |
+| Calendar synchronization | User-confirmed working; requested edge cases subsequently confirmed clean |
+| Credential privacy/security | Reviewed and remediated; 509 automated tests and 14 browser cases pass; final hosted identity-token cleanup and release smoke are pending |
+| Release sign-off | Committed privacy release and final Worker identifier will be recorded after promotion; rollback reference is `8929c5e8-32bc-4a59-87d7-5c6812e5be37` |
+
+The detailed checklist above remains the sign-off record. Manual functional and edge-case results are attributed to the user. Agent negative-origin, credential-disclosure, OAuth-replay, and encryption tests are documented in `security-review-2026-10-10.md`.
 
 Milestone 6 remains **hosted acceptance pending** until every required item above passes on the production deployment.
 

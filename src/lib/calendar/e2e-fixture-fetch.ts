@@ -35,7 +35,7 @@ const fixtureGlobal=globalThis as typeof globalThis&{
 };
 const store=fixtureGlobal.__kairosCalendarE2EFixture??={
   mode:"normal",
-  calendarExists:false,
+  calendarExists:true,
   etagCounter:0,
   events:new Map<string,StoredEvent>(),
 };
@@ -162,11 +162,6 @@ const fixtureFetch:typeof fetch=async(input,init)=>{
     return store.calendarExists?xml(calendarCollectionXml()):empty(404);
   }
 
-  if(method==="MKCALENDAR"&&url.href===CALENDAR){
-    store.calendarExists=true;
-    return empty(201);
-  }
-
   if(url.href.startsWith(CALENDAR)&&url.pathname.endsWith(".ics")){
     if(!store.calendarExists)return empty(404);
     const id=url.pathname.split("/").at(-1)!;
@@ -206,7 +201,8 @@ export function getCalendarRouteFetch():typeof fetch{
 
 export function resetE2ECalendarFixture():void{
   store.mode="normal";
-  store.calendarExists=false;
+  // Simulate the writable Kairos calendar users create in iCloud before connecting.
+  store.calendarExists=true;
   store.etagCounter=0;
   store.events.clear();
 }

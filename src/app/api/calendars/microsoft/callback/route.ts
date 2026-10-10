@@ -33,14 +33,17 @@ export async function GET(request:Request){
     },{status:400});
   }
 
+  let stage:"configuration"|"token_exchange"|"calendar_setup"="configuration";
   try{
     const config=getMicrosoftCalendarConfig();
+    stage="token_exchange";
     const token=await exchangeMicrosoftAuthorizationCode({
       ...config,
       code,
       codeVerifier:registered.codeVerifier,
       redirectUri:registered.redirectUri,
     });
+    stage="calendar_setup";
     if(runtime.kind==="legacy"){
       await connectOAuthCalendar(runtime.db,{
         provider:"microsoft",
@@ -69,9 +72,19 @@ export async function GET(request:Request){
         "CALENDAR_UPSTREAM_ERROR",
         "Microsoft Calendar could not be connected.",
       );
-    return Response.json(
-      {code:e.code,message:e.message},
-      {status:e.code==="CALENDAR_AUTH_EXPIRED"?401:502},
-    );
+    console.warn("Kairos Microsoft Calendar connection failed",{
+      stage,code:e.code,
+    });
+    // A browser follows this callback after consent. Return to the app and
+    // remove the one-time authorization code from the address bar/history.
+    // Only a fixed application error code is carried to the UI.
+    const destination=new URL(registered.returnTo,registered.redirectUri);
+    destination.searchParams.set("calendarProvider","microsoft");
+    destination.searchParams.set("calendarError",e.code);
+    destination.searchParams.set("calendarStage",stage);
+    return new Response(null,{
+      status:303,
+      headers:{location:destination.toString(),"cache-control":"no-store"},
+    });
   }
 }

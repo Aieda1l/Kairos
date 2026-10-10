@@ -1,12 +1,14 @@
 import {z} from "zod";
 import {D1SettingsRepository} from "@/lib/db/d1/repositories/settings";
 import {SettingsRepository} from "@/lib/db/repositories/settings";
-import {getCalendarRouteRuntime} from "@/lib/platform/calendar-runtime";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
 const schema=z.object({timeZone:z.string().min(1).max(100)});
 
 export async function GET(){
-  const runtime=await getCalendarRouteRuntime();
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   const timeZone=runtime.kind==="legacy"
     ?new SettingsRepository(runtime.db).getTimeZone()
     :await new D1SettingsRepository(runtime.db,runtime.scope).getTimeZone();
@@ -14,6 +16,9 @@ export async function GET(){
 }
 
 export async function PUT(request:Request){
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   let body:unknown;
   try{body=await request.json();}
   catch{
@@ -31,7 +36,6 @@ export async function PUT(request:Request){
   }
 
   try{
-    const runtime=await getCalendarRouteRuntime();
     if(runtime.kind==="legacy"){
       new SettingsRepository(runtime.db).setTimeZone(parsed.data.timeZone);
     }else{

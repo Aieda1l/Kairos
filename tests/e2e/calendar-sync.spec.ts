@@ -15,6 +15,9 @@ type FixtureState={
 };
 
 test("publishes Canvas deadlines to iCloud idempotently without exposing calendar credentials",async({page,context})=>{
+  // This flow includes cold Workers compilation, discovery, multiple syncs,
+  // deadline changes, and provider failure handling; retain normal assertion deadlines.
+  test.setTimeout(90_000);
   await prepareFixtureUser(context);
   const request=context.request;
 
@@ -76,6 +79,10 @@ test("publishes Canvas deadlines to iCloud idempotently without exposing calenda
     endsAt:"2026-10-09T07:14:00.000Z",
   });
   const remoteEventId=first.events[0]!.id;
+  const renderedSources=await request.get("/sources");
+  expect(renderedSources.ok()).toBe(true);
+  expect(await renderedSources.text()).not.toContain(appPassword);
+  expect(await page.content()).not.toContain(appPassword);
 
   await icloudCard.getByRole("button",{name:"Sync Apple iCloud Calendar"}).click();
   await expect.poll(async()=> (await readState()).events.length).toBe(1);

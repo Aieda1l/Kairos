@@ -2,6 +2,7 @@ import { D1Adapter } from "@auth/d1-adapter";
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import {authDiagnostics} from "./diagnostics";
 
 export type AuthDatabase=Parameters<typeof D1Adapter>[0];
 
@@ -21,9 +22,23 @@ export function createAuthConfig(
   db:AuthDatabase,
   env:AuthEnvironment,
 ):NextAuthConfig{
+  const adapter=D1Adapter(db);
+  const linkAccount=adapter.linkAccount!;
   return {
     secret:env.AUTH_SECRET,
-    adapter:D1Adapter(db),
+    pages:{signIn:"/sign-in"},
+    logger:authDiagnostics,
+    adapter:{
+      ...adapter,
+      // Identity tokens are used during sign-in only. Calendar offline grants
+      // live separately in the encrypted, user-scoped credential repository.
+      linkAccount:account=>linkAccount({
+        userId:account.userId,
+        type:account.type,
+        provider:account.provider,
+        providerAccountId:account.providerAccountId,
+      }),
+    },
     session:{strategy:"database"},
     providers:[
       Google({
@@ -42,10 +57,12 @@ export function createAuthConfig(
     callbacks:{
       session({session,user}){
         return {
-          ...session,
+          expires:session.expires,
           user:{
-            ...session.user,
             id:user.id,
+            name:user.name??null,
+            email:user.email??null,
+            image:user.image??null,
           },
         };
       },

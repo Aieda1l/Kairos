@@ -26,6 +26,10 @@ const envExample=read(".env.example");
 
 const production=wrangler.env?.production??{};
 const productionVars=production.vars??{};
+const productionObservability=production.observability??wrangler.observability;
+if(productionObservability?.redact_query_string!==true){
+  errors.push("Production must redact OAuth query strings from platform logs and traces.");
+}
 if(String(productionVars.E2E_FIXTURES??"")==="1"){
   errors.push("Production Wrangler configuration enables E2E_FIXTURES.");
 }
@@ -51,7 +55,7 @@ if(
 }
 
 const requiredCiCommands=[
-  "npm install --no-audit --no-fund",
+  "npm ci --no-audit --no-fund",
   "npm test",
   "npm run lint",
   "npm run typecheck",
