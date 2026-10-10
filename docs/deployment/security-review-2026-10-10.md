@@ -31,3 +31,5 @@ The generated RSC, SSR, and client bundle module/import graphs were inspected: n
 ## Release evidence
 
 Final verification, committed source revision, Worker version, identity-token cleanup counts, and hosted smoke results are recorded in the Milestone 6 acceptance/readiness records. Persistent logs remain disabled; no private provider response or credential value is copied into the review. Future rollback must preserve credential-key access and must not reverse D1 schemas or restore discarded identity credentials. A rollback to an older adapter may resume identity-token retention, so apply a forward correction before treating that revision as a secure steady state.
+
+The final non-secret live canary confirmed that privileged real-time tail invocation metadata still exposes request query strings. The redaction flag must not be described as removing this administrator network-inspection view. With persistent observability disabled, retain only filtered application diagnostics and never save/share raw real-time request records. The probe did not contain a real authorization code, state, cookie, or token.
