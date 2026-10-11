@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "status": "draft-awaiting-reviewed-packet-and-mozilla-review",
+  "distribution": "listed",
+  "listingUrl": null,
+  "addonId": "kairos-local@kairos",
+  "version": "0.4.0",
+  "name": "Kairos Bridge",
+  "summary": "Read Canvas submission status and Gradescope coursework from your signed-in Firefox tabs into Kairos.",
+  "description": "Kairos is an independent coursework planner designed first for UW Seattle students, with open account signup. It is not an official University of Washington service. Kairos Bridge uses already signed-in Canvas and Gradescope tabs to read normalized coursework into Kairos. Canvas support is limited to canvas.uw.edu; Gradescope support is limited to www.gradescope.com. It reads source data and does not submit assignments or change grades. Firefox desktop 140 or later is required. During installation, Firefox requests access to the specified sites, tabs, and required website-content and browsing-activity transmission. Browsing activity is limited to two booleans reporting whether a Canvas UW tab and a Gradescope tab are open; no general history or visited URL list is sent. Coursework and these named-site presence flags are sent to the Kairos page at mykairos.me, or the explicitly permitted local development origins. The webpage receives a constant not-shared protocol compatibility marker instead of the installed extension version; the popup can display that version locally. The bridge does not export passwords, session cookies, authorization headers, account identifiers, names, emails, or raw authenticated pages. There is no optional telemetry.",
+  "homepageUrl": "https://mykairos.me",
+  "privacyPolicyUrl": "https://mykairos.me/privacy",
+  "platforms": ["firefox-desktop"],
+  "minimumFirefoxVersion": "140.0",
+  "nativeConsentVersionFloors": {
+    "desktop": "140.0",
+    "android": "142.0"
+  },
+  "dataCollectionPermissions": {
+    "required": ["websiteContent", "browsingActivity"]
+  },
+  "permissions": ["tabs"],
+  "hostPermissions": [
+    "https://canvas.uw.edu/*",
+    "https://www.gradescope.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://mykairos.me/*"
+  ],
+  "reviewerNotes": "Local draft material, not an AMO API request. See extension/firefox/AMO.md for the complete bridge fields, source-build instructions, review steps, and pending signed-install/update gate. Required browsingActivity covers named Canvas UW and Gradescope tab-presence flags. Source-derived HTTP status and DOM structure counts/flags are classified as website-content/control results because they describe source-read responses and parsing, not a separate device/extension analytics feed; this rationale is subject to Mozilla review and is not a Mozilla approval claim. Production protocol-v1 PONG retains extensionVersion with the constant not-shared marker and preserves both tab booleans; actual version is displayed only in the local popup. No optional telemetry is introduced. Verified QA and public-distribution scope is Firefox desktop 140 or later. The gecko_android minimum 142.0 is the native-consent compatibility floor; it establishes no Android QA or public-distribution acceptance claim. Supported reviewer runtime is Node 22.13+ within the Node 22 branch, tested on 22.23.2. The runtime ZIP is unsigned. The source ZIP includes all imported extension/shared modules and the actual root build scripts, tsconfig.json, package.json, and package-lock.json. The operator reports Developer Hub ready; signing/submission waits for the reviewed packet. Confirm public privacy and onboarding copy agrees before submission; configure a listing URL only after Mozilla has accepted the actual listing."
+}
