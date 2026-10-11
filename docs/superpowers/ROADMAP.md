@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-07
+**Updated:** 2026-10-10
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -107,7 +107,7 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
 - `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
-## Milestone 6 — Multi-user hosted foundation — Automated implementation complete; hosted acceptance pending
+## Milestone 6 — Multi-user hosted foundation — Complete
 
 Implemented across 6A–6C:
 - Cloudflare Workers/vinext, D1, Auth.js, and tenant schema foundation;
@@ -125,13 +125,14 @@ Implemented across 6A–6C:
 - manual-only production deployment workflow plus Workers/D1 build, migration, tenancy, credential, and production-safety gates;
 - deterministic two-user hosted E2E coverage using real Auth.js database sessions, including cross-user mutation rejection, sign-out protection, and user-scoped extension submission results.
 
-Pending external hosted acceptance:
-- create/configure the production Cloudflare/D1/DNS and provider resources without committing credentials;
-- deploy the verified revision to `https://mykairos.me`;
-- complete two-account production acceptance for Google/Microsoft identity sign-in, tenant isolation, Google/Microsoft/iCloud calendars, the Firefox bridge, account deletion, credential non-exposure, and rollback;
-- record only non-secret acceptance evidence in `docs/deployment/acceptance-milestone-6.md`.
+Completed hosted acceptance:
+- production deployment and migrations at `https://mykairos.me`;
+- user-confirmed identity, logout, two-user isolation, sources/Firefox extension, calendar synchronization, account deletion, and edge-case acceptance;
+- repository privacy/security review, identity-token minimization, public-session allowlisting, origin guards, credential non-exposure, and rollback readiness;
+- 509 automated tests and 14 Chromium/Firefox browser cases, with build/runtime verification;
+- sign-off commit `6a4f9089319a01818853183298ee6f16827c22ab`, annotated tag `milestone-6`, runtime commit `f068e24bd45b46dee4c5a5a8d219115efaf769ef`.
 
-Milestone 6 must not be marked complete and Milestone 7 implementation must not begin until the hosted acceptance checklist passes.
+Acceptance attribution, production identifiers, and documented limits are in `docs/deployment/acceptance-milestone-6.md` and `docs/deployment/security-review-2026-10-10.md`. Milestone 6's rollback readiness review does not satisfy Milestone 7's required live rollback drill. The release commits/tag are local; source-control integration into `main` remains to be reconciled.
 
 Primary design:
 - `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
@@ -144,7 +145,7 @@ Implementation plans:
 Hosted acceptance:
 - `docs/deployment/acceptance-milestone-6.md`
 
-## Milestone 7 — Public beta readiness — Approved, implementation not started
+## Milestone 7 — Public beta readiness — Approved design; implementation planning prepared
 
 Planned:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
@@ -161,6 +162,12 @@ Planned:
 
 Primary design:
 - `docs/superpowers/specs/2026-10-06-public-beta-readiness-design.md`
+
+Implementation plan:
+- `docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md` links the onboarding/recovery, admission/bounded-work, and distribution/operations slices.
+- Isolated planning branch `feat/milestone-7-public-beta-readiness` starts from the finalized Milestone 6 tag.
+- User selected an AMO listing; Google OAuth is published. Mozilla account creation/signing, Turnstile setup, support/security routing, provider verification evidence, monitoring, and live rollback remain launch gates.
+- ECC and Superpowers plan review precedes implementation. No Milestone 7 runtime change has been deployed.
 
 ## Later extension follow-ups — Planned, not yet numbered
 

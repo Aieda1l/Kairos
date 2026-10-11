@@ -28,9 +28,9 @@ Local development uses the D1-backed vinext runtime and applies local D1 migrati
 
 ## Milestone 6 hosted status
 
-The automated implementation for the multi-user hosted foundation is complete. Production deployment and real-account hosted acceptance at `https://mykairos.me` are still pending, so Milestone 6 is not yet marked complete.
+Milestone 6 is complete and deployed at `https://mykairos.me`. The finalized release is tagged `milestone-6`; hosted acceptance and the privacy/security review are recorded in `docs/deployment/acceptance-milestone-6.md` and `docs/deployment/security-review-2026-10-10.md`.
 
-The hosted acceptance gate uses two independent users and verifies production Google/Microsoft sign-in, strict cross-user isolation, Google/Microsoft/iCloud calendar flows, the Firefox bridge on the exact production origin, account deletion isolation, credential non-exposure, and rollback. The checklist is in `docs/deployment/acceptance-milestone-6.md`.
+The hosted acceptance gate covered two-user isolation, production Google/Microsoft identity, calendar flows, the Firefox bridge, account deletion, credential non-exposure, and rollback readiness. Milestone 7 adds public beta onboarding, abuse controls, signed extension distribution, operational visibility, and a live rollback drill. Its plan is in `docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md`; public launch remains pending.
 
 ## Load the Firefox extension
 
