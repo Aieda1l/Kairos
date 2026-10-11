@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const root=process.cwd();
 const runtimeFiles=[
+  "LICENSE","THIRD_PARTY_NOTICES",
   "manifest.json","icon48.png","icon96.png","popup.html",
   "dist/background.js","dist/kairos-bridge.js","dist/canvas-content.js",
   "dist/gradescope-content.js","dist/popup.js",
@@ -19,6 +20,7 @@ const extensionSources=[
   "gradescope/extract-assignments.ts","gradescope/extract-courses.ts","gradescope/fetch.ts","popup.ts",
 ].map(file=>"extension/firefox/src/"+file);
 const reviewerFiles=[
+  "LICENSE","extension/firefox/LICENSE","extension/firefox/THIRD_PARTY_NOTICES",
   "package.json","package-lock.json","tsconfig.json","scripts/build-firefox-extension.mjs",
   "scripts/package-firefox-extension.mjs","extension/firefox/AMO.md","extension/firefox/amo-metadata.json",
   "extension/firefox/manifest.json","extension/firefox/icon48.png","extension/firefox/icon96.png",
@@ -28,6 +30,30 @@ const reviewerFiles=[
 ].sort();
 const temporaryRoots:string[]=[];
 const sha256=(bytes:Buffer)=>createHash("sha256").update(bytes).digest("hex");
+// Git can convert text line endings on Windows; archive/input byte comparisons remain exact below.
+const licenseText=(bytes:Buffer)=>bytes.toString("utf8").replaceAll("\r\n","\n");
+const expectedKairosLicense=`MIT License
+
+Copyright (c) 2026 Kairos contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
 
 function temporaryRoot(){
   const directory=fs.mkdtempSync(path.join(tmpdir(),"kairos-extension-package-"));
@@ -159,7 +185,7 @@ describe("Firefox release archives",()=>{
     expect(result.status,result.error?.message??result.stdout+result.stderr).toBe(0);
   });
 
-  it("runtime_archive_contains_only_manifest_icons_popup_and_five_bundles",()=>{
+  it("runtime_archive_contains_only_licenses_manifest_icons_popup_and_five_bundles",()=>{
     const directory=fixture();
     write(directory,"extension/firefox/dist/obsolete.js","must not ship");
     const {runtime}=packageExtension(directory);
@@ -187,6 +213,10 @@ describe("Firefox release archives",()=>{
     expect(lock.packages[""].devDependencies["web-ext"]).toBe("10.7.0");
     expect(lock.packages["node_modules/web-ext"].version).toBe("10.7.0");
     expect(lock.packages["node_modules/web-ext"].integrity).toMatch(/^sha512-/);
+    expect(packageJson.license).toBe("MIT");
+    expect(lock.packages[""].license).toBe("MIT");
+    const metadata=JSON.parse(members.get("extension/firefox/amo-metadata.json")!.bytes.toString("utf8"));
+    expect(metadata.license).toBe("MIT");
 
     // esbuild skips implicit tsconfig lookup under node_modules; reproduction must select the shipped config.
     const extracted=path.join(temporaryRoot(),"node_modules","kairos-reviewer");
@@ -206,6 +236,43 @@ describe("Firefox release archives",()=>{
       const start=Math.max(0,mismatch-80);
       expect(rebuilt.equals(expected),file+" expected: "+expected.subarray(start,start+240).toString("utf8")+
         " rebuilt: "+rebuilt.subarray(start,start+240).toString("utf8")).toBe(true);
+    }
+  });
+
+  it.each(["LF","CRLF"])("archives_preserve_complete_Kairos_license_and_installed_third_party_notices_with_%s",lineEndings=>{
+    const directory=fixture();
+    if(lineEndings==="CRLF"){
+      for(const file of ["LICENSE","extension/firefox/LICENSE","extension/firefox/THIRD_PARTY_NOTICES"]){
+        const filename=path.join(directory,file);
+        const text=fs.readFileSync(filename,"utf8").replaceAll("\r\n","\n");
+        fs.writeFileSync(filename,text.replaceAll("\n","\r\n"));
+      }
+    }
+    const {runtime,source}=packageExtension(directory);
+    const runtimeMembers=unzip(runtime);
+    const sourceMembers=unzip(source);
+    for(const [members,file] of [
+      [runtimeMembers,"LICENSE"],
+      [sourceMembers,"LICENSE"],
+      [sourceMembers,"extension/firefox/LICENSE"],
+    ] as const){
+      expect(members.has(file),"missing license archive member: "+file).toBe(true);
+      expect(licenseText(members.get(file)!.bytes)).toBe(expectedKairosLicense);
+    }
+    const rootLicense=fs.readFileSync(path.join(directory,"LICENSE"));
+    const extensionLicense=fs.readFileSync(path.join(directory,"extension/firefox/LICENSE"));
+    expect(extensionLicense.equals(rootLicense)).toBe(true);
+    expect(runtimeMembers.get("LICENSE")!.bytes.equals(rootLicense)).toBe(true);
+
+    expect(runtimeMembers.has("THIRD_PARTY_NOTICES")).toBe(true);
+    expect(sourceMembers.has("extension/firefox/THIRD_PARTY_NOTICES")).toBe(true);
+    const runtimeNotices=runtimeMembers.get("THIRD_PARTY_NOTICES")!.bytes;
+    expect(sourceMembers.get("extension/firefox/THIRD_PARTY_NOTICES")!.bytes.equals(runtimeNotices)).toBe(true);
+    expect(runtimeNotices.equals(fs.readFileSync(path.join(directory,"extension/firefox/THIRD_PARTY_NOTICES")))).toBe(true);
+    for(const file of ["node_modules/zod/LICENSE","node_modules/esbuild/LICENSE.md"]){
+      const completeNotice=fs.readFileSync(path.join(root,file));
+      expect(licenseText(runtimeNotices).includes(licenseText(completeNotice)),
+        "complete installed notice must survive packaging: "+file).toBe(true);
     }
   });
 

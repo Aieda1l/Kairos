@@ -5,6 +5,7 @@
   "listingUrl": null,
   "addonId": "kairos-local@kairos",
   "version": "0.4.0",
+  "license": "MIT",
   "name": "Kairos Bridge",
   "summary": "Read Canvas submission status and Gradescope coursework from your signed-in Firefox tabs into Kairos.",
   "description": "Kairos is an independent coursework planner designed first for UW Seattle students, with open account signup. It is not an official University of Washington service. Kairos Bridge uses already signed-in Canvas and Gradescope tabs to read normalized coursework into Kairos. Canvas support is limited to canvas.uw.edu; Gradescope support is limited to www.gradescope.com. It reads source data and does not submit assignments or change grades. Firefox desktop 140 or later is required. During installation, Firefox requests access to the specified sites, tabs, and required website-content and browsing-activity transmission. Browsing activity is limited to two booleans reporting whether a Canvas UW tab and a Gradescope tab are open; no general history or visited URL list is sent. Coursework and these named-site presence flags are sent to the Kairos page at mykairos.me, or the explicitly permitted local development origins. The webpage receives a constant not-shared protocol compatibility marker instead of the installed extension version; the popup can display that version locally. The bridge does not export passwords, session cookies, authorization headers, account identifiers, names, emails, or raw authenticated pages. There is no optional telemetry.",

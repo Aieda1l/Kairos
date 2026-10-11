@@ -10,6 +10,7 @@ const output=path.join(root,"artifacts/firefox");
 const resolvedRoot=fs.realpathSync(root);
 const runtimeDirectory=path.join(output,"runtime");
 const runtimeFiles=[
+  "LICENSE","THIRD_PARTY_NOTICES",
   "manifest.json","icon48.png","icon96.png","popup.html",
   "dist/background.js","dist/kairos-bridge.js","dist/canvas-content.js",
   "dist/gradescope-content.js","dist/popup.js",
@@ -49,6 +50,7 @@ function verifyOutputPaths(archiveNames){
   for(const name of runtimeFiles)verifyOutputPath(path.join(runtimeDirectory,name));
 }
 const reviewerFiles=[
+  "LICENSE","extension/firefox/LICENSE","extension/firefox/THIRD_PARTY_NOTICES",
   "package.json","package-lock.json","tsconfig.json","scripts/build-firefox-extension.mjs",
   "scripts/package-firefox-extension.mjs","extension/firefox/AMO.md","extension/firefox/amo-metadata.json",
   "extension/firefox/manifest.json","extension/firefox/icon48.png","extension/firefox/icon96.png",

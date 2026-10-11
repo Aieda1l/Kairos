@@ -12,7 +12,7 @@ The user reports Google OAuth is published. Google brand verification rejected o
 
 Public pages: [Home](https://mykairos.me/), [Privacy](https://mykairos.me/privacy), [Terms](https://mykairos.me/terms), [Support](https://mykairos.me/support), [Security](https://mykairos.me/security). New content may be pending deployment. See [provider configuration and approval runbook](docs/deployment/public-beta-providers.md) and [contact routing and support runbook](docs/deployment/public-beta-support.md).
 
-MIT has been selected for both the project and Firefox extension, with copyright (c) 2026 Kairos contributors. License files, third-party notices and distribution metadata are being prepared separately; this README does not assert that those artifacts or a signed package are already present.
+Kairos and the Firefox extension use the [MIT License](LICENSE), with Copyright (c) 2026 Kairos contributors. The standalone extension includes the same [license](extension/firefox/LICENSE) and [third-party notices](extension/firefox/THIRD_PARTY_NOTICES) for bundled code. The release packages remain unsigned; Mozilla acceptance and normal signed-install/update checks are pending.
 
 ## Requirements and local development
 

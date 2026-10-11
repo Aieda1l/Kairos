@@ -36,8 +36,8 @@
 - Production runtime commit: `f068e24bd45b46dee4c5a5a8d219115efaf769ef`; Worker version `f54b4c5d-d0b8-462f-80e7-ae68cca52df5`.
 - Isolated branch: `feat/milestone-7-public-beta-readiness`, based on that tag. The task's original checkout remains on the Milestone 6 branch.
 - Fresh lockfile install and baseline: **509 tests in 102 files passed** on 2026-10-10. npm 12 blocked dependency install scripts; bundled platform binaries were sufficient for this test run. Do not change global npm policy.
-- User selected **AMO listing**. Mozilla developer account readiness and support/security delivery remain pending. A managed Turnstile widget has now been provisioned for `mykairos.me`, with credentials stored directly in Worker secrets.
-- User reports Google OAuth is **published**. This is not evidence that scope/brand verification or public-account acceptance is complete.
+- User selected **AMO listing** and is signed in to the Developer Hub. Signing, listing approval and normal install/update acceptance remain pending. Cloudflare support/security routing is active and its destination verified; inbox delivery is still awaiting confirmation. A managed Turnstile widget has been provisioned for `mykairos.me`, with credentials stored directly in Worker secrets.
+- User reports Google OAuth is **published**. Public homepage/privacy corrections were reviewed and deployed on October 11, 2026; anonymous checks pass. Search Console domain ownership was confirmed by the operator on October 10, 2026 (Pacific time); Google instructed a 24-hour wait before retrying. Verification approval and independent public-account acceptance remain pending.
 - Milestone 6 changes are local and not yet merged to `main`. Reconcile its release commits through normal reviewed source control before integrating Milestone 7 into `main`; do not base implementation on the older `main` or rewrite the release tag.
 - The finalized Milestone 6 branch/tag are now pushed and [draft PR #14](https://github.com/Aieda1l/Kairos/pull/14) is open. Local M7 implementation proceeds from the verified tag under the user's approved plan; reconcile onto the reviewed merge base before release integration. If the release is squash-merged, transfer only M7 commits after the tag; do not duplicate the Milestone 6 diff or rewrite its acceptance history.
 
@@ -51,15 +51,17 @@
 
 Execute independent tasks in disjoint write scopes. Reserve shared edits to `src/proxy.ts`, production config, runtime bindings, migration/test harness lists, workflows, and final acceptance documents for one integrator. Stage only reviewed logical chunks; do not use `git add .`.
 
+The execution ledger prioritizes 7C Task 2 after the foundations to unblock Google verification. The user approved **MIT for both Kairos and Kairos Bridge**, with **Copyright (c) 2026 Kairos contributors**. Follow that task with a scoped licensing supplement: root/extension license files, complete notices for bundled third-party code, MIT package/AMO metadata, and deterministic archive validation. Keep dependency licenses and third-party data/trademark rights intact; this choice does not authorize AMO publication. Continue the remaining dependency order from the ledger afterward.
+
 ## External work and release evidence
 
 | Item | Current evidence | Required result |
 | --- | --- | --- |
-| Google OAuth | User reports published | Confirm actual requested identity/calendar scopes, branding/domain ownership, required verification, and non-test-user hosted consent |
+| Google OAuth | Published; public purpose/privacy corrections deployed; ownership operator-confirmed; 24-hour propagation pending | Pass required verification and confirm non-test-user hosted consent |
 | Microsoft | Milestone 6 personal account works with `common` | Production Web callbacks/audience, consent/rotation record, independent accounts and calendar smoke |
-| Mozilla | AMO chosen; no developer account | Account created, submitted reviewer source/package, approved signed listing, install/update smoke |
+| Mozilla | AMO chosen; Developer Hub ready; MIT selected; unsigned reviewed package prepared | Complete license/notice packet, submit reviewer source/package, obtain approved signed listing, pass install/update smoke |
 | Turnstile | Managed widget scoped to exact production hostname; keys in Worker secret store | Integrated valid/invalid hosted initiation tests |
-| Support/security | User selected Cloudflare account inbox; destination verified; domain currently has Namecheap MX/SPF | Preserve or explicitly migrate current mail service; both aliases delivered successfully |
+| Support/security | Cloudflare account inbox verified; routing enabled; Cloudflare MX/SPF independently confirmed | Confirm messages to both aliases arrive in the monitored inbox |
 | Monitoring | Existing platform dashboards/deploy workflow | Scheduled health check runs; failed-check/deploy notification recipient verified; capacity dashboard/threshold procedure exercised |
 | Rollback | Milestone 6 readiness reviewed | Milestone 7 live rollback and forward restore on compatible schema/keyring, followed by authenticated smoke |
 
