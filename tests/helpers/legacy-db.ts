@@ -1,5 +1,43 @@
-import "server-only";
-import type Database from "better-sqlite3";
+import fs from "node:fs";
+import path from "node:path";
+import Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
+
+export type TestDatabase=Database.Database & LegacyDatabase;
+
+
+let singleton: TestDatabase | null = null;
+let singletonPath: string | null = null;
+
+function resolveDatabasePath(input?: string): string {
+  const requested = input ?? process.env.ASSIGNMENTS_DB_PATH ?? ".data/assignments.sqlite";
+  if (requested === ":memory:") return requested;
+  return path.resolve(/* turbopackIgnore: true */ process.cwd(), requested);
+}
+
+export function openDatabase(databasePath?: string): TestDatabase {
+  const resolved = resolveDatabasePath(databasePath);
+  if (resolved !== ":memory:") fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  const db = new Database(resolved) as TestDatabase;
+  db.pragma("foreign_keys = ON");
+  return db;
+}
+
+export function getDatabase(): TestDatabase {
+  const resolved = resolveDatabasePath();
+  if (!singleton || singletonPath !== resolved) {
+    singleton?.close();
+    singleton = openDatabase(resolved);
+    singletonPath = resolved;
+  }
+  return singleton;
+}
+
+export function resetDatabaseSingletonForTests(): void {
+  singleton?.close();
+  singleton = null;
+  singletonPath = null;
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS source_connections (
@@ -159,7 +197,7 @@ const ASSIGNMENT_COLUMNS: Array<[string,string]> = [
   ["grade_display","TEXT"],
 ];
 
-function ensureSourceCredentialColumns(db: Database.Database): void {
+function ensureSourceCredentialColumns(db: TestDatabase): void {
   const existing=new Set(
     (db.prepare("PRAGMA table_info(source_credentials)").all() as Array<{name:string}>)
       .map(column=>column.name),
@@ -167,7 +205,7 @@ function ensureSourceCredentialColumns(db: Database.Database): void {
   if(!existing.has("ed_api_token")) db.exec("ALTER TABLE source_credentials ADD COLUMN ed_api_token TEXT");
 }
 
-function ensureAssignmentMetadataColumns(db: Database.Database): void {
+function ensureAssignmentMetadataColumns(db: TestDatabase): void {
   const existing=new Set(
     (db.prepare("PRAGMA table_info(assignments)").all() as Array<{name:string}>)
       .map(column=>column.name),
@@ -177,7 +215,7 @@ function ensureAssignmentMetadataColumns(db: Database.Database): void {
   }
 }
 
-export function migrate(db: Database.Database): void {
+export function migrate(db: TestDatabase): void {
   const now = new Date().toISOString();
   db.exec(SCHEMA);
   ensureSourceCredentialColumns(db);
@@ -193,3 +231,4 @@ export function migrate(db: Database.Database): void {
     ON CONFLICT(key) DO NOTHING
   `).run(now);
 }
+

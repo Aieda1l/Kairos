@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type BridgeCapture = {
   messages: string[];
@@ -6,9 +7,8 @@ type BridgeCapture = {
   releaseFirstSync: () => void;
 };
 
-test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,context})=>{
+  await prepareFixtureUser(context);
   const apiBodies:string[]=[];
   let startRequests=0;
 
@@ -98,6 +98,7 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
 
   const secret="fixture-secret-never-echo";
   await page.goto("/sources");
+  await waitForAppHydration(page);
   const canvasCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Canvas",exact:true})});
   const feedUrl=`http://127.0.0.1:3000/api/test-fixtures/canvas-feed?token=${secret}`;
   await canvasCard.getByLabel("Canvas calendar feed URL").fill(feedUrl);
@@ -109,6 +110,10 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
   await expect(page.getByText("Fixture Homework").first()).toBeVisible();
   await expect(page.getByText("Status unavailable").first()).toBeVisible();
   await expect.poll(()=>startRequests).toBe(1);
+  await expect.poll(async()=>page.evaluate(()=>{
+    const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;
+    return capture?.syncRequests??0;
+  })).toBe(1);
 
   await page.evaluate(()=>{
     const capture=(window as Window & {__kairosBridgeCapture?:BridgeCapture}).__kairosBridgeCapture;

@@ -11,3 +11,11 @@ coverage/
 *.sqlite-wal
 *.sqlite-journal
 extension/firefox/dist/
+.cloudflare/
+.wrangler/
+.vinext/
+dist/
+*.tsbuildinfo
+wrangler.deploy.local.jsonc
+.wrangler.deploy.local.jsonc
+.wrangler.production.jsonc

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { openDatabase } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
+import { openDatabase } from "../helpers/legacy-db";
+import { migrate } from "../helpers/legacy-db";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SourceCredentialRepository } from "@/lib/db/repositories/source-credentials";
 import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";

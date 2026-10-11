@@ -1,17 +1,18 @@
 import { connection as waitForRequest } from "next/server";
+import {redirect} from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
 import { GradescopeProvider } from "@/features/gradescope/gradescope-provider";
 import { EdProvider } from "@/features/ed/ed-provider";
 import { CalendarSyncProvider } from "@/features/calendars/calendar-provider";
-import { getDatabase } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
-import { AssignmentRepository } from "@/lib/db/repositories/assignments";
-import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
-import { CalendarConnectionRepository } from "@/lib/db/repositories/calendar-connections";
-import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
-import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
+import { D1AssignmentRepository } from "@/lib/db/d1/repositories/assignments";
+import { D1SourceConnectionRepository } from "@/lib/db/d1/repositories/source-connections";
+import { D1CalendarConnectionRepository } from "@/lib/db/d1/repositories/calendar-connections";
+import { D1SourceCourseRepository } from "@/lib/db/d1/repositories/source-courses";
+import { D1SubmissionStatusRepository } from "@/lib/db/d1/repositories/submission-status";
+import { getSourceRuntimeContext } from "@/lib/platform/source-runtime";
+import {AuthenticationRequiredError} from "@/lib/auth/user-scope";
 import { parseCanvasAssignmentLocator } from "@/lib/submission-status/canvas-locator";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 import type { GradescopeSyncErrorCode } from "@/lib/extension-protocol/gradescope";
@@ -42,55 +43,81 @@ const emptyGradescopeSyncState: SubmissionStatusSyncState<GradescopeSyncErrorCod
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await waitForRequest();
-  const db = getDatabase();
-  migrate(db);
+  let runtime:Awaited<ReturnType<typeof getSourceRuntimeContext>>;
+  try{
+    runtime=await getSourceRuntimeContext();
+  }catch(error){
+    if(error instanceof AuthenticationRequiredError){
+      redirect("/sign-in?returnTo=/upcoming");
+    }
+    throw error;
+  }
+  const {db,scope}=runtime;
 
-  const connections = new SourceConnectionRepository(db);
-  const statuses = new SubmissionStatusRepository(db);
-  const calendarConnections = new CalendarConnectionRepository(db).list();
+  const connections=new D1SourceConnectionRepository(db,scope);
+  const statuses=new D1SubmissionStatusRepository(db,scope);
+  const assignments=new D1AssignmentRepository(db,scope);
+  const courses=new D1SourceCourseRepository(db,scope);
 
-  const canvasConnection = connections.getByKind("canvas");
-  const canvasAssignments = new AssignmentRepository(db).list({ source: "canvas" });
-  const hasEligibleCanvasAssignment = canvasAssignments.some(
-    (assignment) => parseCanvasAssignmentLocator(assignment) !== null,
+  const [
+    calendarConnections,
+    canvasConnection,
+    canvasAssignments,
+    gradescopeConnection,
+    edConnection,
+  ]=await Promise.all([
+    new D1CalendarConnectionRepository(db,scope).list(),
+    connections.getByKind("canvas"),
+    assignments.list({source:"canvas"}),
+    connections.getByKind("gradescope"),
+    connections.getByKind("ed"),
+  ]);
+
+  const hasEligibleCanvasAssignment=canvasAssignments.some(
+    assignment=>parseCanvasAssignmentLocator(assignment)!==null,
   );
-  const canvasSyncState = canvasConnection
-    ? statuses.getSyncState(canvasConnection.id)
-    : emptyCanvasSyncState;
 
-  const gradescopeConnection = connections.getByKind("gradescope");
-  const gradescopeCourses = gradescopeConnection
-    ? new SourceCourseRepository(db).list(gradescopeConnection.id)
-    : [];
-  const gradescopeSyncState = gradescopeConnection
-    ? statuses.getSyncState<GradescopeSyncErrorCode>(gradescopeConnection.id)
-    : emptyGradescopeSyncState;
-
-  const edConnection = connections.getByKind("ed");
-  const edCourses = edConnection
-    ? new SourceCourseRepository(db).list(edConnection.id)
-    : [];
-  const edSyncState = edConnection
-    ? statuses.getSyncState<string>(edConnection.id)
-    : emptyEdSyncState;
+  const [
+    canvasSyncState,
+    gradescopeCourses,
+    gradescopeSyncState,
+    edCourses,
+    edSyncState,
+  ]=await Promise.all([
+    canvasConnection
+      ?statuses.getSyncState(canvasConnection.id)
+      :Promise.resolve(emptyCanvasSyncState),
+    gradescopeConnection
+      ?courses.list(gradescopeConnection.id)
+      :Promise.resolve([]),
+    gradescopeConnection
+      ?statuses.getSyncState<GradescopeSyncErrorCode>(gradescopeConnection.id)
+      :Promise.resolve(emptyGradescopeSyncState),
+    edConnection
+      ?courses.list(edConnection.id)
+      :Promise.resolve([]),
+    edConnection
+      ?statuses.getSyncState<string>(edConnection.id)
+      :Promise.resolve(emptyEdSyncState),
+  ]);
 
   return (
     <ThemeProvider>
       <CalendarSyncProvider initialConnections={calendarConnections}>
-      <EdProvider connection={edConnection} initialCourses={edCourses} initialSyncState={edSyncState}>
-      <GradescopeProvider
-        connection={gradescopeConnection}
-        initialCourses={gradescopeCourses}
-        initialSyncState={gradescopeSyncState}
-      >
-        <SubmissionStatusProvider
-          enabled={Boolean(canvasConnection && canvasConnection.enabled && hasEligibleCanvasAssignment)}
-          initialSyncState={canvasSyncState}
-        >
-          <AppShell>{children}</AppShell>
-        </SubmissionStatusProvider>
-      </GradescopeProvider>
-      </EdProvider>
+        <EdProvider connection={edConnection} initialCourses={edCourses} initialSyncState={edSyncState}>
+          <GradescopeProvider
+            connection={gradescopeConnection}
+            initialCourses={gradescopeCourses}
+            initialSyncState={gradescopeSyncState}
+          >
+            <SubmissionStatusProvider
+              enabled={Boolean(canvasConnection && canvasConnection.enabled && hasEligibleCanvasAssignment)}
+              initialSyncState={canvasSyncState}
+            >
+              <AppShell>{children}</AppShell>
+            </SubmissionStatusProvider>
+          </GradescopeProvider>
+        </EdProvider>
       </CalendarSyncProvider>
     </ThemeProvider>
   );

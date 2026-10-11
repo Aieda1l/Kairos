@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
-import {getDatabase,resetDatabaseSingletonForTests} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {getDatabase,resetDatabaseSingletonForTests} from "../helpers/legacy-db";
+import {migrate} from "../helpers/legacy-db";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 
 const mocks=vi.hoisted(()=>({
@@ -42,6 +42,7 @@ let dbPath:string;
 const requestId="00000000-0000-4000-8000-000000000001";
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-calendar-source-hook-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   process.env.E2E_FIXTURES="0";
@@ -104,6 +105,7 @@ beforeEach(()=>{
 });
 
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   resetDatabaseSingletonForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}
 });

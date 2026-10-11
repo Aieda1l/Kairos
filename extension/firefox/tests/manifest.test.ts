@@ -22,13 +22,20 @@ describe("Firefox manifest",()=>{
       "https://www.gradescope.com/*",
       "http://localhost/*",
       "http://127.0.0.1/*",
+      "https://mykairos.me/*",
     ]);
     expect(manifest.content_scripts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        matches:["http://localhost/*","http://127.0.0.1/*","https://mykairos.me/*"],
+        js:["dist/kairos-bridge.js"],
+      }),
       expect.objectContaining({
         matches:["https://www.gradescope.com/*"],
         js:["dist/gradescope-content.js"],
       }),
     ]));
-    expect(JSON.stringify(manifest)).not.toContain("<all_urls>");
+    const serialized=JSON.stringify(manifest);
+    expect(serialized).not.toContain("<all_urls>");
+    expect(serialized).not.toContain('"https://*/*"');
   });
 });

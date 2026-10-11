@@ -1,6 +1,6 @@
 import {expect,it} from "vitest";
-import {openDatabase} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {openDatabase} from "../helpers/legacy-db";
+import {migrate} from "../helpers/legacy-db";
 import {SettingsRepository} from "@/lib/db/repositories/settings";
 
 it("persists valid timezone settings",()=>{

@@ -1,19 +1,24 @@
-import {getDatabase} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
 import {resetE2ECalendarFixture} from "@/lib/calendar/e2e-fixture-fetch";
+import {getAuthenticatedE2EFixtureRuntime} from "@/lib/testing/e2e-runtime";
 
 export async function POST(){
-  if(process.env.E2E_FIXTURES!=="1"){
+  const runtime=await getAuthenticatedE2EFixtureRuntime();
+  if(!runtime){
     return new Response("Not found",{status:404});
   }
 
-  const db=getDatabase();
-  migrate(db);
-  db.transaction(()=>{
-    db.prepare("DELETE FROM calendar_connections").run();
-    db.prepare("DELETE FROM source_connections").run();
-  })();
-  resetE2ECalendarFixture();
+  for(const table of [
+    "source_connections",
+    "calendar_connections",
+    "app_settings",
+    "sync_requests",
+    "oauth_requests",
+  ]){
+    await runtime.db.prepare(`DELETE FROM ${table} WHERE user_id=?`)
+      .bind(runtime.userId)
+      .run();
+  }
 
+  resetE2ECalendarFixture();
   return Response.json({ok:true});
 }

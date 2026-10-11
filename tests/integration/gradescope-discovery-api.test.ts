@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDatabase, resetDatabaseSingletonForTests } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
+import { getDatabase, resetDatabaseSingletonForTests } from "../helpers/legacy-db";
+import { migrate } from "../helpers/legacy-db";
 import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { resetGradescopeRequestRegistryForTests } from "@/lib/gradescope/request-registry";
@@ -12,12 +12,14 @@ let dbPath:string;
 const requestIdPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-gradescope-discovery-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   resetDatabaseSingletonForTests();
   resetGradescopeRequestRegistryForTests();
 });
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   resetDatabaseSingletonForTests();
   resetGradescopeRequestRegistryForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}

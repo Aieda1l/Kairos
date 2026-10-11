@@ -1,28 +1,37 @@
-import { getDatabase } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
-import { gradescopeDiscoverResultV1Schema } from "@/lib/extension-protocol/gradescope";
+import {gradescopeDiscoverResultV1Schema} from "@/lib/extension-protocol/gradescope";
 import {
   completeGradescopeDiscovery,
   GradescopeDiscoveryServiceError,
 } from "@/lib/gradescope/discovery-service";
+import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 
 export async function POST(request:Request){
   let body:unknown;
-  try{
-    body=await request.json();
-  }catch{
-    return Response.json({code:"INVALID_RESULT",message:"The Gradescope discovery result was invalid."},{status:400});
+  try{body=await request.json();}
+  catch{
+    return Response.json(
+      {code:"INVALID_RESULT",message:"The Gradescope discovery result was invalid."},
+      {status:400},
+    );
   }
 
   const parsed=gradescopeDiscoverResultV1Schema.safeParse(body);
   if(!parsed.success){
-    return Response.json({code:"INVALID_RESULT",message:"The Gradescope discovery result was invalid."},{status:400});
+    return Response.json(
+      {code:"INVALID_RESULT",message:"The Gradescope discovery result was invalid."},
+      {status:400},
+    );
   }
 
-  const db=getDatabase();
-  migrate(db);
+  const resolved=await resolveSourceApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
+
   try{
-    return Response.json(completeGradescopeDiscovery(db,parsed.data));
+    const result=runtime.kind==="legacy"
+      ?completeGradescopeDiscovery(runtime.db,parsed.data)
+      :await completeGradescopeDiscovery(runtime.db,runtime.scope,parsed.data);
+    return Response.json(result);
   }catch(error){
     if(error instanceof GradescopeDiscoveryServiceError){
       if(error.code==="SYNC_REQUEST_NOT_FOUND"){

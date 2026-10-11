@@ -6,17 +6,25 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "npm run build:extension && next build",
+    "dev": "npm run db:migrate:local && npm run dev:vinext",
+    "build": "npm run build:extension && cross-env KAIROS_NEXT_COMPAT_BUILD=1 next build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "build:extension": "node scripts/build-firefox-extension.mjs"
+    "build:extension": "node scripts/build-firefox-extension.mjs",
+    "dev:vinext": "vite dev --port 3000",
+    "build:vinext": "vite build",
+    "start:vinext": "vite preview",
+    "deploy:cloudflare": "npx @vinext/cloudflare deploy",
+    "db:migrate:local": "npx wrangler d1 migrations apply kairos --local",
+    "db:verify": "node scripts/verify-d1-migrations.mjs",
+    "verify:hosted": "node scripts/verify-production-safety.mjs",
+    "verify:workerd": "node scripts/verify-workerd-integrations.mjs",
+    "dev:next-compat": "next dev"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -30,7 +38,11 @@
     "tailwind-merge": "^3.7.0",
     "zod": "^4.1.12",
     "server-only": "^0.0.1",
-    "fast-xml-parser": "^5.11.2"
+    "fast-xml-parser": "^5.11.2",
+    "vinext": "^1.0.0",
+    "react-server-dom-webpack": "^19.3.0",
+    "next-auth": "5.0.0-beta.32",
+    "@auth/d1-adapter": "1.11.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -50,7 +62,17 @@
     "typescript": "^5.9.3",
     "vitest": "^5.0.3",
     "esbuild": "^0.28.2",
-    "@types/firefox-webext-browser": "^143.0.0"
+    "@types/firefox-webext-browser": "^143.0.0",
+    "@cloudflare/vite-plugin": "^1.62.4",
+    "@vitejs/plugin-rsc": "^0.5.35",
+    "vite": "^8.3.3",
+    "wrangler": "^4.147.0",
+    "cross-env": "^10.1.0",
+    "better-sqlite3": "^13.0.3"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "fflate": "^0.8.3",
+    "sharp": "^0.35.5"
+  }
 }

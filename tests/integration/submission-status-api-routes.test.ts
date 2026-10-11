@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDatabase, resetDatabaseSingletonForTests } from "@/lib/db/client";
-import { migrate } from "@/lib/db/migrate";
+import { getDatabase, resetDatabaseSingletonForTests } from "../helpers/legacy-db";
+import { migrate } from "../helpers/legacy-db";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SubmissionStatusRepository } from "@/lib/db/repositories/submission-status";
@@ -12,6 +12,7 @@ import { resetSubmissionSyncRequestRegistryForTests } from "@/lib/submission-sta
 let dbPath:string;
 
 beforeEach(()=>{
+  process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME="1";
   dbPath=path.join(os.tmpdir(),`kairos-submission-${crypto.randomUUID()}.sqlite`);
   process.env.ASSIGNMENTS_DB_PATH=dbPath;
   resetDatabaseSingletonForTests();
@@ -19,6 +20,7 @@ beforeEach(()=>{
 });
 
 afterEach(()=>{
+  delete process.env.KAIROS_TEST_LEGACY_SOURCE_RUNTIME;
   resetDatabaseSingletonForTests();
   resetSubmissionSyncRequestRegistryForTests();
   for(const suffix of ["","-wal","-shm"])try{fs.unlinkSync(dbPath+suffix)}catch{}

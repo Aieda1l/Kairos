@@ -3,9 +3,13 @@ import {z} from "zod";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 
 const MICROSOFT_SCOPE="offline_access Calendars.ReadWrite";
+// Entra application (client) IDs are UUIDs. Reject misplaced client secrets
+// before a value is embedded in an OAuth authorization URL.
+const APPLICATION_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type MicrosoftCalendarConfig={
   clientId:string;
+  clientSecret:string|null;
   tenant:string;
 };
 
@@ -43,8 +47,22 @@ export function getMicrosoftCalendarConfig(
       "Microsoft Calendar client configuration is missing.",
     );
   }
+  if(!APPLICATION_ID.test(clientId)){
+    throw new CalendarSyncError(
+      "CALENDAR_CONFIG_MISSING",
+      "Microsoft Calendar Application (client) ID must be a UUID from the Entra app registration. Check that the client ID and client secret were not swapped.",
+    );
+  }
+  const clientSecret=env.MICROSOFT_CALENDAR_CLIENT_SECRET?.trim()||null;
+  if(env.KAIROS_APP_URL?.trim()&&!clientSecret){
+    throw new CalendarSyncError(
+      "CALENDAR_CONFIG_MISSING",
+      "Microsoft Calendar hosted client secret is missing.",
+    );
+  }
   return {
     clientId,
+    clientSecret,
     tenant:tenantSegment(env.MICROSOFT_CALENDAR_TENANT?.trim()||"common"),
   };
 }
@@ -76,7 +94,32 @@ function tokenError(status:number,body:unknown):CalendarSyncError{
     body&&typeof body==="object"&&"error" in body&&typeof body.error==="string"
       ?body.error
       :null;
-  if(status===401||providerCode==="invalid_grant"||providerCode==="invalid_client"){
+  // Only record a known provider error identifier. Never log the token response:
+  // error_description and related fields can contain sensitive account details.
+  const safeCode=providerCode&&[
+    "invalid_client","unauthorized_client","invalid_scope","invalid_grant",
+    "interaction_required","consent_required","temporarily_unavailable",
+  ].includes(providerCode)?providerCode:"other";
+  const description=body&&typeof body==="object"&&"error_description" in body
+    &&typeof body.error_description==="string"?body.error_description:"";
+  // Only extract the numeric AADSTS identifier, never the provider description.
+  const aadstsCode=description.match(/\bAADSTS([0-9]{4,7})\b/)?.[1]??null;
+  console.warn("Kairos Microsoft Calendar token exchange failed",{
+    status,safeCode,aadstsCode,
+  });
+  if(["invalid_client","unauthorized_client","invalid_scope"].includes(safeCode)){
+    return new CalendarSyncError(
+      "CALENDAR_CONFIG_MISSING",
+      "Microsoft Calendar app credentials or permissions are misconfigured. Check the Entra application ID, client secret value, tenant, and registered Web redirect URL.",
+    );
+  }
+  if(safeCode==="interaction_required"||safeCode==="consent_required"){
+    return new CalendarSyncError(
+      "CALENDAR_AUTH_REQUIRED",
+      "Microsoft Calendar requires renewed account consent. Start the connection again.",
+    );
+  }
+  if(status===401||safeCode==="invalid_grant"){
     return new CalendarSyncError(
       "CALENDAR_AUTH_EXPIRED",
       "Microsoft Calendar authorization is no longer valid.",
@@ -132,34 +175,40 @@ export function exchangeMicrosoftAuthorizationCode(
   input:{
     clientId:string;
     tenant:string;
+    clientSecret?:string|null;
     code:string;
     codeVerifier:string;
     redirectUri:string;
   },
   fetchImpl:typeof fetch=fetch,
 ):Promise<MicrosoftTokenResult>{
-  return requestToken(input.tenant,new URLSearchParams({
+  const params=new URLSearchParams({
     client_id:input.clientId,
     grant_type:"authorization_code",
     scope:MICROSOFT_SCOPE,
     code:input.code,
     code_verifier:input.codeVerifier,
     redirect_uri:input.redirectUri,
-  }),fetchImpl);
+  });
+  if(input.clientSecret)params.set("client_secret",input.clientSecret);
+  return requestToken(input.tenant,params,fetchImpl);
 }
 
 export function refreshMicrosoftAccessToken(
   input:{
     clientId:string;
     tenant:string;
+    clientSecret?:string|null;
     refreshToken:string;
   },
   fetchImpl:typeof fetch=fetch,
 ):Promise<MicrosoftTokenResult>{
-  return requestToken(input.tenant,new URLSearchParams({
+  const params=new URLSearchParams({
     client_id:input.clientId,
     grant_type:"refresh_token",
     scope:MICROSOFT_SCOPE,
     refresh_token:input.refreshToken,
-  }),fetchImpl);
+  });
+  if(input.clientSecret)params.set("client_secret",input.clientSecret);
+  return requestToken(input.tenant,params,fetchImpl);
 }

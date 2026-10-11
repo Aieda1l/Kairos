@@ -6,8 +6,43 @@ import {
   getGoogleCalendarConfig,
   refreshGoogleAccessToken,
 } from "@/lib/calendar/google/oauth";
+import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 
 describe("Google Calendar OAuth",()=>{
+  it("uses only the exact configured production origin for Google callbacks",()=>{
+    expect(getOAuthRedirectUri(
+      "https://attacker.example/api/calendars/google/start",
+      "/api/calendars/google/callback",
+      {KAIROS_APP_URL:"https://mykairos.me"},
+    )).toBe("https://mykairos.me/api/calendars/google/callback");
+  });
+
+  it.each([
+    "http://mykairos.me",
+    "https://www.mykairos.me",
+    "https://mykairos.me.evil.example",
+    "https://user:password@mykairos.me",
+  ])("rejects unsafe configured production origin %s",appUrl=>{
+    expect(()=>getOAuthRedirectUri(
+      "https://mykairos.me/api/calendars/google/start",
+      "/api/calendars/google/callback",
+      {KAIROS_APP_URL:appUrl},
+    )).toThrowError(expect.objectContaining({code:"CALENDAR_CONFIG_MISSING"}));
+  });
+
+  it("rejects protocol-relative callback paths and non-loopback unconfigured request hosts",()=>{
+    expect(()=>getOAuthRedirectUri(
+      "http://localhost:3000/api/calendars/google/start",
+      "//evil.example/callback",
+      {},
+    )).toThrowError(expect.objectContaining({code:"CALENDAR_CONFIG_MISSING"}));
+    expect(()=>getOAuthRedirectUri(
+      "https://evil.example/api/calendars/google/start",
+      "/api/calendars/google/callback",
+      {},
+    )).toThrowError(expect.objectContaining({code:"CALENDAR_CONFIG_MISSING"}));
+  });
+
   it("uses the narrow app-created-calendar scope with offline PKCE authorization",()=>{
     const url=buildGoogleAuthorizationUrl({
       clientId:"fixture-google-client",

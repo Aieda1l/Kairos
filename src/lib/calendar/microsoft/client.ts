@@ -57,14 +57,41 @@ function safeProviderCode(body:unknown):string|null{
   const error="error" in body?body.error:null;
   if(!error||typeof error!=="object"||Array.isArray(error)||!("code" in error))return null;
   const code=error.code;
-  return typeof code==="string"&&/^[A-Za-z0-9_.-]{1,80}$/.test(code)?code:null;
+  // Only fixed Graph codes may appear in warnings or user-visible diagnostics.
+  return typeof code==="string"&&[
+    "ErrorAccessDenied","InvalidAuthenticationToken","AuthenticationError",
+    "ErrorInvalidUser","ErrorItemNotFound","Authorization_RequestDenied",
+    "MailboxNotEnabledForRESTAPI","ErrorMailboxNotEnabledForRESTAPI",
+    "ErrorNonExistentMailbox",
+    "UnknownError",
+  ].includes(code)?code:null;
+}
+
+function safeRejectionReason(body:unknown):string{
+  if(!body||typeof body!=="object"||!("error" in body))return "unspecified";
+  const error=body.error;
+  if(!error||typeof error!=="object"||!("code" in error)
+    ||error.code!=="InvalidAuthenticationToken"||!("message" in error)
+    ||typeof error.message!=="string")return "unspecified";
+  // Classify known messages without retaining or logging any provider text.
+  const message=error.message.toLowerCase();
+  if(message.includes("invalid audience"))return "invalid_audience";
+  if(message.includes("token is expired"))return "token_expired";
+  if(message.includes("compacttoken parsing failed"))return "malformed_token";
+  return "unspecified";
 }
 
 function mapHttpError(status:number,providerCode:string|null):CalendarSyncError{
-  if(status===401||status===403){
+  if(status===401){
     return new CalendarSyncError(
       "CALENDAR_AUTH_EXPIRED",
       "Microsoft Calendar authorization is no longer valid.",
+    );
+  }
+  if(status===403){
+    return new CalendarSyncError(
+      "CALENDAR_PERMISSION_DENIED",
+      "Microsoft Graph denied access to the calendar. Check delegated Calendars.ReadWrite consent and the account's Outlook mailbox.",
     );
   }
   if(status===429){
@@ -92,8 +119,9 @@ export class MicrosoftCalendarClient{
     options:{allowNotFound?:boolean;allowNoContent?:boolean}={},
   ):Promise<unknown|null>{
     let response:Response;
+    const fetchImpl=this.fetchImpl;
     try{
-      response=await this.fetchImpl(GRAPH_API+path,{
+      response=await fetchImpl(GRAPH_API+path,{
         ...init,
         headers:{
           authorization:`Bearer ${this.accessToken}`,
@@ -112,8 +140,20 @@ export class MicrosoftCalendarClient{
     if(options.allowNoContent&&(response.status===204||response.status===404))return null;
     if(!response.ok){
       let body:unknown=null;
-      try{body=await response.json();}catch{}
-      throw mapHttpError(response.status,safeProviderCode(body));
+      let responseFormat:"json"|"non_json"="non_json";
+      try{body=await response.json();responseFormat="json";}catch{}
+      const providerCode=safeProviderCode(body);
+      if(response.status===401||response.status===403){
+        // Fixed, non-sensitive request category and provider code only.
+        console.warn("Kairos Microsoft Graph calendar request denied",{
+          status:response.status,
+          operation:typeof init.method==="string"?init.method:"GET",
+          providerCode,
+          reason:safeRejectionReason(body),
+          responseFormat,
+        });
+      }
+      throw mapHttpError(response.status,providerCode);
     }
     if(response.status===204)return null;
     try{return await response.json();}catch{

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type GradescopeCapture={
   messages:string[];
@@ -6,9 +7,8 @@ type GradescopeCapture={
   syncRequests:number;
 };
 
-test("discovers and syncs Gradescope without exposing authenticated page data",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("discovers and syncs Gradescope without exposing authenticated page data",async({page,context})=>{
+  await prepareFixtureUser(context);
 
   const apiBodies:string[]=[];
   page.on("request",req=>{
@@ -139,6 +139,7 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
   });
 
   await page.goto("/sources");
+  await waitForAppHydration(page);
   await page.getByRole("button",{name:"Discover courses"}).click();
   await expect(page.getByRole("checkbox",{name:/CSE 331/})).toBeVisible();
 
@@ -150,8 +151,11 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
       window as Window&{__gradescopeCapture?:GradescopeCapture}
     ).__gradescopeCapture?.syncRequests??0);
   }).toBeGreaterThan(0);
+  await expect(page.getByText(/Last successful/)).toBeVisible();
+  await page.waitForLoadState("networkidle");
 
-  await page.goto("/assignments");
+  await page.getByRole("link",{name:"All Assignments"}).click();
+  await expect(page).toHaveURL(/\/assignments$/);
   await expect(page.getByText("Gradescope Graded Homework").first()).toBeVisible();
   await expect(page.getByText("8.5 / 10").first()).toBeVisible();
   await expect(page.getByText("Gradescope Open Homework").first()).toBeVisible();
@@ -163,8 +167,11 @@ test("discovers and syncs Gradescope without exposing authenticated page data",a
     "href",
     "https://www.gradescope.com/courses/123/assignments/457",
   );
+  await page.getByRole("button",{name:"Close dialog"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await page.goto("/upcoming");
+  await page.getByRole("link",{name:"Upcoming"}).click();
+  await expect(page).toHaveURL(/\/upcoming$/);
   await expect(page.getByText("Gradescope Graded Homework")).toHaveCount(0);
   await expect(page.getByText("Gradescope Open Homework").first()).toBeVisible();
 
