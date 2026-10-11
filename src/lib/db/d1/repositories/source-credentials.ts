@@ -1,6 +1,6 @@
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 import {
   decryptCredential,
   encryptCredential,
@@ -20,12 +20,12 @@ export class D1SourceCredentialRepository{
     private readonly keyring:CredentialKeyring,
   ){}
 
-  private async set(
+  private async prepareSet(
     connectionId:string,
     column:"canvas_feed_url_envelope"|"ed_api_token_envelope",
     purpose:SecretPurpose,
     plaintext:string,
-  ):Promise<void>{
+  ):Promise<D1PreparedStatementLike>{
     const envelope=await encryptCredential({
       plaintext,
       userId:this.scope.userId,
@@ -33,13 +33,13 @@ export class D1SourceCredentialRepository{
       contextId:connectionId,
     },this.keyring);
     const at=new Date().toISOString();
-    await this.db.prepare(`
+    return this.db.prepare(`
       INSERT INTO source_credentials(user_id,source_connection_id,${column},updated_at)
       VALUES (?,?,?,?)
       ON CONFLICT(user_id,source_connection_id) DO UPDATE SET
         ${column}=excluded.${column},
         updated_at=excluded.updated_at
-    `).bind(this.scope.userId,connectionId,envelope,at).run();
+    `).bind(this.scope.userId,connectionId,envelope,at);
   }
 
   private async get(
@@ -62,12 +62,20 @@ export class D1SourceCredentialRepository{
     },this.keyring);
   }
 
-  setCanvasFeedUrl(connectionId:string,feedUrl:string){
-    return this.set(connectionId,"canvas_feed_url_envelope","canvas_feed_url",feedUrl);
+  prepareCanvasFeedUrl(connectionId:string,feedUrl:string){
+    return this.prepareSet(connectionId,"canvas_feed_url_envelope","canvas_feed_url",feedUrl);
   }
 
-  setEdApiToken(connectionId:string,token:string){
-    return this.set(connectionId,"ed_api_token_envelope","ed_api_token",token);
+  prepareEdApiToken(connectionId:string,token:string){
+    return this.prepareSet(connectionId,"ed_api_token_envelope","ed_api_token",token);
+  }
+
+  async setCanvasFeedUrl(connectionId:string,feedUrl:string):Promise<void>{
+    await (await this.prepareCanvasFeedUrl(connectionId,feedUrl)).run();
+  }
+
+  async setEdApiToken(connectionId:string,token:string):Promise<void>{
+    await (await this.prepareEdApiToken(connectionId,token)).run();
   }
 
   getCanvasFeedUrl(connectionId:string){

@@ -117,10 +117,17 @@ export async function connectEd(
   const connectionRepo=new D1SourceConnectionRepository(hostedDb,scope);
   const credentialRepo=new D1SourceCredentialRepository(hostedDb,scope,keyring);
   const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-  const connection=await connectionRepo.upsertEd("Ed");
-  await credentialRepo.setEdApiToken(connection.id,token);
-  await courseRepo.upsertDiscovered(connection.id,discovered,seenAt);
-  return {connection,courses:await courseRepo.list(connection.id)};
+  const existing=await connectionRepo.getByKind("ed");
+  const id=existing?.id??crypto.randomUUID();
+  const credential=await credentialRepo.prepareEdApiToken(id,token);
+  const results=await hostedDb.batch([
+    connectionRepo.prepareUpsert(id,"ed","Ed",seenAt),
+    credential,
+    courseRepo.prepareDiscovered(id,discovered,seenAt),
+    courseRepo.prepareList(id),
+    connectionRepo.prepareGetByKind("ed"),
+  ]);
+  return {connection:connectionRepo.connectionFromResult(results[4]!),courses:courseRepo.coursesFromResult(results[3]!)};
 }
 
 export function refreshEdCourses(
@@ -158,12 +165,11 @@ export async function refreshEdCourses(
   const {connection,token}=await requireConnectedEdHosted(hostedDb,scope,keyring);
   const payload=await new EdApiClient(token,arg4??fetch).fetchUser();
   const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-  await courseRepo.upsertDiscovered(
-    connection.id,
-    parseEdCourses(payload),
-    (arg5??new Date()).toISOString(),
-  );
-  return {connection,courses:await courseRepo.list(connection.id)};
+  const results=await hostedDb.batch([
+    courseRepo.prepareDiscovered(connection.id,parseEdCourses(payload),(arg5??new Date()).toISOString()),
+    courseRepo.prepareList(connection.id),
+  ]);
+  return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
 }
 
 export function replaceEnabledEdCourses(
@@ -212,7 +218,9 @@ export function replaceEnabledEdCourses(
         "Select only courses discovered from your Ed account.",
       );
     }
-    await courseRepo.setEnabled(connection.id,enabledCourseIds);
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const results=await hostedDb.batch([
+      courseRepo.prepareEnabled(connection.id,enabledCourseIds),courseRepo.prepareList(connection.id),
+    ]);
+    return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
   })();
 }

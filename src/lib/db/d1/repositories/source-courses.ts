@@ -1,6 +1,6 @@
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike,D1ResultLike} from "@/lib/db/d1/types";
 import type {DiscoveredSourceCourse,SourceCourse} from "@/lib/sources/types";
 
 type Row={
@@ -35,65 +35,61 @@ export class D1SourceCourseRepository{
     private readonly scope:UserScope,
   ){}
 
-  async upsertDiscovered(
+  prepareDiscovered(
     sourceConnectionId:string,
     courses:DiscoveredSourceCourse[],
     seenAt:string,
-  ):Promise<void>{
-    for(const course of courses){
-      const existing=await this.db.prepare(`
-        SELECT id FROM source_courses
-        WHERE user_id=? AND source_connection_id=? AND external_course_id=?
-      `).bind(this.scope.userId,sourceConnectionId,course.externalCourseId)
-        .first<{id:string}>();
-
-      if(existing){
-        await this.db.prepare(`
-          UPDATE source_courses
-          SET short_name=?,full_name=?,term=?,year=?,last_seen_at=?,updated_at=?
-          WHERE user_id=? AND source_connection_id=? AND external_course_id=?
-        `).bind(
-          course.shortName,course.fullName,course.term,course.year,seenAt,seenAt,
-          this.scope.userId,sourceConnectionId,course.externalCourseId,
-        ).run();
-      }else{
-        await this.db.prepare(`
-          INSERT INTO source_courses(
-            user_id,id,source_connection_id,external_course_id,short_name,full_name,
-            term,year,enabled,first_seen_at,last_seen_at,updated_at
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        `).bind(
-          this.scope.userId,crypto.randomUUID(),sourceConnectionId,course.externalCourseId,
-          course.shortName,course.fullName,course.term,course.year,0,seenAt,seenAt,seenAt,
-        ).run();
-      }
-    }
+  ):D1PreparedStatementLike{
+    const rows=courses.map(course=>({...course,id:crypto.randomUUID()}));
+    return this.db.prepare(`
+      INSERT INTO source_courses(
+        user_id,id,source_connection_id,external_course_id,short_name,full_name,
+        term,year,enabled,first_seen_at,last_seen_at,updated_at
+      )
+      SELECT ?,json_extract(value,'$.id'),?,json_extract(value,'$.externalCourseId'),
+        json_extract(value,'$.shortName'),json_extract(value,'$.fullName'),
+        json_extract(value,'$.term'),json_extract(value,'$.year'),0,?,?,?
+      FROM json_each(?) WHERE 1
+      ON CONFLICT(user_id,source_connection_id,external_course_id) DO UPDATE SET
+        short_name=excluded.short_name,full_name=excluded.full_name,term=excluded.term,
+        year=excluded.year,last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
+    `).bind(this.scope.userId,sourceConnectionId,seenAt,seenAt,seenAt,JSON.stringify(rows));
   }
 
-  private async listWhere(sourceConnectionId:string,enabledOnly:boolean):Promise<SourceCourse[]>{
-    const result=await this.db.prepare(`
+  async upsertDiscovered(sourceConnectionId:string,courses:DiscoveredSourceCourse[],seenAt:string):Promise<void>{
+    await this.db.batch([this.prepareDiscovered(sourceConnectionId,courses,seenAt)]);
+  }
+
+  prepareList(sourceConnectionId:string,enabledOnly=false):D1PreparedStatementLike{
+    return this.db.prepare(`
       SELECT id,source_connection_id,external_course_id,short_name,full_name,term,year,enabled,first_seen_at,last_seen_at
       FROM source_courses
       WHERE user_id=? AND source_connection_id=? ${enabledOnly?"AND enabled=1":""}
       ORDER BY full_name COLLATE NOCASE, external_course_id
-    `).bind(this.scope.userId,sourceConnectionId).all<Row>();
-    return result.results.map(map);
+    `).bind(this.scope.userId,sourceConnectionId);
+  }
+
+  coursesFromResult(result:D1ResultLike):SourceCourse[]{
+    return (result.results as Row[]).map(map);
+  }
+
+  private async listWhere(sourceConnectionId:string,enabledOnly:boolean):Promise<SourceCourse[]>{
+    return this.coursesFromResult(await this.prepareList(sourceConnectionId,enabledOnly).all());
   }
 
   list(sourceConnectionId:string){return this.listWhere(sourceConnectionId,false);}
   listEnabled(sourceConnectionId:string){return this.listWhere(sourceConnectionId,true);}
 
-  async setEnabled(sourceConnectionId:string,externalCourseIds:string[]):Promise<void>{
-    await this.db.prepare(`
-      UPDATE source_courses SET enabled=0,updated_at=?
+  prepareEnabled(sourceConnectionId:string,externalCourseIds:string[]):D1PreparedStatementLike{
+    return this.db.prepare(`
+      UPDATE source_courses SET
+        enabled=CASE WHEN external_course_id IN (SELECT value FROM json_each(?)) THEN 1 ELSE 0 END,
+        updated_at=?
       WHERE user_id=? AND source_connection_id=?
-    `).bind(new Date().toISOString(),this.scope.userId,sourceConnectionId).run();
+    `).bind(JSON.stringify(externalCourseIds),new Date().toISOString(),this.scope.userId,sourceConnectionId);
+  }
 
-    for(const externalCourseId of externalCourseIds){
-      await this.db.prepare(`
-        UPDATE source_courses SET enabled=1,updated_at=?
-        WHERE user_id=? AND source_connection_id=? AND external_course_id=?
-      `).bind(new Date().toISOString(),this.scope.userId,sourceConnectionId,externalCourseId).run();
-    }
+  async setEnabled(sourceConnectionId:string,externalCourseIds:string[]):Promise<void>{
+    await this.db.batch([this.prepareEnabled(sourceConnectionId,externalCourseIds)]);
   }
 }

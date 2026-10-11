@@ -180,6 +180,10 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       if(url==="https://www.googleapis.com/calendar/v3/calendars"){
         return Response.json({id:"remote-google",summary:"Kairos"});
       }
+      if(url==="https://www.googleapis.com/calendar/v3/users/me/calendarList/remote-google"){
+        expect(init?.method).toBe("GET");
+        return Response.json({id:"remote-google",summary:"Kairos",accessRole:"owner"});
+      }
       throw new Error("unexpected "+url);
     });
 

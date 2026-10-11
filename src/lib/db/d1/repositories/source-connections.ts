@@ -1,7 +1,7 @@
 import "server-only";
 import type {SourceConnection} from "@/lib/assignments/types";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike,D1ResultLike} from "@/lib/db/d1/types";
 import type {SourceKind} from "@/lib/sources/types";
 
 type Row={
@@ -38,15 +38,44 @@ export class D1SourceConnectionRepository{
   ){}
 
   async getByKind(kind:SourceKind):Promise<SourceConnection|null>{
-    const row=await this.db.prepare(`${this.select} WHERE user_id=? AND kind=?`)
-      .bind(this.scope.userId,kind).first<Row>();
+    const row=await this.prepareGetByKind(kind).first<Row>();
     return row?map(row):null;
+  }
+
+  prepareGetByKind(kind:SourceKind):D1PreparedStatementLike{
+    return this.db.prepare(`${this.select} WHERE user_id=? AND kind=?`).bind(this.scope.userId,kind);
+  }
+
+  connectionFromResult(result:D1ResultLike):SourceConnection{
+    return map(result.results[0] as Row);
   }
 
   async getById(id:string):Promise<SourceConnection|null>{
     const row=await this.db.prepare(`${this.select} WHERE user_id=? AND id=?`)
       .bind(this.scope.userId,id).first<Row>();
     return row?map(row):null;
+  }
+
+  prepareUpsert(id:string,kind:SourceKind,label:string,at:string):D1PreparedStatementLike{
+    return this.db.prepare(`
+      INSERT INTO source_connections(user_id,id,kind,label,enabled,last_sync_status,created_at,updated_at)
+      VALUES (?,?,?,?,1,'never',?,?)
+      ON CONFLICT(user_id,kind) DO UPDATE SET label=excluded.label,enabled=1,updated_at=excluded.updated_at
+    `).bind(this.scope.userId,id,kind,label,at,at);
+  }
+
+  prepareSyncStarted(id:string,at:string):D1PreparedStatementLike{
+    return this.db.prepare(
+      "UPDATE source_connections SET last_sync_started_at=?,updated_at=? WHERE user_id=? AND id=?",
+    ).bind(at,at,this.scope.userId,id);
+  }
+
+  prepareSyncSuccess(id:string,at:string,errorCode:string|null=null):D1PreparedStatementLike{
+    return this.db.prepare(`
+      UPDATE source_connections
+      SET last_sync_completed_at=?,last_sync_status='success',last_error_code=?,updated_at=?
+      WHERE user_id=? AND id=?
+    `).bind(at,errorCode,at,this.scope.userId,id);
   }
 
   private async upsert(kind:SourceKind,label:string):Promise<SourceConnection>{
@@ -73,17 +102,11 @@ export class D1SourceConnectionRepository{
   upsertEd(label:string){return this.upsert("ed",label);}
 
   async markSyncStarted(id:string,at:string):Promise<void>{
-    await this.db.prepare(
-      "UPDATE source_connections SET last_sync_started_at=?,updated_at=? WHERE user_id=? AND id=?",
-    ).bind(at,at,this.scope.userId,id).run();
+    await this.prepareSyncStarted(id,at).run();
   }
 
   async markSyncSuccess(id:string,at:string,errorCode:string|null=null):Promise<void>{
-    await this.db.prepare(`
-      UPDATE source_connections
-      SET last_sync_completed_at=?,last_sync_status='success',last_error_code=?,updated_at=?
-      WHERE user_id=? AND id=?
-    `).bind(at,errorCode,at,this.scope.userId,id).run();
+    await this.prepareSyncSuccess(id,at,errorCode).run();
   }
 
   async markSyncError(id:string,at:string,errorCode:string):Promise<void>{

@@ -1,7 +1,7 @@
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarConnection,CalendarProvider,CalendarSyncStatus} from "@/lib/calendar/types";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 
 type Row={
   id:string;
@@ -54,6 +54,22 @@ export class D1CalendarConnectionRepository{
     const row=await this.db.prepare(`${this.select} WHERE user_id=? AND id=?`)
       .bind(this.scope.userId,id).first<Row>();
     return row?map(row):null;
+  }
+
+  prepareAcceptedConnection(connection:CalendarConnection,at:string):D1PreparedStatementLike{
+    return this.db.prepare(`
+      INSERT INTO calendar_connections(
+        user_id,id,provider,label,account_label,remote_calendar_id,remote_calendar_name,
+        enabled,last_sync_status,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id,id) DO UPDATE SET
+        account_label=excluded.account_label,remote_calendar_id=excluded.remote_calendar_id,
+        remote_calendar_name=excluded.remote_calendar_name,updated_at=excluded.updated_at
+    `).bind(
+      this.scope.userId,connection.id,connection.provider,connection.label,connection.accountLabel,
+      connection.remoteCalendarId,connection.remoteCalendarName,connection.enabled?1:0,
+      connection.lastSyncStatus,at,at,
+    );
   }
 
   async create(input:{

@@ -165,20 +165,19 @@ export function completeGradescopeDiscovery(
       );
     }
     const connectionRepo=new D1SourceConnectionRepository(hostedDb,scope);
-    const connection=await connectionRepo.upsertGradescope("Gradescope");
+    const existing=await connectionRepo.getByKind("gradescope");
+    const id=existing?.id??crypto.randomUUID();
     const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-    await courseRepo.upsertDiscovered(
-      connection.id,
-      input.courses.map(course=>({
-        externalCourseId:course.courseId,
-        shortName:course.shortName,
-        fullName:course.fullName,
-        term:course.term,
-        year:course.year,
-      })),
-      now.toISOString(),
-    );
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const seenAt=now.toISOString();
+    const results=await hostedDb.batch([
+      connectionRepo.prepareUpsert(id,"gradescope","Gradescope",seenAt),
+      courseRepo.prepareDiscovered(id,input.courses.map(course=>({
+        externalCourseId:course.courseId,shortName:course.shortName,fullName:course.fullName,
+        term:course.term,year:course.year,
+      })),seenAt),
+      courseRepo.prepareList(id),connectionRepo.prepareGetByKind("gradescope"),
+    ]);
+    return {connection:connectionRepo.connectionFromResult(results[3]!),courses:courseRepo.coursesFromResult(results[2]!)};
   })();
 }
 
@@ -237,7 +236,9 @@ export function replaceEnabledGradescopeCourses(
         "Select only courses discovered from your Gradescope account.",
       );
     }
-    await courseRepo.setEnabled(connection.id,enabledCourseIds);
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const results=await hostedDb.batch([
+      courseRepo.prepareEnabled(connection.id,enabledCourseIds),courseRepo.prepareList(connection.id),
+    ]);
+    return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
   })();
 }
