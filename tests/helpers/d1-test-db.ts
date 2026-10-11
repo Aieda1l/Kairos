@@ -69,11 +69,13 @@ class TestD1Database implements D1DatabaseLike{
 
 export function openD1TestDatabase(options:{
   beforeMigration?:(name:string,sqlite:Database.Database)=>void;
+  filename?:string;
+  migrate?:boolean;
 }={}){
-  const sqlite=new Database(":memory:");
+  const sqlite=new Database(options.filename??":memory:");
   sqlite.pragma("foreign_keys = ON");
   const directory=path.join(process.cwd(),"migrations");
-  for(const migration of fs.readdirSync(directory).filter(name=>/^\d+.*\.sql$/.test(name)).sort()){
+  for(const migration of options.migrate===false?[]:fs.readdirSync(directory).filter(name=>/^\d+.*\.sql$/.test(name)).sort()){
     options.beforeMigration?.(migration,sqlite);
     sqlite.exec(fs.readFileSync(path.join(directory,migration),"utf8"));
   }
