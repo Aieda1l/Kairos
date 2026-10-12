@@ -41,7 +41,10 @@ it.each([
     expect(error).toMatchObject({code:"UNAUTHORIZED_OR_EXPIRED_FEED"});
     expect(String(error)).toContain(expected);
     const diagnostic=JSON.stringify(warning.mock.calls);
-    expect(diagnostic).toContain(`"status":${status}`);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+      event:"kairos.operation",provider:"canvas",code:"UPSTREAM_HTTP_ERROR",status,result:"error",
+    });
     expect(diagnostic).not.toContain("private-secret");
     expect(diagnostic).not.toContain("hidden-feed-code");
     expect(diagnostic).not.toContain("private response body");

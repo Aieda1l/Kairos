@@ -30,6 +30,14 @@ const productionObservability=production.observability??wrangler.observability;
 if(productionObservability?.redact_query_string!==true){
   errors.push("Production must redact OAuth query strings from platform logs and traces.");
 }
+if(productionObservability?.enabled!==false
+  ||productionObservability?.logs?.enabled!==false
+  ||productionObservability?.logs?.persist!==false
+  ||productionObservability?.logs?.invocation_logs!==false
+  ||productionObservability?.traces?.enabled!==false
+  ||productionObservability?.traces?.persist!==false){
+  errors.push("Production observability, log persistence, invocation metadata, and traces must remain explicitly disabled until the preview privacy gate is reviewed.");
+}
 if(String(productionVars.E2E_FIXTURES??"")==="1"){
   errors.push("Production Wrangler configuration enables E2E_FIXTURES.");
 }

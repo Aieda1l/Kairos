@@ -115,6 +115,10 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       expect(destination.searchParams.get("calendarStage")).toBe("token_exchange");
       expect(response.headers.get("location")).not.toContain(secret);
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_CONFIG_MISSING",provider:"microsoft",result:"error",
+      });
       expect(fetchMock).toHaveBeenCalledTimes(1);
     }finally{
       warning.mockRestore();
@@ -146,14 +150,54 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       expect(new URL(location).searchParams.get("calendarError")).toBe("CALENDAR_PERMISSION_DENIED");
       expect(new URL(location).searchParams.get("calendarStage")).toBe("calendar_setup");
       expect(location).not.toContain(secret);
-      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Calendar connection failed",{
-        stage:"calendar_setup",code:"CALENDAR_PERMISSION_DENIED",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_PERMISSION_DENIED",provider:"microsoft",result:"error",
       });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
     }finally{
       vi.unstubAllGlobals();
       warning.mockRestore();
     }
+  });
+
+  it("records one successful Microsoft connection without tokens, identity, or callback URL",async()=>{
+    const start=await microsoftStart();
+    const started=await start.POST(post("http://127.0.0.1:3000/api/calendars/microsoft/start"));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get("state")!;
+    const info=vi.spyOn(console,"info").mockImplementation(()=>{});
+    vi.stubGlobal("fetch",async(input:RequestInfo|URL)=>String(input).startsWith("https://login.microsoftonline.com/")
+      ?Response.json({access_token:"private-access",refresh_token:"private-refresh",expires_in:3600})
+      :String(input).endsWith("/me/calendars")
+        ?Response.json({value:[{id:"private-calendar",name:"Kairos",canEdit:true}]})
+        :Response.json({id:"private-calendar",name:"Kairos",canEdit:true}));
+    const callback=await microsoftCallback();
+    const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/microsoft/callback?state=${state}&code=private-code`,{
+      headers:{cookie:"private-cookie","x-request-id":"private-trace"},
+    }));
+    expect(response.status).toBe(307);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(info.mock.calls[0][0] as string)).toMatchObject({
+      event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,
+    });
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private");
+    vi.unstubAllGlobals();
+  });
+
+  it("records missing Microsoft callback parameters using fresh IDs instead of supplied trace values",async()=>{
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const callback=await microsoftCallback();
+    for(let i=0;i<2;i++){
+      const response=await callback.GET(new Request("http://127.0.0.1:3000/api/calendars/microsoft/callback?error=private-error",{
+        headers:{"x-request-id":"private-trace"},
+      }));
+      expect(response.status).toBe(400);
+    }
+    expect(warning).toHaveBeenCalledTimes(2);
+    const events=warning.mock.calls.map(([value])=>JSON.parse(value as string));
+    expect(events[0]).toMatchObject({action:"calendar.connect",code:"CALENDAR_AUTH_REQUIRED",result:"rejected",status:400});
+    expect(events[0].requestId).not.toBe(events[1].requestId);
+    expect(JSON.stringify(events)).not.toContain("private");
   });
 
   it("rejects unknown or replayed Google state before any token request",async()=>{

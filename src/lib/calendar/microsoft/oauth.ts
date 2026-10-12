@@ -1,6 +1,8 @@
 import "server-only";
 import {z} from "zod";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {createOperationContext,getOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 
 const MICROSOFT_SCOPE="offline_access Calendars.ReadWrite";
 // Entra application (client) IDs are UUIDs. Reject misplaced client secrets
@@ -100,13 +102,6 @@ function tokenError(status:number,body:unknown):CalendarSyncError{
     "invalid_client","unauthorized_client","invalid_scope","invalid_grant",
     "interaction_required","consent_required","temporarily_unavailable",
   ].includes(providerCode)?providerCode:"other";
-  const description=body&&typeof body==="object"&&"error_description" in body
-    &&typeof body.error_description==="string"?body.error_description:"";
-  // Only extract the numeric AADSTS identifier, never the provider description.
-  const aadstsCode=description.match(/\bAADSTS([0-9]{4,7})\b/)?.[1]??null;
-  console.warn("Kairos Microsoft Calendar token exchange failed",{
-    status,safeCode,aadstsCode,
-  });
   if(["invalid_client","unauthorized_client","invalid_scope"].includes(safeCode)){
     return new CalendarSyncError(
       "CALENDAR_CONFIG_MISSING",
@@ -156,7 +151,13 @@ async function requestToken(
     );
   }
   const body=await readJson(response);
-  if(!response.ok)throw tokenError(response.status,body);
+  if(!response.ok){
+    const error=tokenError(response.status,body);
+    if(!getOperationContext())emitOperationEvent(createOperationContext("calendar.connect"),{
+      code:error.code,result:"error",provider:"microsoft",status:response.status,
+    });
+    throw error;
+  }
   const parsed=tokenResponseSchema.safeParse(body);
   if(!parsed.success){
     throw new CalendarSyncError(

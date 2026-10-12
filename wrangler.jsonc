@@ -7,7 +7,9 @@
   ],
   "observability": {
     "enabled": false,
-    "redact_query_string": true
+    "redact_query_string": true,
+    "logs": {"enabled": false, "invocation_logs": false, "persist": false},
+    "traces": {"enabled": false, "persist": false}
   },
   "d1_databases": [
     {

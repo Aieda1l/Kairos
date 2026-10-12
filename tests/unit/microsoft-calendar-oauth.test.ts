@@ -193,14 +193,16 @@ describe("Microsoft Calendar OAuth",()=>{
         error:"invalid_client",
         error_description:`Credential problem for ${secret}`,
       },{status:401})) as typeof fetch)).rejects.toMatchObject({code:"CALENDAR_CONFIG_MISSING"});
-      expect(JSON.stringify(warning.mock.calls)).toContain("invalid_client");
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",code:"CALENDAR_CONFIG_MISSING",provider:"microsoft",status:401,
+      });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
     }finally{
       warning.mockRestore();
     }
   });
 
-  it("records only the numeric AADSTS identifier from a rejected code exchange",async()=>{
+  it("drops AADSTS identifiers and descriptions from a rejected code exchange",async()=>{
     const secret="fixture-sensitive-identity-never-echo";
     const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
     try{
@@ -211,9 +213,11 @@ describe("Microsoft Calendar OAuth",()=>{
         error:"invalid_grant",
         error_description:`AADSTS70000: invalid grant for ${secret}`,
       },{status:400})) as typeof fetch)).rejects.toMatchObject({code:"CALENDAR_AUTH_EXPIRED"});
-      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Calendar token exchange failed",{
-        status:400,safeCode:"invalid_grant",aadstsCode:"70000",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",status:400,code:"CALENDAR_AUTH_EXPIRED",provider:"microsoft",
       });
+      expect(JSON.stringify(warning.mock.calls)).not.toContain("70000");
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
     }finally{
       warning.mockRestore();

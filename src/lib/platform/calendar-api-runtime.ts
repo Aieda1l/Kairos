@@ -1,4 +1,6 @@
 import "server-only";
+import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 import {AuthenticationRequiredError} from "@/lib/auth/user-scope";
 import {
   getCalendarRouteRuntime,
@@ -20,16 +22,23 @@ function isAuthenticationRequired(error:unknown):boolean{
 }
 
 export async function resolveCalendarApiRuntime():Promise<CalendarApiRuntimeResult>{
-  try{
-    return {ok:true,runtime:await getCalendarRouteRuntime()};
-  }catch(error){
-    if(!isAuthenticationRequired(error))throw error;
-    return {
-      ok:false,
-      response:Response.json({
-        code:"AUTH_REQUIRED",
-        message:"Authentication required.",
-      },{status:401}),
-    };
-  }
+  const context=getOperationContext()??createOperationContext("calendar.sync");
+  return runWithOperationContext(context,async()=>{
+    try{
+      return {ok:true,runtime:await getCalendarRouteRuntime()};
+    }catch(error){
+      if(!isAuthenticationRequired(error)){
+        emitOperationEvent(context,{code:"SERVICE_UNAVAILABLE",result:"error",status:503});
+        throw error;
+      }
+      emitOperationEvent(context,{code:"AUTH_REQUIRED",result:"rejected",status:401});
+      return {
+        ok:false,
+        response:Response.json({
+          code:"AUTH_REQUIRED",
+          message:"Authentication required.",
+        },{status:401}),
+      };
+    }
+  });
 }

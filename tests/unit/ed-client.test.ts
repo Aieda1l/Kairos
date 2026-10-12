@@ -63,7 +63,10 @@ describe("EdApiClient",()=>{
       expect(error).toBeInstanceOf(EdSourceError);
       expect(error).toMatchObject({code:"ED_NETWORK_ERROR"});
       expect(String(error)).not.toContain(token);
-      expect(JSON.stringify(warning.mock.calls)).toContain('"reason":"transport"');
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",provider:"ed",code:"UPSTREAM_TRANSPORT_ERROR",result:"error",
+      });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(token);
     }finally{
       warning.mockRestore();
@@ -79,7 +82,10 @@ describe("EdApiClient",()=>{
       expect(error).toMatchObject({code:"ED_NETWORK_ERROR"});
       expect(String(error)).toContain("15 seconds");
       const diagnostic=JSON.stringify(warning.mock.calls);
-      expect(diagnostic).toContain('"reason":"timeout"');
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",provider:"ed",code:"UPSTREAM_TIMEOUT",result:"error",
+      });
       expect(diagnostic).not.toContain(token);
     }finally{
       timeout.mockRestore();

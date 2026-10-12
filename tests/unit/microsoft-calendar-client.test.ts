@@ -256,8 +256,9 @@ describe("Microsoft Calendar client",()=>{
     },{status})) as unknown as typeof fetch);
     try{
       await expect(client.findCalendarByName("Kairos")).rejects.toMatchObject({code});
-      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Graph calendar request denied",{
-        status,operation:"GET",providerCode:"ErrorAccessDenied",reason:"unspecified",responseFormat:"json",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",status,code,provider:"microsoft",action:"calendar.sync",
       });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(sensitive);
     }finally{
@@ -266,11 +267,11 @@ describe("Microsoft Calendar client",()=>{
   });
 
   it.each([
-    ["UnknownError","","unspecified"],
-    ["InvalidAuthenticationToken","Access token validation failure. Invalid audience.","invalid_audience"],
-    ["InvalidAuthenticationToken","Lifetime validation failed, the token is expired.","token_expired"],
-    ["InvalidAuthenticationToken","CompactToken parsing failed with error code: 80049217","malformed_token"],
-  ] as const)("logs a safe Graph rejection category for %s without provider messages",async(providerCode,message,reason)=>{
+    ["UnknownError",""],
+    ["InvalidAuthenticationToken","Access token validation failure. Invalid audience."],
+    ["InvalidAuthenticationToken","Lifetime validation failed, the token is expired."],
+    ["InvalidAuthenticationToken","CompactToken parsing failed with error code: 80049217"],
+  ] as const)("logs a safe Graph rejection category for %s without provider messages",async(providerCode,message)=>{
     const sensitive="private-account-and-access-token-never-echo";
     const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
     const client=new MicrosoftCalendarClient(sensitive,async()=>Response.json({
@@ -278,8 +279,9 @@ describe("Microsoft Calendar client",()=>{
     },{status:401}));
     try{
       await expect(client.findCalendarByName("Kairos")).rejects.toMatchObject({code:"CALENDAR_AUTH_EXPIRED"});
-      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Graph calendar request denied",{
-        status:401,operation:"GET",providerCode,reason,responseFormat:"json",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",status:401,code:"CALENDAR_AUTH_EXPIRED",provider:"microsoft",
       });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(sensitive);
       if(message)expect(JSON.stringify(warning.mock.calls)).not.toContain(message);

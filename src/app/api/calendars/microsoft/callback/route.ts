@@ -6,12 +6,26 @@ import {
 import {connectOAuthCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
+import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 
 export async function GET(request:Request){
+  return runWithOperationContext(createOperationContext("calendar.connect"),async()=>{
+    try{return await completeCallback(request);}catch(error){
+      emitOperationEvent(getOperationContext()!,{code:"SERVICE_UNAVAILABLE",result:"error",provider:"microsoft"});
+      throw error;
+    }
+  });
+}
+
+async function completeCallback(request:Request){
+  const context=getOperationContext()!;
+  const started=performance.now();
   const url=new URL(request.url);
   const state=url.searchParams.get("state");
   const code=url.searchParams.get("code");
   if(!state||!code){
+    emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"microsoft",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
       message:"Microsoft Calendar authorization was not completed.",
@@ -19,14 +33,15 @@ export async function GET(request:Request){
   }
 
   const resolved=await resolveCalendarApiRuntime();
-    if(!resolved.ok)return resolved.response;
-    const runtime=resolved.runtime;
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   const registered=runtime.kind==="legacy"
     ?consumeOAuthRequest(state,"microsoft")
     :await consumeOAuthRequest(
       runtime.db,runtime.scope,runtime.keyring,state,"microsoft",
     );
   if(!registered){
+    emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"microsoft",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
       message:"Microsoft Calendar authorization request is no longer active.",
@@ -61,10 +76,12 @@ export async function GET(request:Request){
         },
       );
     }
-    return Response.redirect(
+    const response=Response.redirect(
       new URL(registered.returnTo,registered.redirectUri),
       307,
     );
+    emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,durationMs:performance.now()-started});
+    return response;
   }catch(error){
     const e=error instanceof CalendarSyncError
       ?error
@@ -72,9 +89,7 @@ export async function GET(request:Request){
         "CALENDAR_UPSTREAM_ERROR",
         "Microsoft Calendar could not be connected.",
       );
-    console.warn("Kairos Microsoft Calendar connection failed",{
-      stage,code:e.code,
-    });
+    emitOperationEvent(context,{code:e.code,result:"error",provider:"microsoft",status:303,durationMs:performance.now()-started});
     // A browser follows this callback after consent. Return to the app and
     // remove the one-time authorization code from the address bar/history.
     // Only a fixed application error code is carried to the UI.
