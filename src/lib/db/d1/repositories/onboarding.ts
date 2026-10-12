@@ -2,6 +2,7 @@ import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import type {OnboardingCommand,OnboardingState} from "@/lib/onboarding/types";
+import {D1OnboardingDraftRepository} from "./onboarding-drafts";
 import {
   applyOnboardingCommand,createOnboardingState,onboardingRevisionSchema,
   onboardingStateSchema,ONBOARDING_MAX_PAYLOAD_BYTES,
@@ -66,10 +67,13 @@ export class D1OnboardingRepository{
     const next=applyOnboardingCommand(state,input);
     const value=JSON.stringify(next);
     if(new TextEncoder().encode(value).byteLength>ONBOARDING_MAX_PAYLOAD_BYTES)throw new OnboardingValidationError();
-    const result=await this.db.prepare(`
+    const update=this.db.prepare(`
       UPDATE app_settings SET value=?,updated_at=?
       WHERE user_id=? AND key='onboarding' AND value=?
-    `).bind(value,new Date().toISOString(),this.scope.userId,row.value).run();
+    `).bind(value,new Date().toISOString(),this.scope.userId,row.value);
+    const result=next.status==="completed"
+      ?(await this.db.batch([update,new D1OnboardingDraftRepository(this.db,this.scope).prepareFinishCleanup(value)]))[0]!
+      :await update.run();
     if(result.meta.changes!==1)throw new OnboardingConflictError();
     return next;
   }

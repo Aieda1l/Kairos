@@ -8,6 +8,7 @@ import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory,CalendarDestinationAdapter} from "@/lib/calendar/adapter";
 import type {CalendarConnection,CalendarProvider} from "@/lib/calendar/types";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
+import {D1OnboardingDraftRepository} from "@/lib/db/d1/repositories/onboarding-drafts";
 import {D1CalendarCredentialRepository} from "@/lib/db/d1/repositories/calendar-credentials";
 import {D1CalendarEventLinkRepository} from "@/lib/db/d1/repositories/calendar-event-links";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -222,10 +223,11 @@ async function connectCaldavHosted(
   scope:UserScope,
   keyring:CredentialKeyring,
   input:CaldavConnectInput,
+  candidateEnvelope?:string|null,
 ):Promise<CalendarConnection>{
   if(!currentProviderWork(db,scope,"caldav","credential")){
     if(input.connectionId){const existing=await new D1CalendarConnectionRepository(db,scope).getById(input.connectionId);if(!existing||existing.provider!=="caldav")throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");}
-    return withProviderService(db,scope,{provider:"caldav",operation:"credential",...(input.connectionId?{resourceId:input.connectionId}:{})},()=>connectCaldavHosted(db,scope,keyring,input));
+    return withProviderService(db,scope,{provider:"caldav",operation:"credential",...(input.connectionId?{resourceId:input.connectionId}:{})},()=>connectCaldavHosted(db,scope,keyring,input,candidateEnvelope));
   }
   const connections=new D1CalendarConnectionRepository(db,scope);
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
@@ -238,13 +240,15 @@ async function connectCaldavHosted(
   }
 
   const base=existing??{...pending("caldav","Apple iCloud Calendar"),id:crypto.randomUUID()};
+  const drafts=new D1OnboardingDraftRepository(db,scope);
+  const candidate=candidateEnvelope===undefined?await drafts.envelope("caldav"):candidateEnvelope;
   const credential=await credentials.prepareCaldavCredentials(base.id,input.username,input.secret);
   const client=new CalDavClient(
     input.username,input.secret,ownedFetch(input.fetchImpl??getCalendarRouteFetch()),
   );
   const remote=await acceptedCaldavRemote(client,existing);
   const updated={...base,accountLabel:input.username,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
-  await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential]);
+  await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential,drafts.prepareAcceptedCleanup("caldav",candidate)]);
   return updated;
 }
 
@@ -257,15 +261,17 @@ export function connectCaldavCalendar(
   scope:UserScope,
   keyring:CredentialKeyring,
   input:CaldavConnectInput,
+  candidateEnvelope?:string|null,
 ):Promise<CalendarConnection>;
 export async function connectCaldavCalendar(
   db:LegacyDatabase|D1DatabaseLike,
   arg2:CaldavConnectInput|UserScope,
   arg3?:CredentialKeyring,
   arg4?:CaldavConnectInput,
+  candidateEnvelope?:string|null,
 ):Promise<CalendarConnection>{
   if("userId" in arg2){
-    return connectCaldavHosted(db as D1DatabaseLike,arg2,arg3!,arg4!);
+    return connectCaldavHosted(db as D1DatabaseLike,arg2,arg3!,arg4!,candidateEnvelope);
   }
 
   const input=arg2;

@@ -4,6 +4,7 @@ export type SecretPurpose=
   | "google_refresh_token"
   | "microsoft_refresh_token"
   | "caldav_secret"
+  | "onboarding_draft"
   | "oauth_pkce_verifier";
 
 export type CredentialKeyring={

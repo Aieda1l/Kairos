@@ -8,6 +8,7 @@ import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
 import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
+import {D1OnboardingDraftRepository} from "@/lib/db/d1/repositories/onboarding-drafts";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {SourceCredentialRepository} from "@/lib/db/repositories/source-credentials";
 import {SourceCourseRepository} from "@/lib/db/repositories/source-courses";
@@ -78,6 +79,7 @@ export function connectEd(
   token:string,
   fetchImpl?:typeof fetch,
   now?:Date,
+  candidateEnvelope?:string|null,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export async function connectEd(
   db:LegacyDatabase|D1DatabaseLike,
@@ -86,6 +88,7 @@ export async function connectEd(
   arg4?:Date|string,
   arg5?:typeof fetch,
   arg6?:Date,
+  candidateEnvelope?:string|null,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(typeof arg2==="string"){
     const legacyDb=db as LegacyDatabase;
@@ -107,12 +110,14 @@ export async function connectEd(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
-  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6,candidateEnvelope));
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
   const token=arg4 as string;
   const fetchImpl=ownedFetch(arg5??fetch);
+  const drafts=new D1OnboardingDraftRepository(hostedDb,scope);
+  const candidate=candidateEnvelope===undefined?await drafts.envelope("ed"):candidateEnvelope;
   const now=arg6??new Date();
   const payload=await new EdApiClient(token,fetchImpl).fetchUser();
   const discovered=parseEdCourses(payload);
@@ -129,6 +134,7 @@ export async function connectEd(
     courseRepo.prepareDiscovered(id,discovered,seenAt),
     courseRepo.prepareList(id),
     connectionRepo.prepareGetByKind("ed"),
+    drafts.prepareAcceptedCleanup("ed",candidate),
   ]);
   return {connection:connectionRepo.connectionFromResult(results[4]!),courses:courseRepo.coursesFromResult(results[3]!)};
 }

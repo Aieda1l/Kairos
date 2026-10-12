@@ -6,6 +6,7 @@ import {normalizeSourceAssignment} from "@/lib/assignments/normalize";
 import {D1AssignmentRepository} from "@/lib/db/d1/repositories/assignments";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
+import {D1OnboardingDraftRepository} from "@/lib/db/d1/repositories/onboarding-drafts";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {SourceCredentialRepository} from "@/lib/db/repositories/source-credentials";
@@ -25,13 +26,18 @@ export const canvasConnectSchema=z.object({
 export async function connectCanvas(
   runtime:SourceRuntimeContext|SourceRouteRuntime,
   input:ConnectInput,
+  candidateEnvelope?:string|null,
 ):Promise<{connection:SourceConnection;sync:SyncSummary}>{
   if(!("kind" in runtime&&runtime.kind==="legacy")){
     const hosted=runtime as SourceRuntimeContext;
-    if(!currentProviderWork(hosted.db,hosted.scope,"canvas","credential"))return withProviderService(hosted.db,hosted.scope,{provider:"canvas",operation:"credential"},()=>connectCanvas(runtime,input));
+    if(!currentProviderWork(hosted.db,hosted.scope,"canvas","credential"))return withProviderService(hosted.db,hosted.scope,{provider:"canvas",operation:"credential"},()=>connectCanvas(runtime,input,candidateEnvelope));
   }
   input=canvasConnectSchema.parse(input);
   const url=validateCanvasFeedUrl(input.feedUrl);
+  const drafts="kind" in runtime&&runtime.kind==="legacy"?null:new D1OnboardingDraftRepository((runtime as SourceRuntimeContext).db,(runtime as SourceRuntimeContext).scope);
+  // Private draft callers carry the exact server-read envelope; HTTP inputs
+  // cannot supply this separate cleanup argument or authorize provider work.
+  const candidate=candidateEnvelope===undefined?await drafts?.envelope("canvas"):candidateEnvelope;
   const startedAt=new Date().toISOString();
   const source=new CanvasIcalSource(url);
   const rows=(await source.sync()).map(row=>normalizeSourceAssignment("canvas",row));
@@ -74,6 +80,7 @@ export async function connectCanvas(
     assignments.prepareUpsertMany(id,rows,completedAt),
     connections.prepareSyncStarted(id,startedAt),
     connections.prepareSyncSuccess(id,completedAt,partial?"PARTIAL_PARSE":null),
+    drafts!.prepareAcceptedCleanup("canvas",candidate??null),
   ]);
   const inserted=(results[2]!.results[0] as {inserted:number}).inserted;
   return {
