@@ -8,6 +8,17 @@ export const CONTROL_KEYS:readonly ControlKey[]=Object.freeze([
 ]);
 export class D1AbuseControlRepository{
   constructor(private readonly db:D1DatabaseLike){}
+  /** Internal operator API only; no request supplies a control or version. */
+  async setEnabled(key:ControlKey,enabled:boolean):Promise<void>{
+    try{
+      if(!CONTROL_KEYS.includes(key)||typeof enabled!=="boolean")throw new AbuseStorageUnavailableError();
+      await this.db.prepare(`UPDATE abuse_controls SET enabled=?,version=version+1,
+        updated_at_ms=CAST(strftime('%s','now') AS INTEGER)*1000
+        WHERE control_key=? AND enabled<>? AND version<9007199254740991`)
+        .bind(enabled?1:0,key,enabled?1:0).run();
+      if((await this.get(key)).enabled!==enabled)throw new AbuseStorageUnavailableError();
+    }catch{throw new AbuseStorageUnavailableError();}
+  }
   async get(key:ControlKey):Promise<{enabled:boolean;version:number}>{
     try{
       if(!CONTROL_KEYS.includes(key))throw new AbuseStorageUnavailableError();

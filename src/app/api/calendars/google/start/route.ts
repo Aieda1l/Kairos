@@ -7,6 +7,8 @@ import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 import {registerOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
+import {OAuthControlPausedError} from "@/lib/db/d1/repositories/oauth-requests";
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 
 const schema=z.object({connectionId:z.string().min(1).optional()}).strict();
 
@@ -49,6 +51,9 @@ export async function POST(request:Request){
       }).toString(),
     });
   }catch(error){
+    const admission=abuseErrorResponse(error);
+    if(admission)return admission;
+    if(error instanceof OAuthControlPausedError)return Response.json({code:error.code,message:error.message},{status:503,headers:{"cache-control":"no-store"}});
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(

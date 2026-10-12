@@ -26,7 +26,7 @@ export function createAuthConfig(
   const linkAccount=adapter.linkAccount!;
   return {
     secret:env.AUTH_SECRET,
-    pages:{signIn:"/sign-in"},
+    pages:{signIn:"/sign-in",error:"/sign-in"},
     logger:authDiagnostics,
     adapter:{
       ...adapter,
@@ -44,11 +44,13 @@ export function createAuthConfig(
       Google({
         clientId:env.AUTH_GOOGLE_ID,
         clientSecret:env.AUTH_GOOGLE_SECRET,
+        checks:["pkce","state"],
         authorization:{params:{scope:GOOGLE_IDENTITY_SCOPE}},
       }),
       MicrosoftEntraID({
         clientId:env.AUTH_MICROSOFT_ENTRA_ID_ID,
         clientSecret:env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+        checks:["pkce","state"],
         issuer:env.AUTH_MICROSOFT_ENTRA_ID_ISSUER
           ?? "https://login.microsoftonline.com/common/v2.0",
         authorization:{params:{scope:MICROSOFT_IDENTITY_SCOPE}},

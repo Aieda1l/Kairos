@@ -6,12 +6,30 @@ import {
 import {connectOAuthCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
+import {D1AbuseControlRepository} from "@/lib/db/d1/repositories/abuse-controls";
+import {abuseErrorResponse} from "@/lib/abuse/guard";
+import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 
 export async function GET(request:Request){
+  return runWithOperationContext(createOperationContext("calendar.connect"),async()=>{
+    try{return await completeCallback(request);}catch(error){
+      const admission=abuseErrorResponse(error);
+      emitOperationEvent(getOperationContext()!,{code:"SERVICE_UNAVAILABLE",result:"error",provider:"google",
+        ...(admission?{status:admission.status}:{})});
+      if(admission)return admission;
+      throw error;
+    }
+  });
+}
+
+async function completeCallback(request:Request){
+  const context=getOperationContext()!;
   const url=new URL(request.url);
   const state=url.searchParams.get("state");
   const code=url.searchParams.get("code");
   if(!state||!code){
+    emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"google",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
       message:"Google Calendar authorization was not completed.",
@@ -27,6 +45,7 @@ export async function GET(request:Request){
       runtime.db,runtime.scope,runtime.keyring,state,"google",
     );
   if(!registered){
+    emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"google",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
       message:"Google Calendar authorization request is no longer active.",
@@ -49,6 +68,8 @@ export async function GET(request:Request){
         connectionId:registered.connectionId,
       });
     }else{
+      const control=await new D1AbuseControlRepository(runtime.db).get("provider:google");
+      if(!control.enabled||control.version!==registered.controlVersion)throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
       await connectOAuthCalendar(
         runtime.db,runtime.scope,runtime.keyring,{
           provider:"google",
@@ -58,20 +79,25 @@ export async function GET(request:Request){
         },
       );
     }
-    return Response.redirect(
+    const response=Response.redirect(
       new URL(registered.returnTo,registered.redirectUri),
       307,
     );
+    emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"google",status:307});
+    return response;
   }catch(error){
+    if(abuseErrorResponse(error))throw error;
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(
         "CALENDAR_UPSTREAM_ERROR",
         "Google Calendar could not be connected.",
       );
+    const status=e.code==="CALENDAR_AUTH_EXPIRED"?401:502;
+    emitOperationEvent(context,{code:e.code,result:"error",provider:"google",status});
     return Response.json(
       {code:e.code,message:e.message},
-      {status:e.code==="CALENDAR_AUTH_EXPIRED"?401:502},
+      {status},
     );
   }
 }

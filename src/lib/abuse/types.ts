@@ -5,7 +5,7 @@ export type SourceProvider="canvas"|"gradescope"|"ed";
 export type CalendarProvider="google"|"microsoft"|"caldav";
 export type IntegrationProvider=SourceProvider|CalendarProvider;
 export type ControlKey="auth:initiation"|`auth:${IdentityProvider}`|`provider:${IntegrationProvider}`;
-export type TrustedIngress="none"|"cloudflare";
+export type TrustedIngress="none"|"cloudflare"|"loopback";
 
 // Callers must authenticate and authorize these actors/resources before admission.
 // No body/header supplied identity, resource, ingress mode, or budget is trusted.

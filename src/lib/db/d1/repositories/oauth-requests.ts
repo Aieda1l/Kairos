@@ -3,6 +3,7 @@ import {isSafeReturnTo,safeReturnTo} from "@/lib/auth/return-to";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarProvider} from "@/lib/calendar/types";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import {D1AbuseControlRepository} from "./abuse-controls";
 import {
   decryptCredential,
   encryptCredential,
@@ -12,6 +13,7 @@ import {
 export type OAuthProvider=Extract<CalendarProvider,"google"|"microsoft">;
 
 export type RegisteredHostedOAuthRequest={
+  controlVersion:number;
   provider:OAuthProvider;
   codeVerifier:string;
   redirectUri:string;
@@ -29,6 +31,7 @@ export type HostedOAuthRequestInput={
 };
 
 type Row={
+  control_version:number;
   provider:OAuthProvider;
   code_verifier_envelope:string;
   redirect_uri:string;
@@ -39,6 +42,10 @@ type Row={
 };
 
 const TTL_MS=10*60*1000;
+export class OAuthControlPausedError extends Error{
+  readonly code="AUTH_INITIATION_PAUSED";
+  constructor(){super("Calendar authorization is temporarily unavailable.");}
+}
 
 function base64Url(bytes:Uint8Array):string{
   let binary="";
@@ -80,6 +87,8 @@ export class D1OAuthRequestRepository{
     input:HostedOAuthRequestInput,
     now:Date=new Date(),
   ):Promise<{state:string;codeChallenge:string}>{
+    const control=await new D1AbuseControlRepository(this.db).get(`provider:${input.provider}`);
+    if(!control.enabled)throw new OAuthControlPausedError();
     const state=randomBase64Url(32);
     const codeVerifier=randomBase64Url(48);
     const stateHash=await sha256Base64Url(state);
@@ -94,11 +103,12 @@ export class D1OAuthRequestRepository{
       contextId:stateHash,
     },this.keyring);
 
-    await this.db.prepare(`
+    const inserted=await this.db.prepare(`
       INSERT INTO oauth_requests(
         user_id,state_hash,provider,code_verifier_envelope,connection_id,
-        return_to,redirect_uri,created_at,expires_at,consumed_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,NULL)
+        return_to,redirect_uri,created_at,expires_at,consumed_at,control_version
+      ) SELECT ?,?,?,?,?,?,?,?,?,NULL,?
+        WHERE EXISTS(SELECT 1 FROM abuse_controls WHERE control_key=? AND enabled=1 AND version=?)
     `).bind(
       this.scope.userId,
       stateHash,
@@ -109,7 +119,11 @@ export class D1OAuthRequestRepository{
       input.redirectUri,
       createdAt,
       expiresAt,
+      control.version,
+      `provider:${input.provider}`,
+      control.version,
     ).run();
+    if((inserted.meta.changes??0)!==1)throw new OAuthControlPausedError();
 
     return {state,codeChallenge};
   }
@@ -119,6 +133,9 @@ export class D1OAuthRequestRepository{
     provider:OAuthProvider,
     now:Date=new Date(),
   ):Promise<RegisteredHostedOAuthRequest|null>{
+    if(typeof state!=="string"||state.length>2048||!state)return null;
+    const control=await new D1AbuseControlRepository(this.db).get(`provider:${provider}`);
+    if(!control.enabled)return null;
     const stateHash=await sha256Base64Url(state);
     const consumedAt=now.toISOString();
 
@@ -130,19 +147,24 @@ export class D1OAuthRequestRepository{
         AND provider=?
         AND consumed_at IS NULL
         AND expires_at>=?
+        AND control_version=?
+        AND EXISTS(SELECT 1 FROM abuse_controls WHERE control_key=? AND enabled=1 AND version=?)
     `).bind(
       consumedAt,
       this.scope.userId,
       stateHash,
       provider,
       consumedAt,
+      control.version,
+      `provider:${provider}`,
+      control.version,
     ).run();
 
     if((claimed.meta.changes??0)!==1)return null;
 
     const row=await this.db.prepare(`
       SELECT provider,code_verifier_envelope,redirect_uri,return_to,
-        connection_id,created_at,expires_at
+        connection_id,created_at,expires_at,control_version
       FROM oauth_requests
       WHERE user_id=? AND state_hash=? AND provider=? AND consumed_at=?
     `).bind(
@@ -162,6 +184,7 @@ export class D1OAuthRequestRepository{
     },this.keyring);
 
     return {
+      controlVersion:row.control_version,
       provider:row.provider,
       codeVerifier,
       redirectUri:row.redirect_uri,

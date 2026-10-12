@@ -3,6 +3,7 @@ import {abuseKeyFromEnvironment} from "@/lib/abuse/keys";
 import {policyFromEnvironment} from "@/lib/abuse/policy";
 import {AbuseConfigurationError,type AbuseRuntime,type TrustedIngress} from "@/lib/abuse/types";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import {canonicalAppOrigin} from "@/lib/security/request-origin";
 
 export function resolveAbuseRuntime(env:Record<string,unknown>,fetchImpl:typeof fetch=fetch):AbuseRuntime{
   try{
@@ -12,11 +13,9 @@ export function resolveAbuseRuntime(env:Record<string,unknown>,fetchImpl:typeof 
       if(typeof env[name]!=="string"||!(env[name] as string).trim()||(env[name] as string).length>4096)throw new AbuseConfigurationError();
     }
     const hmacKey=abuseKeyFromEnvironment(env.KAIROS_ABUSE_KEY_V1,env.KAIROS_CREDENTIAL_KEY_V1);
-    if(typeof env.KAIROS_APP_URL!=="string")throw new AbuseConfigurationError();
-    const origin=new URL(env.KAIROS_APP_URL);
-    if(origin.protocol!=="https:"||origin.username||origin.password||origin.origin!==env.KAIROS_APP_URL)throw new AbuseConfigurationError();
+    const origin=canonicalAppOrigin(env);
     const ingress=env.KAIROS_ABUSE_TRUSTED_INGRESS??"none";
-    if(ingress!=="none"&&ingress!=="cloudflare")throw new AbuseConfigurationError();
+    if(ingress!=="none"&&ingress!=="cloudflare"&&!(ingress==="loopback"&&env.KAIROS_LOCAL_AUTH==="loopback"))throw new AbuseConfigurationError();
     return {db,hmacKey,turnstileSecret:(env.KAIROS_TURNSTILE_SECRET_KEY as string).trim(),appOrigin:origin.origin,
       hostname:origin.hostname,fetchImpl,policy:policyFromEnvironment(env),trustedIngress:ingress as TrustedIngress};
   }catch{throw new AbuseConfigurationError();}

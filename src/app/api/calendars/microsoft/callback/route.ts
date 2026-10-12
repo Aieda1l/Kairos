@@ -8,11 +8,16 @@ import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
 import {emitOperationEvent} from "@/lib/operations/events";
+import {D1AbuseControlRepository} from "@/lib/db/d1/repositories/abuse-controls";
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 
 export async function GET(request:Request){
   return runWithOperationContext(createOperationContext("calendar.connect"),async()=>{
     try{return await completeCallback(request);}catch(error){
-      emitOperationEvent(getOperationContext()!,{code:"SERVICE_UNAVAILABLE",result:"error",provider:"microsoft"});
+      const admission=abuseErrorResponse(error);
+      emitOperationEvent(getOperationContext()!,{code:"SERVICE_UNAVAILABLE",result:"error",provider:"microsoft",
+        ...(admission?{status:admission.status}:{})});
+      if(admission)return admission;
       throw error;
     }
   });
@@ -67,6 +72,8 @@ async function completeCallback(request:Request){
         connectionId:registered.connectionId,
       });
     }else{
+      const control=await new D1AbuseControlRepository(runtime.db).get("provider:microsoft");
+      if(!control.enabled||control.version!==registered.controlVersion)throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
       await connectOAuthCalendar(
         runtime.db,runtime.scope,runtime.keyring,{
           provider:"microsoft",
@@ -83,6 +90,7 @@ async function completeCallback(request:Request){
     emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,durationMs:performance.now()-started});
     return response;
   }catch(error){
+    if(abuseErrorResponse(error))throw error;
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(

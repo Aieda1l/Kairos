@@ -11,6 +11,12 @@
     "logs": {"enabled": false, "invocation_logs": false, "persist": false},
     "traces": {"enabled": false, "persist": false}
   },
+  "vars": {
+    "KAIROS_APP_URL": "http://127.0.0.1:3000",
+    "AUTH_URL": "http://127.0.0.1:3000",
+    "KAIROS_LOCAL_AUTH": "loopback",
+    "KAIROS_ABUSE_TRUSTED_INGRESS": "loopback"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -31,7 +37,8 @@
     "production": {
       "vars": {
         "KAIROS_APP_URL": "https://mykairos.me",
-        "AUTH_URL": "https://mykairos.me"
+        "AUTH_URL": "https://mykairos.me",
+        "KAIROS_ABUSE_TRUSTED_INGRESS": "cloudflare"
       },
       "d1_databases": [
         {

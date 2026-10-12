@@ -12,6 +12,7 @@ import type {CredentialKeyring} from "@/lib/security/credential-cipher";
 type OAuthProvider=Extract<CalendarProvider,"google"|"microsoft">;
 
 export type RegisteredOAuthRequest={
+  controlVersion?:number; // Durable hosted callbacks always carry the admitted version.
   provider:OAuthProvider;
   codeVerifier:string;
   redirectUri:string;
