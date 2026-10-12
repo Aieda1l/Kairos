@@ -1,3 +1,5 @@
+import {guardCalendarAdapter} from "@/lib/calendar/adapter";
+import {ownsOperation,withOwnedOperation,ownedFetch,uncertainOwnedWork,uncertainOwnedCalendarWrite,throttleOwnedWork,ownedWorkStopped} from "@/lib/abuse/operation-lock";
 import "server-only";
 import {z} from "zod";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -39,7 +41,7 @@ async function requireWritableOAuthCalendar(input:OAuthConnectInput,calendarId:s
     :`https://graph.microsoft.com/v1.0/me/calendars/${id}`;
   let response:Response;
   try{
-    response=await (input.fetchImpl??fetch)(url,{method:"GET",headers:{authorization:`Bearer ${input.accessToken}`}});
+    response=await (ownedFetch(input.fetchImpl??fetch))(url,{method:"GET",headers:{authorization:`Bearer ${input.accessToken}`}});
   }catch{
     throw new CalendarSyncError("CALENDAR_NETWORK_ERROR","The calendar provider could not be reached.");
   }
@@ -106,6 +108,10 @@ async function connectOAuthHosted(
   keyring:CredentialKeyring,
   input:OAuthConnectInput,
 ):Promise<CalendarConnection>{
+  if(!ownsOperation(db,scope,`calendar:${input.provider}`)){
+    if(input.connectionId){const existing=await new D1CalendarConnectionRepository(db,scope).getById(input.connectionId);if(!existing||existing.provider!==input.provider)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");}
+    return withOwnedOperation(db,scope,`calendar:${input.provider}`,()=>connectOAuthHosted(db,scope,keyring,input));
+  }
   const connections=new D1CalendarConnectionRepository(db,scope);
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
   const existing=input.connectionId?await connections.getById(input.connectionId):null;
@@ -126,16 +132,23 @@ async function connectOAuthHosted(
   const base=existing??{...pending(input.provider,label),id:crypto.randomUUID()};
   const credential=await credentials.prepareOAuthRefreshToken(base.id,input.provider,refreshToken);
   const client=input.provider==="google"
-    ?new GoogleCalendarClient(input.accessToken,input.fetchImpl??fetch)
-    :new MicrosoftCalendarClient(input.accessToken,input.fetchImpl??fetch);
+    ?new GoogleCalendarClient(input.accessToken,ownedFetch(input.fetchImpl??fetch))
+    :new MicrosoftCalendarClient(input.accessToken,ownedFetch(input.fetchImpl??fetch));
   const adapter=input.provider==="google"
     ?new GoogleCalendarAdapter(base,client as GoogleCalendarClient)
     :new MicrosoftCalendarAdapter(base,client as MicrosoftCalendarClient);
 
-  const remote=await acceptedOAuthRemote(input,adapter,existing);
+  let remote:Awaited<ReturnType<typeof acceptedOAuthRemote>>;
+  try{remote=await acceptedOAuthRemote(input,adapter,existing);}catch(error){
+    if(!existing&&(!(error instanceof CalendarSyncError)||["CALENDAR_NETWORK_ERROR","CALENDAR_UPSTREAM_ERROR"].includes(error.code)))uncertainOwnedCalendarWrite();
+    throw error;
+  }
   const updated={...base,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
   // Provisioning cannot join this transaction; never delete remote data to compensate.
-  await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential]);
+  try{await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential]);}catch(error){
+    uncertainOwnedCalendarWrite();
+    throw error;
+  }
   return updated;
 }
 
@@ -172,8 +185,8 @@ export async function connectOAuthCalendar(
   const label=input.provider==="google"?"Google Calendar":"Outlook / Microsoft 365";
   const base=existing??pending(input.provider,label);
   const client=input.provider==="google"
-    ?new GoogleCalendarClient(input.accessToken,input.fetchImpl??fetch)
-    :new MicrosoftCalendarClient(input.accessToken,input.fetchImpl??fetch);
+    ?new GoogleCalendarClient(input.accessToken,ownedFetch(input.fetchImpl??fetch))
+    :new MicrosoftCalendarClient(input.accessToken,ownedFetch(input.fetchImpl??fetch));
   const adapter=input.provider==="google"
     ?new GoogleCalendarAdapter(base,client as GoogleCalendarClient)
     :new MicrosoftCalendarAdapter(base,client as MicrosoftCalendarClient);
@@ -187,12 +200,11 @@ export async function connectOAuthCalendar(
   })();
 }
 
-export async function testCaldavCredentials(
-  username:string,
-  secret:string,
-  fetchImpl:typeof fetch=getCalendarRouteFetch(),
-):Promise<{calendarCount:number}>{
-  const client=new CalDavClient(username,secret,fetchImpl);
+export function testCaldavCredentials(username:string,secret:string,fetchImpl?:typeof fetch):Promise<{calendarCount:number}>;
+export function testCaldavCredentials(db:D1DatabaseLike,scope:UserScope,username:string,secret:string,fetchImpl?:typeof fetch):Promise<{calendarCount:number}>;
+export async function testCaldavCredentials(arg1:string|D1DatabaseLike,arg2:string|UserScope,arg3?:typeof fetch|string,arg4?:string,arg5?:typeof fetch):Promise<{calendarCount:number}>{
+  if(typeof arg1!=="string")return withOwnedOperation(arg1,arg2 as UserScope,"calendar:caldav",()=>testCaldavCredentials(arg3 as string,arg4!,ownedFetch(arg5??getCalendarRouteFetch())));
+  const client=new CalDavClient(arg1,arg2 as string,(arg3 as typeof fetch|undefined)??getCalendarRouteFetch());
   const calendars=await client.discoverCalendars();
   return {calendarCount:calendars.filter(item=>item.writable).length};
 }
@@ -210,6 +222,10 @@ async function connectCaldavHosted(
   keyring:CredentialKeyring,
   input:CaldavConnectInput,
 ):Promise<CalendarConnection>{
+  if(!ownsOperation(db,scope,"calendar:caldav")){
+    if(input.connectionId){const existing=await new D1CalendarConnectionRepository(db,scope).getById(input.connectionId);if(!existing||existing.provider!=="caldav")throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");}
+    return withOwnedOperation(db,scope,"calendar:caldav",()=>connectCaldavHosted(db,scope,keyring,input));
+  }
   const connections=new D1CalendarConnectionRepository(db,scope);
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
   const existing=input.connectionId?await connections.getById(input.connectionId):null;
@@ -223,7 +239,7 @@ async function connectCaldavHosted(
   const base=existing??{...pending("caldav","Apple iCloud Calendar"),id:crypto.randomUUID()};
   const credential=await credentials.prepareCaldavCredentials(base.id,input.username,input.secret);
   const client=new CalDavClient(
-    input.username,input.secret,input.fetchImpl??getCalendarRouteFetch(),
+    input.username,input.secret,ownedFetch(input.fetchImpl??getCalendarRouteFetch()),
   );
   const remote=await acceptedCaldavRemote(client,existing);
   const updated={...base,accountLabel:input.username,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
@@ -258,7 +274,7 @@ export async function connectCaldavCalendar(
   const existing=input.connectionId?connections.getById(input.connectionId):null;
   if(input.connectionId&&!existing)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");
   if(existing&&existing.provider!=="caldav")throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar provider does not match the connection.");
-  const client=new CalDavClient(input.username,input.secret,input.fetchImpl??getCalendarRouteFetch());
+  const client=new CalDavClient(input.username,input.secret,ownedFetch(input.fetchImpl??getCalendarRouteFetch()));
   const remote=await acceptedCaldavRemote(client,existing);
   return legacyDb.transaction(()=>{
     const connection=existing??connections.create({
@@ -318,6 +334,7 @@ async function removeHosted(
   const connections=new D1CalendarConnectionRepository(db,scope);
   const connection=await connections.getById(connectionId);
   if(!connection)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");
+  if(!ownsOperation(db,scope,`calendar:${connection.provider}`))return withOwnedOperation(db,scope,`calendar:${connection.provider}`,()=>removeHosted(db,scope,keyring,connectionId,options));
   if(!connection.remoteCalendarId)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection has no Kairos calendar.");
 
   const links=new D1CalendarEventLinkRepository(db,scope);
@@ -325,21 +342,25 @@ async function removeHosted(
   if(rows.length===0)return {deletedCount:0,failedCount:0};
   const factory=options.adapterFactory
     ??createCalendarAdapterFactory(db,scope,keyring,options);
-  const adapter=await factory(connection);
+  const adapter=guardCalendarAdapter(await factory(connection));
   await adapter.testConnection();
 
   let deletedCount=0;
   let failedCount=0;
   for(const link of rows){
+    if(ownedWorkStopped())break;
     if(!link.remoteEventId){failedCount++;continue;}
     try{
       await adapter.deleteEvent(connection.remoteCalendarId,link.remoteEventId);
       await links.delete(link.id);
       deletedCount++;
-    }catch{
+    }catch(error){
+      if(error instanceof CalendarSyncError&&error.code==="CALENDAR_RATE_LIMITED")throttleOwnedWork();
+      else if(!(error instanceof CalendarSyncError)||["CALENDAR_NETWORK_ERROR","CALENDAR_UPSTREAM_ERROR"].includes(error.code))uncertainOwnedWork();
       failedCount++;
     }
   }
+  if(ownedWorkStopped())failedCount=rows.length-deletedCount;
   return {deletedCount,failedCount};
 }
 
@@ -383,7 +404,7 @@ export async function removeManagedCalendarEvents(
   const rows=links.listByConnection(connection.id);
   if(rows.length===0)return {deletedCount:0,failedCount:0};
   const factory=options.adapterFactory??createCalendarAdapterFactory(legacyDb,options);
-  const adapter=await factory(connection);
+  const adapter=guardCalendarAdapter(await factory(connection));
   await adapter.testConnection();
   let deletedCount=0,failedCount=0;
   for(const link of rows){

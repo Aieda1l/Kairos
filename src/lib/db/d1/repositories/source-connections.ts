@@ -1,3 +1,4 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {SourceConnection} from "@/lib/assignments/types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -43,7 +44,7 @@ export class D1SourceConnectionRepository{
   }
 
   prepareGetByKind(kind:SourceKind):D1PreparedStatementLike{
-    return this.db.prepare(`${this.select} WHERE user_id=? AND kind=?`).bind(this.scope.userId,kind);
+    return prepareOwned(this.db,this.scope,`${this.select} WHERE user_id=? AND kind=?`).bind(this.scope.userId,kind);
   }
 
   connectionFromResult(result:D1ResultLike):SourceConnection{
@@ -51,49 +52,49 @@ export class D1SourceConnectionRepository{
   }
 
   async getById(id:string):Promise<SourceConnection|null>{
-    const row=await this.db.prepare(`${this.select} WHERE user_id=? AND id=?`)
+    const row=await prepareOwned(this.db,this.scope,`${this.select} WHERE user_id=? AND id=?`)
       .bind(this.scope.userId,id).first<Row>();
     return row?map(row):null;
   }
 
   prepareUpsert(id:string,kind:SourceKind,label:string,at:string):D1PreparedStatementLike{
-    return this.db.prepare(`
+    return prepareOwned(this.db,this.scope,`
       INSERT INTO source_connections(user_id,id,kind,label,enabled,last_sync_status,created_at,updated_at)
       VALUES (?,?,?,?,1,'never',?,?)
       ON CONFLICT(user_id,kind) DO UPDATE SET label=excluded.label,enabled=1,updated_at=excluded.updated_at
-    `).bind(this.scope.userId,id,kind,label,at,at);
+    `,{kind:"source",id,key:`source:${kind}`}).bind(this.scope.userId,id,kind,label,at,at);
   }
 
   prepareSyncStarted(id:string,at:string):D1PreparedStatementLike{
-    return this.db.prepare(
+    return prepareOwned(this.db,this.scope,
       "UPDATE source_connections SET last_sync_started_at=?,updated_at=? WHERE user_id=? AND id=?",
-    ).bind(at,at,this.scope.userId,id);
+    {kind:"source",id}).bind(at,at,this.scope.userId,id);
   }
 
   prepareSyncSuccess(id:string,at:string,errorCode:string|null=null):D1PreparedStatementLike{
-    return this.db.prepare(`
+    return prepareOwned(this.db,this.scope,`
       UPDATE source_connections
       SET last_sync_completed_at=?,last_sync_status='success',last_error_code=?,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(at,errorCode,at,this.scope.userId,id);
+    `,{kind:"source",id}).bind(at,errorCode,at,this.scope.userId,id);
   }
 
   private async upsert(kind:SourceKind,label:string):Promise<SourceConnection>{
     const existing=await this.getByKind(kind);
     const now=new Date().toISOString();
     if(existing){
-      await this.db.prepare(
+      await prepareOwned(this.db,this.scope,
         "UPDATE source_connections SET label=?,enabled=1,updated_at=? WHERE user_id=? AND id=?",
-      ).bind(label,now,this.scope.userId,existing.id).run();
+      {kind:"source",id:existing.id,key:`source:${kind}`}).bind(label,now,this.scope.userId,existing.id).run();
       return (await this.getByKind(kind))!;
     }
 
     const id=crypto.randomUUID();
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       INSERT INTO source_connections(
         user_id,id,kind,label,enabled,last_sync_status,created_at,updated_at
       ) VALUES (?,?,?,?,?,?,?,?)
-    `).bind(this.scope.userId,id,kind,label,1,"never",now,now).run();
+    `,{kind:"source",id:id,key:`source:${kind}`}).bind(this.scope.userId,id,kind,label,1,"never",now,now).run();
     return (await this.getByKind(kind))!;
   }
 
@@ -110,10 +111,10 @@ export class D1SourceConnectionRepository{
   }
 
   async markSyncError(id:string,at:string,errorCode:string):Promise<void>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE source_connections
       SET last_sync_status='error',last_error_code=?,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(errorCode,at,this.scope.userId,id).run();
+    `,{kind:"source",id}).bind(errorCode,at,this.scope.userId,id).run();
   }
 }

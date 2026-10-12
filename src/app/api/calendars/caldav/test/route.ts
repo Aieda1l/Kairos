@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {z} from "zod";
 import {testCaldavCredentials} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
@@ -24,9 +25,10 @@ export async function POST(request:Request){
   try{
     return Response.json({
       ok:true,
-      ...await testCaldavCredentials(parsed.data.username,parsed.data.secret),
+      ...await (resolved.runtime.kind==="legacy"?testCaldavCredentials(parsed.data.username,parsed.data.secret):testCaldavCredentials(resolved.runtime.db,resolved.runtime.scope,parsed.data.username,parsed.data.secret)),
     });
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(

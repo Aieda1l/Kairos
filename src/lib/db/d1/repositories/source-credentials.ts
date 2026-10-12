@@ -1,3 +1,4 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
@@ -33,13 +34,13 @@ export class D1SourceCredentialRepository{
       contextId:connectionId,
     },this.keyring);
     const at=new Date().toISOString();
-    return this.db.prepare(`
+    return prepareOwned(this.db,this.scope,`
       INSERT INTO source_credentials(user_id,source_connection_id,${column},updated_at)
       VALUES (?,?,?,?)
       ON CONFLICT(user_id,source_connection_id) DO UPDATE SET
         ${column}=excluded.${column},
         updated_at=excluded.updated_at
-    `).bind(this.scope.userId,connectionId,envelope,at);
+    `,{kind:"source",id:connectionId,key:purpose==="ed_api_token"?"source:ed":"source:canvas"}).bind(this.scope.userId,connectionId,envelope,at);
   }
 
   private async get(
@@ -47,7 +48,7 @@ export class D1SourceCredentialRepository{
     column:keyof Row,
     purpose:SecretPurpose,
   ):Promise<string|null>{
-    const row=await this.db.prepare(`
+    const row=await prepareOwned(this.db,this.scope,`
       SELECT canvas_feed_url_envelope,ed_api_token_envelope
       FROM source_credentials
       WHERE user_id=? AND source_connection_id=?

@@ -1,3 +1,4 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarConnection,CalendarProvider,CalendarSyncStatus} from "@/lib/calendar/types";
@@ -44,20 +45,20 @@ export class D1CalendarConnectionRepository{
   ){}
 
   async list():Promise<CalendarConnection[]>{
-    const result=await this.db.prepare(`
+    const result=await prepareOwned(this.db,this.scope,`
       ${this.select} WHERE user_id=? ORDER BY created_at ASC,id ASC
     `).bind(this.scope.userId).all<Row>();
     return result.results.map(map);
   }
 
   async getById(id:string):Promise<CalendarConnection|null>{
-    const row=await this.db.prepare(`${this.select} WHERE user_id=? AND id=?`)
+    const row=await prepareOwned(this.db,this.scope,`${this.select} WHERE user_id=? AND id=?`)
       .bind(this.scope.userId,id).first<Row>();
     return row?map(row):null;
   }
 
   prepareAcceptedConnection(connection:CalendarConnection,at:string):D1PreparedStatementLike{
-    return this.db.prepare(`
+    return prepareOwned(this.db,this.scope,`
       INSERT INTO calendar_connections(
         user_id,id,provider,label,account_label,remote_calendar_id,remote_calendar_name,
         enabled,last_sync_status,created_at,updated_at
@@ -65,7 +66,7 @@ export class D1CalendarConnectionRepository{
       ON CONFLICT(user_id,id) DO UPDATE SET
         account_label=excluded.account_label,remote_calendar_id=excluded.remote_calendar_id,
         remote_calendar_name=excluded.remote_calendar_name,updated_at=excluded.updated_at
-    `).bind(
+    `,{kind:"calendar",id:connection.id,key:`calendar:${connection.provider}`}).bind(
       this.scope.userId,connection.id,connection.provider,connection.label,connection.accountLabel,
       connection.remoteCalendarId,connection.remoteCalendarName,connection.enabled?1:0,
       connection.lastSyncStatus,at,at,
@@ -80,11 +81,11 @@ export class D1CalendarConnectionRepository{
   },now:Date=new Date()):Promise<CalendarConnection>{
     const id=crypto.randomUUID();
     const at=now.toISOString();
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       INSERT INTO calendar_connections(
         user_id,id,provider,label,account_label,enabled,last_sync_status,created_at,updated_at
       ) VALUES (?,?,?,?,?,?,?,?,?)
-    `).bind(
+    `,{kind:"calendar",id,key:`calendar:${input.provider}`}).bind(
       this.scope.userId,id,input.provider,input.label,input.accountLabel??null,
       input.enabled===false?0:1,"never",at,at,
     ).run();
@@ -97,11 +98,11 @@ export class D1CalendarConnectionRepository{
     remoteCalendarName:string,
     now:Date=new Date(),
   ):Promise<CalendarConnection>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE calendar_connections
       SET remote_calendar_id=?,remote_calendar_name=?,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(
+    `,{kind:"calendar",id}).bind(
       remoteCalendarId,remoteCalendarName,now.toISOString(),this.scope.userId,id,
     ).run();
     const updated=await this.getById(id);
@@ -110,10 +111,10 @@ export class D1CalendarConnectionRepository{
   }
 
   async markSyncStarted(id:string,at:string):Promise<void>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE calendar_connections SET last_sync_started_at=?,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(at,at,this.scope.userId,id).run();
+    `,{kind:"calendar",id}).bind(at,at,this.scope.userId,id).run();
   }
 
   async markSyncResult(id:string,input:{
@@ -121,22 +122,22 @@ export class D1CalendarConnectionRepository{
     status:Exclude<CalendarSyncStatus,"never">;
     errorCode:string|null;
   }):Promise<void>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE calendar_connections SET
         last_sync_completed_at=CASE WHEN ? IN ('success','partial') THEN ? ELSE last_sync_completed_at END,
         last_sync_status=?,
         last_error_code=?,
         updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(
+    `,{kind:"calendar",id}).bind(
       input.status,input.completedAt,input.status,input.errorCode,input.completedAt,
       this.scope.userId,id,
     ).run();
   }
 
   async delete(id:string):Promise<void>{
-    await this.db.prepare(
+    await prepareOwned(this.db,this.scope,
       "DELETE FROM calendar_connections WHERE user_id=? AND id=?",
-    ).bind(this.scope.userId,id).run();
+    {kind:"calendar",id}).bind(this.scope.userId,id).run();
   }
 }

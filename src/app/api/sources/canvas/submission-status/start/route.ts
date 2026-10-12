@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 import {
   startCanvasSubmissionStatusSync,
@@ -15,6 +16,7 @@ export async function POST(){
       :await startCanvasSubmissionStatusSync(runtime.db,runtime.scope);
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof SubmissionStatusSyncServiceError){
       return Response.json(
         {code:error.code,message:error.message},

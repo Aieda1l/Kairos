@@ -1,3 +1,5 @@
+import {settleCalendarWrite} from "@/lib/calendar/adapter";
+import {withOwnedOperation,ownedFetch,OperationControlVersionChangedError} from "@/lib/abuse/operation-lock";
 import {consumeOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {
   exchangeMicrosoftAuthorizationCode,
@@ -55,43 +57,50 @@ async function completeCallback(request:Request){
 
   let stage:"configuration"|"token_exchange"|"calendar_setup"="configuration";
   try{
-    const config=getMicrosoftCalendarConfig();
-    stage="token_exchange";
-    const token=await exchangeMicrosoftAuthorizationCode({
-      ...config,
-      code,
-      codeVerifier:registered.codeVerifier,
-      redirectUri:registered.redirectUri,
-    });
-    stage="calendar_setup";
-    if(runtime.kind==="legacy"){
-      await connectOAuthCalendar(runtime.db,{
-        provider:"microsoft",
-        accessToken:token.accessToken,
-        refreshToken:token.refreshToken,
-        connectionId:registered.connectionId,
-      });
-    }else{
-      const control=await new D1AbuseControlRepository(runtime.db).get("provider:microsoft");
-      if(!control.enabled||control.version!==registered.controlVersion)throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
-      await connectOAuthCalendar(
-        runtime.db,runtime.scope,runtime.keyring,{
+    if(runtime.kind==="hosted"&&(!Number.isSafeInteger(registered.controlVersion)||registered.controlVersion!<0))throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
+    const work=async()=>{
+      const config=getMicrosoftCalendarConfig();
+      stage="token_exchange";
+      const token=await settleCalendarWrite(()=>exchangeMicrosoftAuthorizationCode({
+        ...config,
+        code,
+        codeVerifier:registered.codeVerifier,
+        redirectUri:registered.redirectUri,
+      },ownedFetch(fetch)));
+      stage="calendar_setup";
+      if(runtime.kind==="legacy"){
+        await connectOAuthCalendar(runtime.db,{
           provider:"microsoft",
           accessToken:token.accessToken,
           refreshToken:token.refreshToken,
           connectionId:registered.connectionId,
-        },
+        });
+      }else{
+        const control=await new D1AbuseControlRepository(runtime.db).get("provider:microsoft");
+        if(!control.enabled||control.version!==registered.controlVersion)throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
+        await settleCalendarWrite(()=>connectOAuthCalendar(
+          runtime.db,runtime.scope,runtime.keyring,{
+            provider:"microsoft",
+            accessToken:token.accessToken,
+            refreshToken:token.refreshToken,
+            connectionId:registered.connectionId,
+          },
+        ));
+      }
+      const response=Response.redirect(
+        new URL(registered.returnTo,registered.redirectUri),
+        307,
       );
-    }
-    const response=Response.redirect(
-      new URL(registered.returnTo,registered.redirectUri),
-      307,
-    );
+      return response;
+    };
+    const response=await (runtime.kind==="legacy"?work():withOwnedOperation(runtime.db,runtime.scope,"calendar:microsoft",work,{expectedControlVersion:registered.controlVersion}));
     emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,durationMs:performance.now()-started});
     return response;
   }catch(error){
     if(abuseErrorResponse(error))throw error;
-    const e=error instanceof CalendarSyncError
+    const e=error instanceof OperationControlVersionChangedError
+      ?new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.")
+      :error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(
         "CALENDAR_UPSTREAM_ERROR",

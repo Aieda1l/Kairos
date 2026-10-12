@@ -1,3 +1,4 @@
+import {ownsOperation,withOwnedOperation,ownedFetch} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {SourceConnection} from "@/lib/assignments/types";
@@ -25,11 +26,11 @@ export class EdDiscoveryServiceError extends Error{
   }
 }
 
-export async function testEdConnection(
-  token:string,
-  fetchImpl:typeof fetch=fetch,
-):Promise<{ok:true;itemCount:number}>{
-  const payload=await new EdApiClient(token,fetchImpl).fetchUser();
+export function testEdConnection(token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
+export function testEdConnection(db:D1DatabaseLike,scope:UserScope,token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
+export async function testEdConnection(arg1:string|D1DatabaseLike,arg2?:typeof fetch|UserScope,arg3?:string,arg4?:typeof fetch):Promise<{ok:true;itemCount:number}>{
+  if(typeof arg1!=="string")return withOwnedOperation(arg1,arg2 as UserScope,"source:ed",()=>testEdConnection(arg3!,ownedFetch(arg4??fetch)));
+  const payload=await new EdApiClient(arg1,(arg2 as typeof fetch|undefined)??fetch).fetchUser();
   return {ok:true,itemCount:parseEdCourses(payload).length};
 }
 
@@ -105,11 +106,12 @@ export async function connectEd(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6));
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
   const token=arg4 as string;
-  const fetchImpl=arg5??fetch;
+  const fetchImpl=ownedFetch(arg5??fetch);
   const now=arg6??new Date();
   const payload=await new EdApiClient(token,fetchImpl).fetchUser();
   const discovered=parseEdCourses(payload);
@@ -159,11 +161,12 @@ export async function refreshEdCourses(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>refreshEdCourses(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4,arg5));
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
   const {connection,token}=await requireConnectedEdHosted(hostedDb,scope,keyring);
-  const payload=await new EdApiClient(token,arg4??fetch).fetchUser();
+  const payload=await new EdApiClient(token,ownedFetch(arg4??fetch)).fetchUser();
   const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
   const results=await hostedDb.batch([
     courseRepo.prepareDiscovered(connection.id,parseEdCourses(payload),(arg5??new Date()).toISOString()),
@@ -205,6 +208,7 @@ export function replaceEnabledEdCourses(
   }
 
   return (async()=>{
+    if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>replaceEnabledEdCourses(db as D1DatabaseLike,arg2,arg3!,arg4??[]));
     const hostedDb=db as D1DatabaseLike;
     const scope=arg2;
     const {connection}=await requireConnectedEdHosted(hostedDb,scope,arg3!);

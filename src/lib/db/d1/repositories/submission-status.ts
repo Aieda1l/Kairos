@@ -1,3 +1,4 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -22,7 +23,7 @@ export class D1SubmissionStatusRepository{
   ){}
 
   private async ownsSource(sourceConnectionId:string):Promise<boolean>{
-    return Boolean(await this.db.prepare(
+    return Boolean(await prepareOwned(this.db,this.scope,
       "SELECT id FROM source_connections WHERE user_id=? AND id=?",
     ).bind(this.scope.userId,sourceConnectionId).first<{id:string}>());
   }
@@ -30,7 +31,7 @@ export class D1SubmissionStatusRepository{
   async getSyncState<TError extends string=SubmissionSyncErrorCode>(
     sourceConnectionId:string,
   ):Promise<SubmissionStatusSyncState<TError>>{
-    const row=await this.db.prepare(`
+    const row=await prepareOwned(this.db,this.scope,`
       SELECT last_attempted_at,last_successful_at,last_error_code,updated_count,failed_count
       FROM submission_status_sync
       WHERE user_id=? AND source_connection_id=?
@@ -47,14 +48,14 @@ export class D1SubmissionStatusRepository{
 
   async markAttempt(sourceConnectionId:string,attemptedAt:string):Promise<void>{
     if(!await this.ownsSource(sourceConnectionId))return;
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       INSERT INTO submission_status_sync(
         user_id,source_connection_id,last_attempted_at,updated_at
       ) VALUES (?,?,?,?)
       ON CONFLICT(user_id,source_connection_id) DO UPDATE SET
         last_attempted_at=excluded.last_attempted_at,
         updated_at=excluded.updated_at
-    `).bind(this.scope.userId,sourceConnectionId,attemptedAt,attemptedAt).run();
+    `,{kind:"source",id:sourceConnectionId}).bind(this.scope.userId,sourceConnectionId,attemptedAt,attemptedAt).run();
   }
 
   async applyCompletion<
@@ -79,7 +80,7 @@ export class D1SubmissionStatusRepository{
     for(const result of results){
       if(result.errorCode)continue;
 
-      const belongs=await this.db.prepare(`
+      const belongs=await prepareOwned(this.db,this.scope,`
         SELECT id FROM assignments
         WHERE user_id=? AND id=? AND source_connection_id=?
       `).bind(this.scope.userId,result.assignmentLocalId,sourceConnectionId)
@@ -88,7 +89,7 @@ export class D1SubmissionStatusRepository{
 
       if(successfulChecksOverride===undefined)successfulChecks++;
 
-      const existing=await this.db.prepare(`
+      const existing=await prepareOwned(this.db,this.scope,`
         SELECT checked_at FROM assignment_submission_status
         WHERE user_id=? AND assignment_id=?
       `).bind(this.scope.userId,result.assignmentLocalId)
@@ -99,7 +100,7 @@ export class D1SubmissionStatusRepository{
         continue;
       }
 
-      await this.db.prepare(`
+      await prepareOwned(this.db,this.scope,`
         INSERT INTO assignment_submission_status(
           user_id,assignment_id,state,is_late,is_missing,submitted_at,checked_at,extractor_version,updated_at
         ) VALUES (?,?,?,?,?,?,?,?,?)
@@ -111,7 +112,7 @@ export class D1SubmissionStatusRepository{
           checked_at=excluded.checked_at,
           extractor_version=excluded.extractor_version,
           updated_at=excluded.updated_at
-      `).bind(
+      `,{kind:"source-assignment",id:result.assignmentLocalId,connectionId:sourceConnectionId}).bind(
         this.scope.userId,result.assignmentLocalId,result.state,result.isLate?1:0,
         result.isMissing?1:0,result.submittedAt,result.checkedAt,result.extractorVersion,completedAt,
       ).run();
@@ -119,7 +120,7 @@ export class D1SubmissionStatusRepository{
     }
 
     if(successfulChecks>0){
-      await this.db.prepare(`
+      await prepareOwned(this.db,this.scope,`
         INSERT INTO submission_status_sync(
           user_id,source_connection_id,last_successful_at,last_error_code,updated_count,failed_count,updated_at
         ) VALUES (?,?,?,?,?,?,?)
@@ -129,11 +130,11 @@ export class D1SubmissionStatusRepository{
           updated_count=excluded.updated_count,
           failed_count=excluded.failed_count,
           updated_at=excluded.updated_at
-      `).bind(
+      `,{kind:"source",id:sourceConnectionId}).bind(
         this.scope.userId,sourceConnectionId,completedAt,errorCode,updated,failedCount,completedAt,
       ).run();
     }else{
-      await this.db.prepare(`
+      await prepareOwned(this.db,this.scope,`
         INSERT INTO submission_status_sync(
           user_id,source_connection_id,last_error_code,updated_count,failed_count,updated_at
         ) VALUES (?,?,?,?,?,?)
@@ -142,7 +143,7 @@ export class D1SubmissionStatusRepository{
           updated_count=excluded.updated_count,
           failed_count=excluded.failed_count,
           updated_at=excluded.updated_at
-      `).bind(
+      `,{kind:"source",id:sourceConnectionId}).bind(
         this.scope.userId,sourceConnectionId,errorCode,0,failedCount,completedAt,
       ).run();
     }

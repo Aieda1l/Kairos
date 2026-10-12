@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {z} from "zod";
 import {connectEd} from "@/lib/ed/discovery-service";
 import {getEdRouteFetch} from "@/lib/ed/e2e-fixture-fetch";
@@ -36,6 +37,7 @@ export async function POST(request:Request){
       );
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdSourceError){
       return Response.json(
         {code:error.code,message:error.message},

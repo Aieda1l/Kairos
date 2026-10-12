@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 import {getEdRouteFetch} from "@/lib/ed/e2e-fixture-fetch";
 import {EdSyncServiceError,syncEdConnection} from "@/lib/ed/sync-service";
@@ -33,6 +34,7 @@ export async function POST(request?:Request){
       :200;
     return Response.json(result,{status});
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdSyncServiceError){
       return Response.json(
         {code:error.code,message:error.message},

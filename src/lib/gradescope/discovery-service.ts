@@ -1,3 +1,4 @@
+import {ownsOperation,withOwnedOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -77,6 +78,8 @@ export function startGradescopeDiscovery(
     return {requestId,protocolVersion:1};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:gradescope",()=>startGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3));
+
   return (async()=>{
     const requestId=crypto.randomUUID();
     const now=arg3??new Date();
@@ -144,6 +147,8 @@ export function completeGradescopeDiscovery(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withBridgeCompletion(db as D1DatabaseLike,arg2,(arg3 as GradescopeDiscoverResultV1).requestId,"gradescope_discovery",arg4??new Date(),()=>completeGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3 as GradescopeDiscoverResultV1,arg4));
+
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
     const scope=arg2;
@@ -158,6 +163,7 @@ export function completeGradescopeDiscovery(
       );
     }
     if(input.errorCode){
+      if(input.errorCode==="EXTENSION_TIMEOUT")uncertainOwnedWork();
       throw new GradescopeDiscoveryServiceError(
         "GRADESCOPE_DISCOVERY_FAILED",
         discoveryFailureMessage(input.errorCode),
@@ -217,6 +223,7 @@ export function replaceEnabledGradescopeCourses(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:gradescope",()=>replaceEnabledGradescopeCourses(db as D1DatabaseLike,arg2,arg3??[]));
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
     const connection=await new D1SourceConnectionRepository(hostedDb,arg2).getByKind("gradescope");

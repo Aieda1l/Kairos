@@ -176,7 +176,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeGradescopeDiscovery(
       db,{userId:BOB.id},payload,new Date("2026-10-06T05:01:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeGradescopeDiscovery(
       db,{userId:ALICE.id},payload,new Date("2026-10-06T05:01:00.000Z"),
@@ -220,7 +220,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeGradescopeSync(
       db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeGradescopeSync(
       db,alice,input,new Date("2026-10-06T05:02:00.000Z"),
@@ -269,7 +269,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeCanvasSubmissionStatusSync(
       db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeCanvasSubmissionStatusSync(
       db,alice,input,new Date("2026-10-06T05:02:00.000Z"),

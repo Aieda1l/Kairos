@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {gradescopeDiscoverResultV1Schema} from "@/lib/extension-protocol/gradescope";
 import {
   completeGradescopeDiscovery,
@@ -33,6 +34,7 @@ export async function POST(request:Request){
       :await completeGradescopeDiscovery(runtime.db,runtime.scope,parsed.data);
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof GradescopeDiscoveryServiceError){
       if(error.code==="SYNC_REQUEST_NOT_FOUND"){
         return Response.json({code:error.code,message:error.message},{status:409});

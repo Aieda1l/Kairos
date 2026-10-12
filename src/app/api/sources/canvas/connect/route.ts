@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 import {CanvasFeedUrlError} from "@/lib/sources/canvas-ical/validate-url";
 import {canvasConnectSchema,connectCanvas} from "@/lib/sources/canvas-ical/connection-service";
@@ -26,6 +27,7 @@ export async function POST(request:Request){
     if(!resolved.ok)return resolved.response;
     return Response.json(await connectCanvas(resolved.runtime,parsed.data));
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof CanvasFeedUrlError){
       return Response.json({code:error.code,message:error.message},{status:400});
     }

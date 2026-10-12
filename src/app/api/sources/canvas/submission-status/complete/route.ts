@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 import {
@@ -47,6 +48,7 @@ export async function POST(request:Request){
     }
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof SubmissionStatusSyncServiceError){
       return Response.json(
         {code:error.code,message:error.message},

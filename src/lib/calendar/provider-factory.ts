@@ -1,3 +1,5 @@
+import {settleCalendarWrite} from "@/lib/calendar/adapter";
+import {ownsOperation,ownedFetch,OperationOwnershipError} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -80,21 +82,23 @@ function hostedFactory(
   keyring:CredentialKeyring,
   options:FactoryOptions={},
 ):CalendarAdapterFactory{
-  const fetchImpl=options.fetchImpl??getCalendarRouteFetch();
+  const fetchImpl=ownedFetch(options.fetchImpl??getCalendarRouteFetch());
   const env=options.env??process.env;
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
 
   return async connection=>{
+    if(!ownsOperation(db,scope,`calendar:${connection.provider}`))throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
     if(connection.provider==="google"){
       const refreshToken=await credentials.getOAuthRefreshToken(connection.id);
       if(!refreshToken){
         throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Google Calendar.");
       }
       const config=getGoogleCalendarConfig(env);
-      const token=await refreshGoogleAccessToken({...config,refreshToken},fetchImpl);
-      if(token.refreshToken){
-        await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
-      }
+      const token=await settleCalendarWrite(async()=>{
+        const token=await refreshGoogleAccessToken({...config,refreshToken},fetchImpl);
+        if(token.refreshToken)await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
+        return token;
+      });
       return new GoogleCalendarAdapter(
         connection,
         new GoogleCalendarClient(token.accessToken,fetchImpl),
@@ -107,10 +111,11 @@ function hostedFactory(
         throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Microsoft Calendar.");
       }
       const config=getMicrosoftCalendarConfig(env);
-      const token=await refreshMicrosoftAccessToken({...config,refreshToken},fetchImpl);
-      if(token.refreshToken){
-        await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
-      }
+      const token=await settleCalendarWrite(async()=>{
+        const token=await refreshMicrosoftAccessToken({...config,refreshToken},fetchImpl);
+        if(token.refreshToken)await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
+        return token;
+      });
       return new MicrosoftCalendarAdapter(
         connection,
         new MicrosoftCalendarClient(token.accessToken,fetchImpl),

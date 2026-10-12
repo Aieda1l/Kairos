@@ -1,3 +1,4 @@
+import {withOwnedOperation,ownedWorkStopped,uncertainOwnedWork,throttleOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -12,6 +13,7 @@ import {CalendarEventLinkRepository} from "@/lib/db/repositories/calendar-event-
 import {SettingsRepository} from "@/lib/db/repositories/settings";
 import type {Assignment} from "@/lib/assignments/types";
 import type {CalendarConnection,CalendarEventLink,CalendarSyncStatus} from "@/lib/calendar/types";
+import {guardCalendarAdapter} from "@/lib/calendar/adapter";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {CalendarSyncError,type CalendarSyncErrorCode} from "@/lib/calendar/errors";
 import {createCalendarSyncKey} from "@/lib/calendar/sync-key";
@@ -172,7 +174,7 @@ async function reconcileWithRepositories(
 
   let adapter:Awaited<ReturnType<CalendarAdapterFactory>>;
   try{
-    adapter=await options.adapterFactory(connection);
+    adapter=guardCalendarAdapter(await options.adapterFactory(connection));
     await adapter.testConnection();
   }catch(error){
     const code=errorCode(error);
@@ -188,9 +190,15 @@ async function reconcileWithRepositories(
   const assignments=await repositories.assignments.list();
   const hideSubmitted=await repositories.settings.getCalendarHideSubmitted();
   let cursor=0;
+  let halted=false;
+  const failure=(error:unknown,wrote:boolean)=>{
+    if(error instanceof CalendarSyncError&&error.code==="CALENDAR_RATE_LIMITED"){halted=true;throttleOwnedWork(error.retryAfterSeconds);}
+    else if(wrote&&(!(error instanceof CalendarSyncError)||["CALENDAR_NETWORK_ERROR","CALENDAR_UPSTREAM_ERROR"].includes(error.code))) {halted=true;uncertainOwnedWork();}
+  };
   const outcomes:Array<Outcome|undefined>=new Array(assignments.length);
 
   const reconcileOne=async(index:number):Promise<Outcome>=>{
+    let wrote=false;
     const assignment=assignments[index]!;
     const projection=projectAssignment(assignment,{hideSubmitted});
     let link=await repositories.links.get(connection.id,assignment.id);
@@ -203,10 +211,12 @@ async function reconcileWithRepositories(
         return {kind:"failed",errorCode:code};
       }
       try{
+        wrote=true;
         await adapter.deleteEvent(connection.remoteCalendarId!,link.remoteEventId);
         await repositories.links.delete(link.id);
         return {kind:"deleted"};
       }catch(error){
+        failure(error,wrote);
         const code=errorCode(error);
         await repositories.links.markError(link.id,code,completedAt);
         return {kind:"failed",errorCode:code};
@@ -232,6 +242,7 @@ async function reconcileWithRepositories(
           );
           if(existing){
             const recoveredCreate=Boolean(link.lastErrorCode);
+            wrote=true;
             const adopted=await adapter.updateEvent(
               connection.remoteCalendarId!,
               existing.remoteEventId,
@@ -244,6 +255,7 @@ async function reconcileWithRepositories(
             return {kind:recoveredCreate?"created":"updated"};
           }
         }
+        wrote=true;
         const created=await adapter.createEvent(
           connection.remoteCalendarId!,
           projection,
@@ -263,6 +275,7 @@ async function reconcileWithRepositories(
             projection.assignmentId,
           );
           if(existing){
+            wrote=true;
             const adopted=await adapter.updateEvent(
               connection.remoteCalendarId!,
               existing.remoteEventId,
@@ -275,6 +288,7 @@ async function reconcileWithRepositories(
             return {kind:"updated"};
           }
         }
+        wrote=true;
         const created=await adapter.createEvent(
           connection.remoteCalendarId!,
           projection,
@@ -294,6 +308,7 @@ async function reconcileWithRepositories(
         return {kind:"unchanged"};
       }
 
+      wrote=true;
       const updated=await adapter.updateEvent(
         connection.remoteCalendarId!,
         link.remoteEventId,
@@ -305,6 +320,7 @@ async function reconcileWithRepositories(
       );
       return {kind:"updated"};
     }catch(error){
+      failure(error,wrote);
       const code=errorCode(error);
       await repositories.links.markError(link.id,code,completedAt);
       return {kind:"failed",errorCode:code};
@@ -313,9 +329,10 @@ async function reconcileWithRepositories(
 
   const worker=async()=>{
     while(true){
+      if(halted||ownedWorkStopped())return;
       const index=cursor++;
       if(index>=assignments.length)return;
-      outcomes[index]=await reconcileOne(index);
+      try{outcomes[index]=await reconcileOne(index);}catch(error){halted=true;throw error;}
     }
   };
 
@@ -323,7 +340,9 @@ async function reconcileWithRepositories(
     clampConcurrency(options.concurrency),
     Math.max(assignments.length,1),
   );
-  await Promise.all(Array.from({length:workerCount},()=>worker()));
+  const settled=await Promise.allSettled(Array.from({length:workerCount},()=>worker()));
+  const rejected=settled.find(result=>result.status==="rejected");
+  if(rejected?.status==="rejected")throw rejected.reason;
 
   let createdCount=0;
   let updatedCount=0;
@@ -333,7 +352,8 @@ async function reconcileWithRepositories(
   const failures:CalendarSyncErrorCode[]=[];
 
   for(const outcome of outcomes){
-    if(!outcome||outcome.kind==="skipped")continue;
+    if(!outcome){failedCount++;failures.push("CALENDAR_RATE_LIMITED");continue;}
+    if(outcome.kind==="skipped")continue;
     switch(outcome.kind){
       case "created":createdCount++;break;
       case "updated":updatedCount++;break;
@@ -399,11 +419,12 @@ export function reconcileCalendarConnection(
       arg3 as ReconcileOptions,
     );
   }
-  return reconcileWithRepositories(
-    hostedRepositories(db as D1DatabaseLike,arg2),
-    arg3 as string,
-    arg4!,
-  );
+  return (async()=>{
+    const hosted=db as D1DatabaseLike;
+    const connection=await new D1CalendarConnectionRepository(hosted,arg2).getById(arg3 as string);
+    if(!connection)throw new Error("Calendar connection not found.");
+    return withOwnedOperation(hosted,arg2,`calendar:${connection.provider}`,()=>reconcileWithRepositories(hostedRepositories(hosted,arg2),connection.id,arg4!));
+  })();
 }
 
 async function reconcileAllWithRepositories(
@@ -452,6 +473,6 @@ export function reconcileAllCalendars(
   const repositories=hostedRepositories(db as D1DatabaseLike,scope);
   return reconcileAllWithRepositories(
     repositories,
-    id=>reconcileWithRepositories(repositories,id,options),
+    id=>reconcileCalendarConnection(db as D1DatabaseLike,scope,id,options),
   );
 }

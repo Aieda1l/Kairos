@@ -1,3 +1,4 @@
+import {ownsOperation,withOwnedOperation} from "@/lib/abuse/operation-lock";
 import "server-only";
 import {z} from "zod";
 import type {SourceConnection} from "@/lib/assignments/types";
@@ -25,6 +26,10 @@ export async function connectCanvas(
   runtime:SourceRuntimeContext|SourceRouteRuntime,
   input:ConnectInput,
 ):Promise<{connection:SourceConnection;sync:SyncSummary}>{
+  if(!("kind" in runtime&&runtime.kind==="legacy")){
+    const hosted=runtime as SourceRuntimeContext;
+    if(!ownsOperation(hosted.db,hosted.scope,"source:canvas"))return withOwnedOperation(hosted.db,hosted.scope,"source:canvas",()=>connectCanvas(runtime,input));
+  }
   input=canvasConnectSchema.parse(input);
   const url=validateCanvasFeedUrl(input.feedUrl);
   const startedAt=new Date().toISOString();

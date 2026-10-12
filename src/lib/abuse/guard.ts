@@ -1,3 +1,6 @@
+import {getOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
+import {OperationOwnershipError} from "./operation-lock";
 import "server-only";
 import {D1RateLimitRepository} from "@/lib/db/d1/repositories/rate-limits";
 import {hashRateKey,rateKeyParts} from "./keys";
@@ -15,6 +18,10 @@ export async function enforceBudget(runtime:AbuseRuntime,subject:RateSubject):Pr
 
 export function abuseErrorResponse(error:unknown):Response|null{
   const headers=new Headers({"Cache-Control":"no-store"});
+  if(error instanceof OperationOwnershipError){
+    const context=getOperationContext();if(context)emitOperationEvent(context,{code:error.code,result:"rejected",status:409});
+    return Response.json({code:error.code,message:error.message},{status:409,headers});
+  }
   if(error instanceof RateLimitedError){
     headers.set("Retry-After",String(error.retryAfterSeconds));
     return Response.json({code:error.code,message:error.message,retryAfterSeconds:error.retryAfterSeconds},{status:429,headers});

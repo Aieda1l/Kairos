@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {
   startGradescopeSync,
   GradescopeSyncServiceError,
@@ -15,6 +16,7 @@ export async function POST(){
       :await startGradescopeSync(runtime.db,runtime.scope);
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof GradescopeSyncServiceError){
       return Response.json(
         {code:error.code,message:error.message},

@@ -21,6 +21,7 @@ describe("structured operation events",()=>{
     ["AUTH_SIGNED_IN","ok"],["AUTH_REJECTED","rejected"],["CREDENTIAL_CONNECTED","ok"],
     ["CREDENTIAL_TESTED","ok"],["CREDENTIAL_REJECTED","rejected"],["SOURCE_SYNCED","ok"],
     ["CALENDAR_SYNCED","ok"],["RATE_LIMITED","rejected"],["SERVICE_UNAVAILABLE","error"],["HEALTH_OK","ok"],
+    ["SYNC_IN_PROGRESS","rejected"],["SYNC_RECOVERY_REQUIRED","rejected"],
   ] as const)("emits one allowlisted event for %s",(code,result)=>{
     const info=vi.spyOn(console,"info").mockImplementation(()=>{});
     const warn=vi.spyOn(console,"warn").mockImplementation(()=>{});
