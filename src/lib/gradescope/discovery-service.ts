@@ -1,3 +1,4 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
 import {ownsOperation,withOwnedOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -78,7 +79,7 @@ export function startGradescopeDiscovery(
     return {requestId,protocolVersion:1};
   }
 
-  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:gradescope",()=>startGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"gradescope","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"gradescope",operation:"credential"},()=>startGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3));
 
   return (async()=>{
     const requestId=crypto.randomUUID();

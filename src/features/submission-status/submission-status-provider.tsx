@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 
 import {
   createContext,
@@ -125,10 +126,10 @@ async function startSyncRequest() {
   });
   const body = await readJson(response);
   if (!response.ok) {
-    const message =
+    const message = providerRecoveryMessage(body)??(
       body && typeof body === "object" && "message" in body && typeof body.message === "string"
         ? body.message
-        : "Submission status sync could not start.";
+        : "Submission status sync could not start.");
     throw new Error(message);
   }
   return startResponseSchema.parse(body);
@@ -149,10 +150,10 @@ async function completeSyncRequest(input: {
   });
   const body = await readJson(response);
   if (!response.ok) {
-    const message =
+    const message = providerRecoveryMessage(body)??(
       body && typeof body === "object" && "message" in body && typeof body.message === "string"
         ? body.message
-        : "Submission status could not be saved.";
+        : "Submission status could not be saved.");
     throw new Error(message);
   }
   return completeResponseSchema.parse(body);

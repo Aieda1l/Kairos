@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 
 import {useState} from "react";
 import {useRouter} from "next/navigation";
@@ -13,7 +14,7 @@ import {useCalendarSync} from "@/features/calendars/calendar-provider";
 async function responseMessage(response:Response,fallback:string):Promise<string>{
   try{
     const body=await response.json() as {message?:unknown};
-    return typeof body.message==="string"&&body.message.trim()?body.message:fallback;
+    return providerRecoveryMessage(body)??(typeof body.message==="string"&&body.message.trim()?body.message:fallback);
   }catch{
     return fallback;
   }

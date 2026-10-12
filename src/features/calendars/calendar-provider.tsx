@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 
 import {
   createContext,
@@ -53,6 +54,7 @@ async function readJson(response:Response):Promise<Record<string,unknown>>{
 }
 
 function bodyMessage(body:Record<string,unknown>,fallback:string){
+  const recovery=providerRecoveryMessage(body);if(recovery)return recovery;
   return typeof body.message==="string"&&body.message.trim()
     ?body.message
     :fallback;

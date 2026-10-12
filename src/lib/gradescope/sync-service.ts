@@ -1,4 +1,5 @@
-import {ownsOperation,withOwnedOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import crypto from "node:crypto";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -130,7 +131,11 @@ export function startGradescopeSync(
     return {protocolVersion:1,requestId,courseIds,maxCourseBatchSize:20};
   }
 
-  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:gradescope",()=>startGradescopeSync(db as D1DatabaseLike,arg2,arg3));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"gradescope","manual-sync"))return (async()=>{
+    const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("gradescope");
+    if(!connection)throw new GradescopeSyncServiceError("GRADESCOPE_NOT_CONFIGURED","Discover Gradescope courses before syncing.");
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"gradescope",operation:"manual-sync",resourceId:connection.id},()=>startGradescopeSync(db as D1DatabaseLike,arg2,arg3));
+  })();
 
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;

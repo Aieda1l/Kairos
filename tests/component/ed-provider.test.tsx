@@ -67,6 +67,14 @@ beforeEach(()=>{
 });
 
 describe("EdProvider",()=>{
+  it("presents a bounded admission retry while retaining accepted courses",async()=>{
+    vi.stubGlobal("fetch",async()=>json({code:"RATE_LIMITED",message:"synthetic-private-detail",retryAfterSeconds:99999},429));
+    render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Test"}));
+    await waitFor(()=>expect(screen.getByTestId("message")).toHaveTextContent("Try again in 3600 seconds."));
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-detail");
+    expect(screen.getByTestId("courses")).toHaveTextContent("123:false");
+  });
   it("sends the token only to test/connect and keeps later operations credential-free",async()=>{
     const user=userEvent.setup();
     const calls:Array<{url:string;body:string|null}>=[];

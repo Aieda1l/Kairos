@@ -1,4 +1,4 @@
-import {ownsOperation,withOwnedOperation} from "@/lib/abuse/operation-lock";
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
 import "server-only";
 import {z} from "zod";
 import type {SourceConnection} from "@/lib/assignments/types";
@@ -28,7 +28,7 @@ export async function connectCanvas(
 ):Promise<{connection:SourceConnection;sync:SyncSummary}>{
   if(!("kind" in runtime&&runtime.kind==="legacy")){
     const hosted=runtime as SourceRuntimeContext;
-    if(!ownsOperation(hosted.db,hosted.scope,"source:canvas"))return withOwnedOperation(hosted.db,hosted.scope,"source:canvas",()=>connectCanvas(runtime,input));
+    if(!currentProviderWork(hosted.db,hosted.scope,"canvas","credential"))return withProviderService(hosted.db,hosted.scope,{provider:"canvas",operation:"credential"},()=>connectCanvas(runtime,input));
   }
   input=canvasConnectSchema.parse(input);
   const url=validateCanvasFeedUrl(input.feedUrl);
@@ -81,4 +81,12 @@ export async function connectCanvas(
       lastSyncCompletedAt:completedAt,lastSyncStatus:"success",lastErrorCode:partial?"PARTIAL_PARSE":null},
     sync:{connectionId:id,inserted,updated:rows.length-inserted,...report,partial,completedAt},
   };
+}
+
+/** Shared by regular and saved-candidate consumers. */
+export async function testCanvasConnection(runtime:SourceRuntimeContext|SourceRouteRuntime,feedUrl:string){
+  const work=()=>new CanvasIcalSource(validateCanvasFeedUrl(feedUrl)).testConnection();
+  if("kind" in runtime&&runtime.kind==="legacy")return work();
+  const hosted=runtime as SourceRuntimeContext;
+  return withProviderService(hosted.db,hosted.scope,{provider:"canvas",operation:"credential"},work);
 }

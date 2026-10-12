@@ -1,5 +1,6 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
 import {guardCalendarAdapter} from "@/lib/calendar/adapter";
-import {ownsOperation,withOwnedOperation,ownedFetch,uncertainOwnedWork,uncertainOwnedCalendarWrite,throttleOwnedWork,ownedWorkStopped} from "@/lib/abuse/operation-lock";
+import {ownedFetch,uncertainOwnedWork,uncertainOwnedCalendarWrite,throttleOwnedWork,ownedWorkStopped} from "@/lib/abuse/operation-lock";
 import "server-only";
 import {z} from "zod";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -108,9 +109,9 @@ async function connectOAuthHosted(
   keyring:CredentialKeyring,
   input:OAuthConnectInput,
 ):Promise<CalendarConnection>{
-  if(!ownsOperation(db,scope,`calendar:${input.provider}`)){
+  if(!currentProviderWork(db,scope,input.provider,"credential")){
     if(input.connectionId){const existing=await new D1CalendarConnectionRepository(db,scope).getById(input.connectionId);if(!existing||existing.provider!==input.provider)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");}
-    return withOwnedOperation(db,scope,`calendar:${input.provider}`,()=>connectOAuthHosted(db,scope,keyring,input));
+    return withProviderService(db,scope,{provider:input.provider,operation:"credential",...(input.connectionId?{resourceId:input.connectionId}:{})},()=>connectOAuthHosted(db,scope,keyring,input));
   }
   const connections=new D1CalendarConnectionRepository(db,scope);
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
@@ -203,7 +204,7 @@ export async function connectOAuthCalendar(
 export function testCaldavCredentials(username:string,secret:string,fetchImpl?:typeof fetch):Promise<{calendarCount:number}>;
 export function testCaldavCredentials(db:D1DatabaseLike,scope:UserScope,username:string,secret:string,fetchImpl?:typeof fetch):Promise<{calendarCount:number}>;
 export async function testCaldavCredentials(arg1:string|D1DatabaseLike,arg2:string|UserScope,arg3?:typeof fetch|string,arg4?:string,arg5?:typeof fetch):Promise<{calendarCount:number}>{
-  if(typeof arg1!=="string")return withOwnedOperation(arg1,arg2 as UserScope,"calendar:caldav",()=>testCaldavCredentials(arg3 as string,arg4!,ownedFetch(arg5??getCalendarRouteFetch())));
+  if(typeof arg1!=="string")return withProviderService(arg1,arg2 as UserScope,{provider:"caldav",operation:"credential"},()=>testCaldavCredentials(arg3 as string,arg4!,ownedFetch(arg5??getCalendarRouteFetch())));
   const client=new CalDavClient(arg1,arg2 as string,(arg3 as typeof fetch|undefined)??getCalendarRouteFetch());
   const calendars=await client.discoverCalendars();
   return {calendarCount:calendars.filter(item=>item.writable).length};
@@ -222,9 +223,9 @@ async function connectCaldavHosted(
   keyring:CredentialKeyring,
   input:CaldavConnectInput,
 ):Promise<CalendarConnection>{
-  if(!ownsOperation(db,scope,"calendar:caldav")){
+  if(!currentProviderWork(db,scope,"caldav","credential")){
     if(input.connectionId){const existing=await new D1CalendarConnectionRepository(db,scope).getById(input.connectionId);if(!existing||existing.provider!=="caldav")throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");}
-    return withOwnedOperation(db,scope,"calendar:caldav",()=>connectCaldavHosted(db,scope,keyring,input));
+    return withProviderService(db,scope,{provider:"caldav",operation:"credential",...(input.connectionId?{resourceId:input.connectionId}:{})},()=>connectCaldavHosted(db,scope,keyring,input));
   }
   const connections=new D1CalendarConnectionRepository(db,scope);
   const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
@@ -334,7 +335,7 @@ async function removeHosted(
   const connections=new D1CalendarConnectionRepository(db,scope);
   const connection=await connections.getById(connectionId);
   if(!connection)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection was not found.");
-  if(!ownsOperation(db,scope,`calendar:${connection.provider}`))return withOwnedOperation(db,scope,`calendar:${connection.provider}`,()=>removeHosted(db,scope,keyring,connectionId,options));
+  if(!currentProviderWork(db,scope,connection.provider,"manual-sync",connection.id))return withProviderService(db,scope,{provider:connection.provider,operation:"manual-sync",resourceId:connection.id},()=>removeHosted(db,scope,keyring,connectionId,options));
   if(!connection.remoteCalendarId)throw new CalendarSyncError("CALENDAR_CONFIG_MISSING","Calendar connection has no Kairos calendar.");
 
   const links=new D1CalendarEventLinkRepository(db,scope);

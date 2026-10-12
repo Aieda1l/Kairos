@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ async function readJson(response:Response):Promise<Record<string,unknown>>{
 }
 
 function errorMessage(body:Record<string,unknown>,fallback:string):string{
+  const recovery=providerRecoveryMessage(body);if(recovery)return recovery;
   return typeof body.message==="string"&&body.message.trim()?body.message:fallback;
 }
 

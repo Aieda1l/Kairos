@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 
 import {useState} from "react";
 import {useRouter} from "next/navigation";
@@ -25,7 +26,7 @@ export function DeleteAccountControl(){
       });
       if(!response.ok){
         const body=await response.json().catch(()=>null) as {message?:string}|null;
-        setMessage(body?.message??"Your account could not be deleted.");
+        setMessage(providerRecoveryMessage(body)??body?.message??"Your account could not be deleted.");
         return;
       }
       router.push("/");

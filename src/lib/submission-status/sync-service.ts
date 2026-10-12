@@ -1,4 +1,5 @@
-import {ownsOperation,withOwnedOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import crypto from "node:crypto";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -94,7 +95,11 @@ export function startCanvasSubmissionStatusSync(
     return {requestId,assignments,maxBatchSize:100};
   }
 
-  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:canvas"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:canvas",()=>startCanvasSubmissionStatusSync(db as D1DatabaseLike,arg2,arg3));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"canvas","manual-sync"))return (async()=>{
+    const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("canvas");
+    if(!connection)throw new SubmissionStatusSyncServiceError("CANVAS_NOT_CONFIGURED","Connect Canvas before syncing submission status.");
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"canvas",operation:"manual-sync",resourceId:connection.id},()=>startCanvasSubmissionStatusSync(db as D1DatabaseLike,arg2,arg3));
+  })();
 
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;

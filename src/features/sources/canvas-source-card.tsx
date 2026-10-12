@@ -1,4 +1,5 @@
 "use client";
+import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SourceConnection } from "@/lib/assignments/types";
@@ -28,7 +29,7 @@ export function CanvasSourceCard({connection:initial}:{connection:SourceConnecti
       body:JSON.stringify({feedUrl}),
     });
     const body=await response.json();
-    if(!response.ok) throw new Error(body.message??"Canvas request failed.");
+    if(!response.ok) throw new Error(providerRecoveryMessage(body)??body.message??"Canvas request failed.");
     return body;
   }
 

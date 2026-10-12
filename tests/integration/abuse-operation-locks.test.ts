@@ -1,3 +1,4 @@
+import {installProviderRuntime} from "../helpers/provider-runtime";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {startGradescopeDiscovery,completeGradescopeDiscovery} from "@/lib/gradescope/discovery-service";
 import {connectEd} from "@/lib/ed/discovery-service";
@@ -26,7 +27,7 @@ import {AbuseStorageUnavailableError} from "@/lib/abuse/types";
 const opened:ReturnType<typeof openD1TestDatabase>[]=[];
 const scope={userId:"synthetic-owner"};
 const keyring={activeKeyId:"test",keys:{test:new Uint8Array(32).fill(9)}};
-function open(){const test=openD1TestDatabase();opened.push(test);test.sqlite.exec("INSERT INTO users(id) VALUES ('synthetic-owner'),('synthetic-other')");return test;}
+function open(){const test=openD1TestDatabase();installProviderRuntime(test.db);opened.push(test);test.sqlite.exec("INSERT INTO users(id) VALUES ('synthetic-owner'),('synthetic-other')");return test;}
 async function seedCalendar(test:ReturnType<typeof open>,count=6,provider:"google"|"microsoft"="google"){
   const source=await new D1SourceConnectionRepository(test.db,scope).upsertCanvas("Synthetic");
   await new D1AssignmentRepository(test.db,scope).upsertMany(source.id,Array.from({length:count},(_,i)=>({source:"canvas" as const,externalId:`synthetic-${i}`,courseId:null,courseName:"Synthetic",title:"Synthetic",releaseAt:null,dueAt:"2026-11-01T00:00:00.000Z",lateDueAt:null,status:"pending" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null})),new Date().toISOString());
@@ -50,7 +51,7 @@ describe("durable service ownership",()=>{
     const test=openD1TestDatabase({beforeMigration:(name,sqlite)=>{
       if(name!=="0006_bridge_ownership.sql")return;
       sqlite.exec("INSERT INTO users(id) VALUES ('synthetic-upgrade'); INSERT INTO sync_requests(user_id,request_id,kind,payload_json,created_at,expires_at) VALUES ('synthetic-upgrade','synthetic-request','gradescope_discovery','{}','2026-10-01T00:00:00.000Z','2026-10-01T00:10:00.000Z')");
-    }});opened.push(test);
+    }});opened.push(test);installProviderRuntime(test.db);
     expect(test.sqlite.prepare("SELECT state FROM operation_locks").get()).toEqual({state:"uncertain"});
     await expect(startGradescopeDiscovery(test.db,{userId:"synthetic-upgrade"})).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
   });
@@ -194,6 +195,7 @@ describe("ownership SQL and settled work",()=>{
     const test=open();const connections=new D1CalendarConnectionRepository(test.db,scope);
     const connection=await connections.create({provider:"google",label:"Synthetic"});
     const registered=await registerOAuthRequest(test.db,scope,keyring,{provider:"google",connectionId:connection.id,redirectUri:"https://synthetic.invalid/api/calendars/google/callback"});
+    const startOwner=test.sqlite.prepare("SELECT * FROM operation_locks").all();
     await connections.delete(connection.id);
     vi.spyOn(await import("@/lib/platform/calendar-api-runtime"),"resolveCalendarApiRuntime").mockResolvedValue({ok:true,runtime:{kind:"hosted",db:test.db,scope,keyring}});
     vi.stubEnv("GOOGLE_CALENDAR_CLIENT_ID","synthetic-client");
@@ -202,7 +204,7 @@ describe("ownership SQL and settled work",()=>{
     const {GET}=await import("@/app/api/calendars/google/callback/route");
     const response=await GET(new Request(`https://synthetic.invalid/api/calendars/google/callback?state=${registered.state}&code=synthetic-code`));
     expect(response.status).toBe(400);expect(transport).not.toHaveBeenCalled();
-    expect(test.sqlite.prepare("SELECT count(*) AS n FROM operation_locks").get()).toEqual({n:0});
+    expect(test.sqlite.prepare("SELECT * FROM operation_locks").all()).toEqual(startOwner);
   });
   it("refuses owner release while its provider promise is unresolved",async()=>{
     const test=open();const lock=await acquireOperation({db:test.db} as AbuseRuntime,scope,"source:ed");

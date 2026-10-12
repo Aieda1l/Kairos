@@ -1,4 +1,6 @@
-import {withOwnedOperation,ownedWorkStopped,uncertainOwnedWork,throttleOwnedWork} from "@/lib/abuse/operation-lock";
+import {providerRuntime,withProviderService} from "@/lib/abuse/provider-operation";
+import {enforceBudget} from "@/lib/abuse/guard";
+import {ownedWorkStopped,uncertainOwnedWork,throttleOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -423,7 +425,7 @@ export function reconcileCalendarConnection(
     const hosted=db as D1DatabaseLike;
     const connection=await new D1CalendarConnectionRepository(hosted,arg2).getById(arg3 as string);
     if(!connection)throw new Error("Calendar connection not found.");
-    return withOwnedOperation(hosted,arg2,`calendar:${connection.provider}`,()=>reconcileWithRepositories(hostedRepositories(hosted,arg2),connection.id,arg4!));
+    return withProviderService(hosted,arg2,{provider:connection.provider,operation:"manual-sync",resourceId:connection.id},()=>reconcileWithRepositories(hostedRepositories(hosted,arg2),connection.id,arg4!));
   })();
 }
 
@@ -471,8 +473,8 @@ export function reconcileAllCalendars(
   const scope=arg2;
   const options=arg3!;
   const repositories=hostedRepositories(db as D1DatabaseLike,scope);
-  return reconcileAllWithRepositories(
-    repositories,
-    id=>reconcileCalendarConnection(db as D1DatabaseLike,scope,id,options),
-  );
+  return (async()=>{
+    await enforceBudget(await providerRuntime(db as D1DatabaseLike),{class:"sync-all",userId:scope.userId});
+    return reconcileAllWithRepositories(repositories,id=>reconcileCalendarConnection(db as D1DatabaseLike,scope,id,options));
+  })();
 }

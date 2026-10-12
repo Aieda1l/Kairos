@@ -1,3 +1,4 @@
+import {installProviderRuntime} from "../helpers/provider-runtime";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {connectEd,refreshEdCourses,replaceEnabledEdCourses} from "@/lib/ed/discovery-service";
 import {completeGradescopeDiscovery,startGradescopeDiscovery,replaceEnabledGradescopeCourses} from "@/lib/gradescope/discovery-service";
@@ -24,7 +25,7 @@ const calendarId="https://caldav.icloud.com/fixture/calendars/kairos/";
 const databases:ReturnType<typeof openD1TestDatabase>[]=[];
 
 function open(){
-  const test=openD1TestDatabase();databases.push(test);
+  const test=openD1TestDatabase();installProviderRuntime(test.db);databases.push(test);
   test.sqlite.prepare("INSERT INTO users(id) VALUES (?)").run(scope.userId);
   runtime.get.mockReturnValue({kind:"hosted",db:test.db,scope,keyring});
   return test;
@@ -325,6 +326,9 @@ describe("bounded D1 candidate commits",()=>{
     });
     const result=await connectEd(db,scope,keyring,"synthetic-token",edFetch("Candidate",150),now);
     expect(result.courses).toHaveLength(150);
+    // These are separate API operations. Bound each request, including its real
+    // admission/control SQL, while keeping the credential acceptance atomic.
+    expect(queries).toBeLessThan(20);queries=0;
     const selected=await replaceEnabledEdCourses(db,scope,keyring,Array.from({length:150},(_,i)=>String(i+1)));
     expect(selected.courses.every(c=>c.enabled)).toBe(true);expect(queries).toBeLessThan(20);
   });

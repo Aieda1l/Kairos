@@ -1,3 +1,4 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
 import {ownsOperation,withOwnedOperation,ownedFetch} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -29,7 +30,7 @@ export class EdDiscoveryServiceError extends Error{
 export function testEdConnection(token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
 export function testEdConnection(db:D1DatabaseLike,scope:UserScope,token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
 export async function testEdConnection(arg1:string|D1DatabaseLike,arg2?:typeof fetch|UserScope,arg3?:string,arg4?:typeof fetch):Promise<{ok:true;itemCount:number}>{
-  if(typeof arg1!=="string")return withOwnedOperation(arg1,arg2 as UserScope,"source:ed",()=>testEdConnection(arg3!,ownedFetch(arg4??fetch)));
+  if(typeof arg1!=="string")return withProviderService(arg1,arg2 as UserScope,{provider:"ed",operation:"credential"},()=>testEdConnection(arg3!,ownedFetch(arg4??fetch)));
   const payload=await new EdApiClient(arg1,(arg2 as typeof fetch|undefined)??fetch).fetchUser();
   return {ok:true,itemCount:parseEdCourses(payload).length};
 }
@@ -106,7 +107,7 @@ export async function connectEd(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
-  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6));
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
@@ -161,7 +162,10 @@ export async function refreshEdCourses(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
-  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>refreshEdCourses(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4,arg5));
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential")){
+    await requireConnectedEdHosted(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring);
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>refreshEdCourses(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4,arg5));
+  }
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;

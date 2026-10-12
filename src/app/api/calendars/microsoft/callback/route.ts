@@ -1,3 +1,4 @@
+import {withProviderContinuation} from "@/lib/abuse/provider-operation";
 import {settleCalendarWrite} from "@/lib/calendar/adapter";
 import {withOwnedOperation,ownedFetch,OperationControlVersionChangedError} from "@/lib/abuse/operation-lock";
 import {consumeOAuthRequest} from "@/lib/calendar/oauth-registry";
@@ -93,11 +94,11 @@ async function completeCallback(request:Request){
       );
       return response;
     };
-    const response=await (runtime.kind==="legacy"?work():withOwnedOperation(runtime.db,runtime.scope,"calendar:microsoft",work,{expectedControlVersion:registered.controlVersion}));
+    const response=await (runtime.kind==="legacy"?work():withOwnedOperation(runtime.db,runtime.scope,"calendar:microsoft",()=>withProviderContinuation(runtime.db,runtime.scope,registered,work),{expectedControlVersion:registered.controlVersion}));
     emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,durationMs:performance.now()-started});
     return response;
   }catch(error){
-    if(abuseErrorResponse(error))throw error;
+    if(!(error instanceof OperationControlVersionChangedError)&&abuseErrorResponse(error))throw error;
     const e=error instanceof OperationControlVersionChangedError
       ?new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.")
       :error instanceof CalendarSyncError

@@ -33,9 +33,9 @@ export function acquireOperation(runtime:AbuseRuntime,scope:UserScope,key:Operat
   return acquireFromDatabase(runtime.db,scope,key,options);
 }
 async function acquireFromDatabase(db:D1DatabaseLike,scope:UserScope,key:OperationKey,options:OperationOptions={}):Promise<OperationLock>{
-  const expected=options.expectedControlVersion;
-  if(expected!==undefined&&(!Number.isSafeInteger(expected)||expected<0))throw new OperationControlVersionChangedError();
   if(!scope.userId||! /^(source:(canvas|ed|gradescope)|calendar:(google|microsoft|caldav))$/.test(key))throw new AbuseSubjectError();
+  const expected=options.expectedControlVersion??(await new D1AbuseControlRepository(db).get(`provider:${key.split(":")[1] as IntegrationProvider}`)).version;
+  if(expected!==undefined&&(!Number.isSafeInteger(expected)||expected<0))throw new OperationControlVersionChangedError();
   const lock=bindLock(db,Object.freeze({userId:scope.userId,operationKey:key,ownerNonce:crypto.randomUUID()}));
   if(expected!==undefined)controlVersions.set(lock,expected);
   try{
@@ -170,16 +170,30 @@ export async function runWithOperationOwnership<T>(lock:OperationLock,work:()=>P
 }
 
 export async function withBridgeCompletion<T>(db:D1DatabaseLike,scope:UserScope,requestId:string,kind:string,now:Date,work:()=>Promise<T>):Promise<T>{
-  const row=await db.prepare(`SELECT operation_key,owner_nonce,expires_at,consumed_at FROM sync_requests WHERE user_id=? AND request_id=? AND kind=?`)
-    .bind(scope.userId,requestId,kind).first<{operation_key:OperationKey|null;owner_nonce:string|null;expires_at:string;consumed_at:string|null}>();
-  if(!row?.operation_key||!row.owner_nonce||row.consumed_at)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+  const row=await (async()=>{try{return await db.prepare(`SELECT operation_key,owner_nonce,expires_at,consumed_at,admitted_at_ms,control_version FROM sync_requests WHERE user_id=? AND request_id=? AND kind=?`)
+    .bind(scope.userId,requestId,kind).first<{operation_key:OperationKey|null;owner_nonce:string|null;expires_at:string;consumed_at:string|null;admitted_at_ms:number|null;control_version:number|null}>();}catch{throw new AbuseStorageUnavailableError();}})();
+  if(!row?.operation_key||!row.owner_nonce||row.consumed_at||!Number.isSafeInteger(row.admitted_at_ms)||row.admitted_at_ms!<0||!Number.isSafeInteger(row.control_version)||row.control_version!<0)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
   const lock=bindLock(db,{userId:scope.userId,operationKey:row.operation_key,ownerNonce:row.owner_nonce});
+  controlVersions.set(lock,row.control_version!);
   if(row.expires_at<now.toISOString()){await markOperationUncertain(lock);throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");}
-  if(!(await new D1AbuseControlRepository(db).get(`provider:${row.operation_key.split(":")[1] as IntegrationProvider}`)).enabled)throw new AbuseStorageUnavailableError();
+  const control=await new D1AbuseControlRepository(db).get(`provider:${row.operation_key.split(":")[1] as IntegrationProvider}`);
+  if(!control.enabled)throw new AbuseStorageUnavailableError();
+  if(control.version!==row.control_version)throw new OperationControlVersionChangedError();
   const active=await db.prepare("SELECT 1 AS active FROM operation_locks WHERE user_id=? AND operation_key=? AND owner_nonce=? AND state='running'")
     .bind(lock.userId,lock.operationKey,lock.ownerNonce).first();
   if(!active)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
   return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},work,true);
+}
+
+/** Check before scheduling even adapters that do not use HTTP themselves. */
+export async function checkOwnedOperation():Promise<void>{
+  const owner=owners.getStore();if(!owner)return;
+  if(owner.stopped)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+  try{await assertOperationOwner(owner.db,owner.lock);}catch(error){
+    if(error instanceof AbuseStorageUnavailableError)owner.admissionFailed=true;
+    if(error instanceof OperationControlVersionChangedError)owner.authorizationChanged=true;
+    throw error;
+  }
 }
 
 // Tracks transport settlement and ambiguous calendar writes without recording

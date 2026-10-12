@@ -1,3 +1,4 @@
+import {installProviderRuntime} from "../helpers/provider-runtime";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {openD1TestDatabase} from "../helpers/d1-test-db";
 import {ALICE,BOB} from "../helpers/test-users";
@@ -59,7 +60,7 @@ describe("hosted account deletion",()=>{
   });
 
   it("deletes only the current user and relies on database cleanup without remote provider calls",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUser(sqlite,ALICE.id,ALICE.name,ALICE.email);
     seedUser(sqlite,BOB.id,BOB.name,BOB.email);
     const fetchSpy=vi.spyOn(globalThis,"fetch");
@@ -87,7 +88,7 @@ describe("hosted account deletion",()=>{
   });
 
   it("requires confirmation and rejects a browser-supplied target user id",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUser(sqlite,ALICE.id,ALICE.name,ALICE.email);
     seedUser(sqlite,BOB.id,BOB.name,BOB.email);
     runtime.resolve.mockResolvedValue({

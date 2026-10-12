@@ -1,4 +1,5 @@
-import {withOwnedOperation,ownedFetch,ownedWorkStopped} from "@/lib/abuse/operation-lock";
+import {withProviderService} from "@/lib/abuse/provider-operation";
+import {ownedFetch,ownedWorkStopped} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -293,12 +294,16 @@ export function syncEdConnection(
   arg4?:SyncOptions,
 ):Promise<EdSyncResult>{
   if(isUserScope(arg2)){
-    return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>syncHostedEdConnection(
-      db as D1DatabaseLike,
-      arg2,
-      arg3!,
-      arg4,
-    ));
+    return (async()=>{
+      const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("ed");
+      if(!connection)throw new EdSyncServiceError("ED_NOT_CONNECTED","Connect Ed before syncing.");
+      return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"manual-sync",resourceId:connection.id},()=>syncHostedEdConnection(
+        db as D1DatabaseLike,
+        arg2,
+        arg3!,
+        arg4,
+      ));
+    })();
   }
   return syncLegacyEdConnection(db as LegacyDatabase,arg2);
 }

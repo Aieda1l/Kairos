@@ -1,4 +1,4 @@
-import {withOwnedOperation} from "@/lib/abuse/operation-lock";
+import {withProviderService} from "@/lib/abuse/provider-operation";
 import "server-only";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
@@ -112,7 +112,7 @@ export function syncCanvasConnection(
     ?(async()=>{
       const connection=await new D1SourceConnectionRepository(deps.db,deps.scope).getById(connectionId);
       if(!connection||connection.kind!=="canvas")throw new SyncServiceError("CANVAS_NOT_CONFIGURED","Connect Canvas before syncing.");
-      return withOwnedOperation(deps.db,deps.scope,"source:canvas",()=>syncHosted(connectionId,deps));
+      return withProviderService(deps.db,deps.scope,{provider:"canvas",operation:"manual-sync",resourceId:connectionId},()=>syncHosted(connectionId,deps));
     })()
     :syncLegacy(connectionId,deps);
 }
