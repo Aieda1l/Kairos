@@ -43,6 +43,7 @@ vi.mock("@/features/ed/ed-provider",()=>({
 }));
 
 import { EdSourceCard } from "@/features/sources/ed-source-card";
+import {PrivateDraftProvider,type PrivateDraftSession} from '@/features/onboarding/private-drafts';
 
 beforeEach(()=>{
   state.connected=false;
@@ -58,6 +59,25 @@ beforeEach(()=>{
 });
 
 describe("EdSourceCard",()=>{
+  it('updates a mounted public selection on reload without clearing fresh token memory',async()=>{
+    state.connected=true;const session:PrivateDraftSession={saved:[],read:()=>'',edit:()=>{},save:async()=>{},discard:async()=>{},use:async()=>({}),progress:async()=>{},courseIds:()=>['123'],selectCourses:()=>{},run:async work=>work()};
+    const view=render(<PrivateDraftProvider value={session}><EdSourceCard/></PrivateDraftProvider>);
+    const input=screen.getByLabelText('Ed API token'),checkbox=screen.getByRole('checkbox',{name:/CSE 331/});
+    await userEvent.setup().type(input,'synthetic-fresh-memory');expect(checkbox).toBeChecked();
+    view.rerender(<PrivateDraftProvider value={{...session,courseIds:()=>[]}}><EdSourceCard/></PrivateDraftProvider>);
+    expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBe(checkbox);expect(checkbox).not.toBeChecked();
+    expect(screen.getByLabelText('Ed API token')).toBe(input);expect(input).toHaveValue('synthetic-fresh-memory');expect(document.documentElement.outerHTML).not.toContain('synthetic-fresh-memory');
+    await userEvent.setup().click(screen.getByRole('button',{name:'Save selection'}));expect(saveEnabledCourses).toHaveBeenCalledWith([]);
+  });
+  it('restores saved course selection and retains fresh token memory without rendering it in HTML',async()=>{
+    state.connected=true;
+    const session:PrivateDraftSession={saved:[],read:()=>'',edit:()=>{},save:async()=>{},discard:async()=>{},use:async()=>({}),progress:async()=>{},courseIds:()=>['123'],selectCourses:()=>{},run:async work=>work()};
+    render(<PrivateDraftProvider value={session}><EdSourceCard/></PrivateDraftProvider>);
+    expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBeChecked();
+    await userEvent.setup().type(screen.getByLabelText('Ed API token'),'memory-only-synthetic-token');
+    expect(screen.getByLabelText('Ed API token')).toHaveValue('memory-only-synthetic-token');
+    expect(document.documentElement.outerHTML).not.toContain('memory-only-synthetic-token');
+  });
   it("tests and connects with a password-style token field and clears it after save",async()=>{
     const user=userEvent.setup();
     const view=render(<EdSourceCard/>);

@@ -18,16 +18,8 @@ it("renders an actionable safe error",()=>{
 });
 
 describe("hosted dashboard data boundary",()=>{
-  it("redirects unauthenticated dashboard access before repository reads",()=>{
-    const source=fs.readFileSync(
-      path.join(process.cwd(),"src/app/(dashboard)/layout.tsx"),
-      "utf8",
-    );
-    expect(source).toContain("AuthenticationRequiredError");
-    expect(source).toContain('redirect("/sign-in?returnTo=/upcoming")');
-    expect(source.indexOf("getSourceRuntimeContext()"))
-      .toBeLessThan(source.indexOf("new D1SourceConnectionRepository"));
-  });
+  // Authentication and per-request return paths are exercised by the actual
+  // layout in onboarding-dashboard.test.tsx and the browser guard smoke.
 
   it("does not load dashboard pages through the legacy SQLite runtime",()=>{
     const files=[

@@ -1,14 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import {TimezoneControl} from '@/features/settings/timezone-control';
 import { Alert } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSubmissionStatusSync } from "@/features/submission-status/submission-status-provider";
 import {DeleteAccountControl} from "@/features/account/delete-account-control";
 
-const zones=["America/Los_Angeles","America/Denver","America/Chicago","America/New_York","UTC"];
 
 function DiagnosticRow({label,value}:{label:string;value:string}){
   return (
@@ -62,11 +60,8 @@ export default function SettingsPage(){
             <ThemeToggle/>
           </div>
           <div>
-            <Label htmlFor="timezone">Display timezone</Label>
             <div className="flex flex-wrap gap-2">
-              <Select id="timezone" value={timeZone} onChange={e=>setTimeZone(e.target.value)}>
-                {zones.map(z=><option key={z}>{z}</option>)}
-              </Select>
+              <TimezoneControl value={timeZone} onChange={setTimeZone} disabled={saving}/>
               <Button onClick={save} disabled={saving}>{saving?"Saving…":"Save timezone"}</Button>
             </div>
           </div>
@@ -79,7 +74,7 @@ export default function SettingsPage(){
             <p className="mt-1 text-sm text-[var(--muted)]">Firefox reads status from an open signed-in Canvas tab; Kairos never stores your Canvas session.</p>
           </div>
           <dl>
-            <DiagnosticRow label="Automatic refresh" value="On"/>
+            <DiagnosticRow label="Automatic refresh" value={submissionSync.automaticEnabled===false?'Off':'On'}/>
             <DiagnosticRow label="Refresh when older than" value="15 minutes"/>
             <DiagnosticRow
               label="Last successful refresh"

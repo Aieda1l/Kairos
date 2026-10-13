@@ -1,3 +1,4 @@
+import {isCalendarReturnTo} from '@/lib/auth/return-to';
 import {z} from "zod";
 import {
   buildMicrosoftAuthorizationUrl,
@@ -10,7 +11,7 @@ import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 import {OAuthControlPausedError} from "@/lib/db/d1/repositories/oauth-requests";
 import {abuseErrorResponse} from "@/lib/abuse/guard";
 
-const schema=z.object({connectionId:z.string().min(1).optional()}).strict();
+const schema=z.object({connectionId:z.string().min(1).optional(),returnTo:z.string().refine(isCalendarReturnTo).optional()}).strict();
 
 export async function POST(request:Request){
   let body:unknown={};
@@ -37,6 +38,7 @@ export async function POST(request:Request){
       provider:"microsoft" as const,
       redirectUri,
       connectionId:parsed.data.connectionId??null,
+      returnTo:parsed.data.returnTo??"/sources",
     };
     const registered=runtime.kind==="legacy"
       ?registerOAuthRequest(input)

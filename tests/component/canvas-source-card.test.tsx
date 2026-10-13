@@ -10,6 +10,15 @@ vi.mock("@/lib/browser-navigation",()=>({navigateDocument}));
 
 beforeEach(()=>{navigateDocument.mockClear();});
 
+it('awaits the onboarding connection callback and keeps Sources default navigation separate',async()=>{
+  const connection={id:'accepted',kind:'canvas',label:'Canvas',enabled:true,lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:'never',lastErrorCode:null};
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({connection})));
+  const onConnected=vi.fn(async()=>{});render(<CanvasSourceCard connection={null} onConnected={onConnected}/>);
+  await userEvent.setup().type(screen.getByLabelText('Canvas calendar feed URL'),'https://canvas.uw.edu/feeds/calendars/synthetic.ics');
+  await userEvent.setup().click(screen.getByRole('button',{name:'Connect Canvas'}));
+  expect(onConnected).toHaveBeenCalledWith(connection);expect(navigateDocument).not.toHaveBeenCalled();
+});
+
 it("tests then connects without keeping the feed URL in the rendered UI",async()=>{
   const user=userEvent.setup();
   const feedUrl="https://canvas.example.edu/feeds/calendars/private.ics";

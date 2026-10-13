@@ -16,6 +16,21 @@ afterEach(()=>database.close());
 const patch=(body:unknown)=>new Request("https://mykairos.me/api/settings/onboarding",{method:"PATCH",body:JSON.stringify(body)});
 
 describe("onboarding settings API",()=>{
+  it('submission preference defaults off for new users, retains established preferences and is tenant scoped',async()=>{
+    const route=await import('@/app/api/settings/submission-status/route');
+    expect(await (await route.GET()).json()).toEqual({enabled:false});
+    const put=(body:unknown)=>new Request('https://mykairos.me/api/settings/submission-status',{method:'PUT',body:JSON.stringify(body)});
+    expect((await route.PUT(put({enabled:true,userId:'bob'}))).status).toBe(400);
+    expect((await route.PUT(put({enabled:true}))).status).toBe(200);
+    expect(await (await route.GET()).json()).toEqual({enabled:true});
+    runtime.get.mockResolvedValue({kind:'hosted',db:database.db,scope:{userId:'bob'}});
+    expect(await (await route.GET()).json()).toEqual({enabled:false});
+    database.sqlite.prepare("UPDATE app_settings SET value=? WHERE user_id='bob' AND key='onboarding'").run(JSON.stringify({version:1,revision:0,status:'completed',currentStep:'finish',skipped:[],drafts:{}}));
+    database.sqlite.exec("DELETE FROM app_settings WHERE user_id='bob' AND key='canvas_submission_status_enabled'");
+    expect(await (await route.GET()).json()).toEqual({enabled:true});
+    runtime.get.mockRejectedValue(new AuthenticationRequiredError());
+    expect((await route.GET()).status).toBe(401);expect((await route.PUT(put({enabled:false}))).status).toBe(401);
+  });
   it("GET_initializes_and_returns_only_current_tenant_state",async()=>{
     const route=await import("@/app/api/settings/onboarding/route");
     const response=await route.GET();

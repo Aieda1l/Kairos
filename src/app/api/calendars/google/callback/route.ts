@@ -1,3 +1,4 @@
+import {calendarCallbackDestination} from '@/lib/auth/return-to';
 import {withProviderContinuation} from "@/lib/abuse/provider-operation";
 import {settleCalendarWrite} from "@/lib/calendar/adapter";
 import {withOwnedOperation,ownedFetch,OperationControlVersionChangedError} from "@/lib/abuse/operation-lock";
@@ -31,7 +32,7 @@ async function completeCallback(request:Request){
   const url=new URL(request.url);
   const state=url.searchParams.get("state");
   const code=url.searchParams.get("code");
-  if(!state||!code){
+  if(!state){
     emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"google",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
@@ -55,6 +56,10 @@ async function completeCallback(request:Request){
     },{status:400});
   }
 
+  if(!code||url.searchParams.has('error')){
+    emitOperationEvent(context,{code:'CALENDAR_AUTH_REQUIRED',result:'rejected',provider:'google',status:303});
+    return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google','CALENDAR_AUTH_REQUIRED');
+  }
   try{
     if(runtime.kind==="hosted"&&(!Number.isSafeInteger(registered.controlVersion)||registered.controlVersion!<0))throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
     const work=async()=>{
@@ -94,7 +99,14 @@ async function completeCallback(request:Request){
     emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"google",status:307});
     return response;
   }catch(error){
-    if(!(error instanceof OperationControlVersionChangedError)&&abuseErrorResponse(error))throw error;
+    const admission=error instanceof OperationControlVersionChangedError?null:abuseErrorResponse(error);
+    if(admission){
+      if(registered.returnTo!=='/onboarding')throw error;
+      const body=await admission.json() as {code:string};
+      const response=calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google',body.code);
+      const retryAfter=admission.headers.get('retry-after');if(retryAfter)response.headers.set('retry-after',retryAfter);
+      return response;
+    }
     const e=error instanceof OperationControlVersionChangedError
       ?new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.")
       :error instanceof CalendarSyncError
@@ -105,9 +117,7 @@ async function completeCallback(request:Request){
       );
     const status=e.code==="CALENDAR_AUTH_EXPIRED"?401:502;
     emitOperationEvent(context,{code:e.code,result:"error",provider:"google",status});
-    return Response.json(
-      {code:e.code,message:e.message},
-      {status},
-    );
+    if(registered.returnTo==='/onboarding')return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google',e.code);
+    return Response.json({code:e.code,message:e.message},{status});
   }
 }

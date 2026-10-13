@@ -6,16 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { useEd } from "@/features/ed/ed-provider";
 import { SourceStatus } from "./source-status";
+import {MemoryInput,PrivateDraftControls,usePrivateDrafts} from '@/features/onboarding/private-drafts';
 
 export function EdSourceCard(){
   const ed=useEd();
-  const [token,setToken]=useState("");
+  const drafts=usePrivateDrafts();
+  const [token,setToken]=useState(drafts?.read('ed','token')??"");
+  const [draftBusy,setDraftBusy]=useState(false),[draftMessage,setDraftMessage]=useState('');
+  const candidate=token.trim()?{kind:'ed' as const,token}:null;
+  const hasInput=Boolean(candidate||drafts?.saved.includes('ed'));
   const [selectionOverrides,setSelectionOverrides]=useState<Record<string,boolean>>({});
+  const publicSelection=drafts?.courseIds('ed');
   const selected=ed.courses
-    .filter(course=>selectionOverrides[course.externalCourseId]??course.enabled)
+    .filter(course=>drafts?publicSelection?.includes(course.externalCourseId)??course.enabled:selectionOverrides[course.externalCourseId]??course.enabled)
     .map(course=>course.externalCourseId);
 
-  const busy=["testing","connecting","refreshing","syncing"].includes(ed.phase);
+  const busy=draftBusy||["testing","connecting","refreshing","syncing"].includes(ed.phase);
   const statusConnection:SourceConnection|null=ed.connection?{
     ...ed.connection,
     lastSyncStartedAt:ed.lastAttemptedAt??ed.connection.lastSyncStartedAt,
@@ -27,7 +33,8 @@ export function EdSourceCard(){
   }:null;
 
   function toggle(courseId:string,checked:boolean){
-    setSelectionOverrides(current=>({...current,[courseId]:checked}));
+    if(drafts)drafts.selectCourses('ed',checked?Array.from(new Set([...selected,courseId])):selected.filter(id=>id!==courseId));
+    else setSelectionOverrides(current=>({...current,[courseId]:checked}));
   }
 
   async function refreshCourses(){
@@ -36,14 +43,25 @@ export function EdSourceCard(){
   }
 
   async function saveSelection(){
-    await ed.saveEnabledCourses(selected);
-    setSelectionOverrides({});
+    try{if(drafts)await drafts.progress({edCourseIds:selected});await ed.saveEnabledCourses(selected);setSelectionOverrides({});}
+    catch{setDraftMessage('Course selection could not be saved. Reload saved progress before continuing.');}
   }
 
   async function saveToken(){
+    if(drafts){await actOnDraft('connect');return;}
     if(!token.trim())return;
     const ok=await ed.connect(token);
     if(ok)setToken("");
+  }
+  async function actOnDraft(action:'test'|'connect'){
+    if(!drafts)return;
+    setDraftBusy(true);setDraftMessage('');
+    try{
+      const body=await drafts.use('ed',action,candidate??undefined);
+      if(action==='connect'){setToken('');await ed.refreshAccepted();setDraftMessage('Ed connected. Choose courses to sync.');}
+      else setDraftMessage(`Ed token is valid · ${body.itemCount??body.count??0} courses found.`);
+    }catch{setDraftMessage('Ed could not use the saved input. Try again; your working connection was kept.');}
+    finally{setDraftBusy(false);}
   }
 
   return <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -59,12 +77,12 @@ export function EdSourceCard(){
 
     <div className="mt-4 grid max-w-xl gap-2">
       <label className="text-sm font-medium" htmlFor="ed-api-token">Ed API token</label>
-      <input
+      <MemoryInput
         id="ed-api-token"
         type="password"
         autoComplete="off"
         value={token}
-        onChange={event=>setToken(event.target.value)}
+        onValueChange={value=>{setToken(value);drafts?.edit('ed','token',value);}}
         placeholder={ed.connection?"Enter a new token to replace the saved token":"Paste your Ed API token"}
         className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
       />
@@ -72,10 +90,10 @@ export function EdSourceCard(){
     </div>
 
     <div className="mt-4 flex flex-wrap gap-2">
-      <Button variant="secondary" disabled={busy||!token.trim()} onClick={()=>void ed.testToken(token)}>
+      <Button variant="secondary" disabled={busy||!hasInput} onClick={()=>void (drafts?actOnDraft('test'):ed.testToken(token))}>
         {ed.phase==="testing"?"Testing…":"Test connection"}
       </Button>
-      <Button disabled={busy||!token.trim()} onClick={()=>void saveToken()}>
+      <Button disabled={busy||!hasInput} onClick={()=>void saveToken()}>
         {ed.phase==="connecting"?"Connecting…":ed.connection?"Update token":"Connect Ed"}
       </Button>
       {ed.connection&&<>
@@ -90,6 +108,7 @@ export function EdSourceCard(){
         </Button>
       </>}
     </div>
+    <PrivateDraftControls kind="ed" input={candidate} busy={busy} onError={setDraftMessage}/>
 
     {ed.courses.length>0&&<fieldset className="mt-5 grid gap-2">
       <legend className="mb-1 text-sm font-medium">Courses to sync</legend>
@@ -115,5 +134,6 @@ export function EdSourceCard(){
     </div>}
 
     {ed.message&&<Alert className="mt-4">{ed.message}</Alert>}
+    {draftMessage&&<Alert className="mt-4">{draftMessage}</Alert>}
   </section>;
 }

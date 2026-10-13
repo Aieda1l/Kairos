@@ -43,6 +43,7 @@ export function proxy(request:NextRequest){
 }
 
 export const config={matcher:[
+  "/upcoming", "/assignments", "/calendar", "/sources", "/settings", "/onboarding",
   "/sign-in",
   "/api/auth/:path*",
   "/api/account",

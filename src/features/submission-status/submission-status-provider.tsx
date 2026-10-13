@@ -56,6 +56,7 @@ const completeResponseSchema = z
 type SyncPhase = "idle" | "syncing" | "success" | "partial" | "error";
 
 type SubmissionStatusContextValue = SubmissionStatusSyncState & {
+  automaticEnabled:boolean;
   phase: SyncPhase;
   extensionDetected: boolean;
   extensionVersion: string | null;
@@ -161,10 +162,12 @@ async function completeSyncRequest(input: {
 
 export function SubmissionStatusProvider({
   enabled,
+  automaticEnabled=true,
   initialSyncState,
   children,
 }: {
   enabled: boolean;
+  automaticEnabled?:boolean;
   initialSyncState: SubmissionStatusSyncState;
   children: ReactNode;
 }) {
@@ -313,7 +316,7 @@ export function SubmissionStatusProvider({
   }, [getExtensionInfo]);
 
   useEffect(() => {
-    if (autoStartedRef.current || !enabled) return;
+    if (autoStartedRef.current || !enabled || !automaticEnabled) return;
     if (!isSubmissionStatusStale(syncState.lastSuccessfulAt)) {
       autoStartedRef.current = true;
       return;
@@ -326,12 +329,13 @@ export function SubmissionStatusProvider({
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [enabled, syncNow, syncState.lastSuccessfulAt]);
+  }, [enabled, automaticEnabled, syncNow, syncState.lastSuccessfulAt]);
 
   return (
     <SubmissionStatusContext.Provider
       value={{
         ...syncState,
+        automaticEnabled,
         phase,
         extensionDetected,
         extensionVersion,

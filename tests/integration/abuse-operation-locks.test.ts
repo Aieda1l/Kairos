@@ -88,6 +88,19 @@ describe("durable service ownership",()=>{
 });
 
 describe("ownership SQL and settled work",()=>{
+  it.each(['google','microsoft'] as const)('returns an admitted %s onboarding callback to its target when prior work requires recovery',async provider=>{
+    const test=open();const connection=await seedCalendar(test,1,provider);
+    const credentials=new D1CalendarCredentialRepository(test.db,scope,keyring);await credentials.setOAuthRefreshToken(connection.id,'synthetic-accepted-refresh');
+    const before=test.sqlite.prepare('SELECT * FROM calendar_connections').all();
+    const registered=await registerOAuthRequest(test.db,scope,keyring,{provider,connectionId:connection.id,returnTo:'/onboarding',redirectUri:`https://synthetic.invalid/api/calendars/${provider}/callback`});
+    const lock=await acquireOperation({db:test.db} as AbuseRuntime,scope,`calendar:${provider}`);await markOperationUncertain(lock);
+    const transport=vi.fn(()=>{throw new Error('No provider calls while recovery is required');});vi.stubGlobal('fetch',transport);
+    const response=await (await hostedCallback(test,provider)).GET(new Request(`https://synthetic.invalid/api/calendars/${provider}/callback?state=${registered.state}&code=synthetic-private-code`));
+    expect(response.status).toBe(303);const target=new URL(response.headers.get('location')!);expect(target.pathname).toBe('/onboarding');expect(target.searchParams.get('calendarError')).toBe('SYNC_RECOVERY_REQUIRED');
+    expect(target.href).not.toContain('synthetic-private-code');expect(transport).not.toHaveBeenCalled();expect(test.sqlite.prepare('SELECT * FROM calendar_connections').all()).toEqual(before);
+    expect(await credentials.getOAuthRefreshToken(connection.id)).toBe('synthetic-accepted-refresh');expect(test.sqlite.prepare('SELECT state FROM operation_locks').get()).toEqual({state:'uncertain'});
+    expect(test.sqlite.prepare('SELECT consumed_at FROM oauth_requests').get()).toMatchObject({consumed_at:expect.any(String)});
+  });
   it.each([
     {provider:"google" as const,failure:"batch"},{provider:"microsoft" as const,failure:"batch"},
     {provider:"google" as const,failure:"preparation"},{provider:"microsoft" as const,failure:"preparation"},

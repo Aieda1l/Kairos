@@ -115,6 +115,14 @@ beforeEach(()=>{
 });
 
 describe("SubmissionStatusProvider",()=>{
+  it('does not refresh browser submission data until explicit opt-in, then refreshes once',async()=>{
+    const {started,calls}=installFetch(1);syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    const view=render(<SubmissionStatusProvider enabled automaticEnabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await waitFor(()=>expect(screen.getByTestId('detected')).toHaveTextContent('true'));
+    expect(calls.start).toBe(0);expect(calls.complete).toBe(0);
+    view.rerender(<SubmissionStatusProvider enabled automaticEnabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await waitFor(()=>expect(calls.complete).toBe(1));expect(calls.start).toBe(1);
+  });
   it("pings the Firefox extension and does not auto-sync fresh status",async()=>{
     installFetch(1);
     render(<SubmissionStatusProvider enabled initialSyncState={{

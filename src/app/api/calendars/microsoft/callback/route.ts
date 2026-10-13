@@ -1,3 +1,4 @@
+import {calendarCallbackDestination} from '@/lib/auth/return-to';
 import {withProviderContinuation} from "@/lib/abuse/provider-operation";
 import {settleCalendarWrite} from "@/lib/calendar/adapter";
 import {withOwnedOperation,ownedFetch,OperationControlVersionChangedError} from "@/lib/abuse/operation-lock";
@@ -32,7 +33,7 @@ async function completeCallback(request:Request){
   const url=new URL(request.url);
   const state=url.searchParams.get("state");
   const code=url.searchParams.get("code");
-  if(!state||!code){
+  if(!state){
     emitOperationEvent(context,{code:"CALENDAR_AUTH_REQUIRED",result:"rejected",provider:"microsoft",status:400});
     return Response.json({
       code:"CALENDAR_AUTH_REQUIRED",
@@ -57,6 +58,10 @@ async function completeCallback(request:Request){
   }
 
   let stage:"configuration"|"token_exchange"|"calendar_setup"="configuration";
+  if(!code||url.searchParams.has('error')){
+    emitOperationEvent(context,{code:'CALENDAR_AUTH_REQUIRED',result:'rejected',provider:'microsoft',status:303});
+    return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'microsoft','CALENDAR_AUTH_REQUIRED');
+  }
   try{
     if(runtime.kind==="hosted"&&(!Number.isSafeInteger(registered.controlVersion)||registered.controlVersion!<0))throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
     const work=async()=>{
@@ -98,7 +103,14 @@ async function completeCallback(request:Request){
     emitOperationEvent(context,{code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,durationMs:performance.now()-started});
     return response;
   }catch(error){
-    if(!(error instanceof OperationControlVersionChangedError)&&abuseErrorResponse(error))throw error;
+    const admission=error instanceof OperationControlVersionChangedError?null:abuseErrorResponse(error);
+    if(admission){
+      if(registered.returnTo!=='/onboarding')throw error;
+      const body=await admission.json() as {code:string};
+      const response=calendarCallbackDestination(registered.returnTo,registered.redirectUri,'microsoft',body.code,stage);
+      const retryAfter=admission.headers.get('retry-after');if(retryAfter)response.headers.set('retry-after',retryAfter);
+      return response;
+    }
     const e=error instanceof OperationControlVersionChangedError
       ?new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.")
       :error instanceof CalendarSyncError
@@ -111,13 +123,6 @@ async function completeCallback(request:Request){
     // A browser follows this callback after consent. Return to the app and
     // remove the one-time authorization code from the address bar/history.
     // Only a fixed application error code is carried to the UI.
-    const destination=new URL(registered.returnTo,registered.redirectUri);
-    destination.searchParams.set("calendarProvider","microsoft");
-    destination.searchParams.set("calendarError",e.code);
-    destination.searchParams.set("calendarStage",stage);
-    return new Response(null,{
-      status:303,
-      headers:{location:destination.toString(),"cache-control":"no-store"},
-    });
+    return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'microsoft',e.code,stage);
   }
 }

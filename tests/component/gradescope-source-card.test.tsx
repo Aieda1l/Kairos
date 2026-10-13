@@ -53,8 +53,24 @@ vi.mock("@/features/gradescope/gradescope-provider",()=>({
 }));
 
 import { GradescopeSourceCard } from "@/features/sources/gradescope-source-card";
+import {PrivateDraftProvider,type PrivateDraftSession} from '@/features/onboarding/private-drafts';
 
 describe("GradescopeSourceCard",()=>{
+  it('updates a mounted public selection on reload and saves the winning empty selection',async()=>{
+    const session:PrivateDraftSession={saved:[],read:()=>'',edit:()=>{},save:async()=>{},discard:async()=>{},use:async()=>({}),progress:async()=>{},courseIds:()=>['123'],selectCourses:()=>{},run:async work=>work()};
+    const view=render(<PrivateDraftProvider value={session}><GradescopeSourceCard/></PrivateDraftProvider>);
+    const checkbox=screen.getByRole('checkbox',{name:/CSE 331/});expect(checkbox).toBeChecked();
+    view.rerender(<PrivateDraftProvider value={{...session,courseIds:()=>[]}}><GradescopeSourceCard/></PrivateDraftProvider>);
+    expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBe(checkbox);expect(checkbox).not.toBeChecked();
+    await userEvent.setup().click(screen.getByRole('button',{name:'Save selection'}));expect(saveEnabledCourses).toHaveBeenCalledWith([]);
+  });
+  it('restores saved course selection and persists it before changing accepted provider state',async()=>{
+    const events:string[]=[];saveEnabledCourses.mockImplementationOnce(async()=>{events.push('accepted');});
+    const session:PrivateDraftSession={saved:[],read:()=>'',edit:()=>{},save:async()=>{},discard:async()=>{},use:async()=>({}),progress:async drafts=>{expect(drafts).toEqual({gradescopeCourseIds:['123']});events.push('progress');},courseIds:()=>['123'],selectCourses:()=>{},run:async work=>work()};
+    render(<PrivateDraftProvider value={session}><GradescopeSourceCard/></PrivateDraftProvider>);
+    expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBeChecked();await userEvent.setup().click(screen.getByRole('button',{name:'Save selection'}));
+    expect(events).toEqual(['progress','accepted']);
+  });
   it("lets the user discover, choose, save, and sync Gradescope courses",async()=>{
     const user=userEvent.setup();
     render(<GradescopeSourceCard/>);

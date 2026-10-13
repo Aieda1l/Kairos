@@ -17,6 +17,7 @@ type EdContextValue=SubmissionStatusSyncState<string>&{
   testToken(token:string):Promise<boolean>;
   connect(token:string):Promise<boolean>;
   refreshCourses():Promise<void>;
+  refreshAccepted():Promise<void>;
   saveEnabledCourses(ids:string[]):Promise<void>;
   syncNow(options?:{deferCalendarSync?:boolean}):Promise<void>;
 };
@@ -56,6 +57,14 @@ export function EdProvider({
   const [syncState,setSyncState]=useState(initialSyncState);
   const [phase,setPhase]=useState<EdPhase>("idle");
   const [message,setMessage]=useState("");
+
+  async function refreshAccepted(){
+    const response=await fetch('/api/sources/ed/courses',{cache:'no-store'});
+    const body=await readJson(response);
+    if(!response.ok)throw new Error('Ed connection could not be loaded.');
+    setConnection(body.connection as SourceConnection|null);
+    setCourses(Array.isArray(body.courses)?body.courses as SourceCourse[]:[]);
+  }
 
   async function testToken(token:string):Promise<boolean>{
     setPhase("testing"); setMessage("");
@@ -184,7 +193,7 @@ export function EdProvider({
   return <Context.Provider value={{
     ...syncState,
     connection,courses,phase,message,
-    testToken,connect,refreshCourses,saveEnabledCourses,syncNow,
+    testToken,connect,refreshCourses,refreshAccepted,saveEnabledCourses,syncNow,
   }}>{children}</Context.Provider>;
 }
 

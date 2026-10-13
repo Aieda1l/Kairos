@@ -6,12 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { SourceStatus } from "./source-status";
 import { useGradescope } from "@/features/gradescope/gradescope-provider";
+import {usePrivateDrafts} from '@/features/onboarding/private-drafts';
 
 export function GradescopeSourceCard(){
   const gradescope=useGradescope();
-  const [selected,setSelected]=useState<string[]>(
+  const drafts=usePrivateDrafts();
+  const [localSelected,setSelected]=useState<string[]>(
     gradescope.courses.filter(course=>course.enabled).map(course=>course.externalCourseId),
   );
+  const selected=drafts
+    ?drafts.courseIds('gradescope')??gradescope.courses.filter(course=>course.enabled).map(course=>course.externalCourseId)
+    :localSelected;
 
 
   const busy=gradescope.phase==="discovering"||gradescope.phase==="syncing";
@@ -24,9 +29,8 @@ export function GradescopeSourceCard(){
   }:null;
 
   function toggle(courseId:string,checked:boolean){
-    setSelected(current=>checked
-      ?Array.from(new Set([...current,courseId]))
-      :current.filter(id=>id!==courseId));
+    const next=checked?Array.from(new Set([...selected,courseId])):selected.filter(id=>id!==courseId);
+    if(drafts)drafts.selectCourses('gradescope',next);else setSelected(next);
   }
 
   return (
@@ -61,7 +65,7 @@ export function GradescopeSourceCard(){
         {gradescope.courses.length>0&&(
           <Button
             variant="secondary"
-            onClick={()=>void gradescope.saveEnabledCourses(selected)}
+            onClick={()=>void (async()=>{try{if(drafts)await drafts.progress({gradescopeCourseIds:selected});await gradescope.saveEnabledCourses(selected);}catch{/* Wizard retains conflict and the accepted selection. */}})()}
             disabled={busy}
           >
             Save selection

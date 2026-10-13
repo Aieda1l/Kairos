@@ -30,8 +30,9 @@ type CalendarSyncContextValue={
   connections:CalendarConnection[];
   phaseFor(id:string):CalendarPhase;
   messageFor(id:string):string;
-  startGoogle(connectionId?:string):Promise<void>;
-  startMicrosoft(connectionId?:string):Promise<void>;
+  startGoogle(connectionId?:string,returnTo?:'/onboarding'):Promise<void>;
+  startMicrosoft(connectionId?:string,returnTo?:'/onboarding'):Promise<void>;
+  refreshAccepted():Promise<void>;
   testIcloud(username:string,secret:string):Promise<boolean>;
   connectIcloud(username:string,secret:string):Promise<boolean>;
   syncConnection(id:string):Promise<void>;
@@ -156,14 +157,21 @@ export function CalendarSyncProvider({
     setConnections(nextConnections);
   },[]);
 
-  async function startOAuth(provider:"google"|"microsoft",connectionId?:string){
+  async function refreshAccepted(){
+    const response=await fetch('/api/calendars',{cache:'no-store'});
+    const body=await readJson(response);
+    if(!response.ok||!Array.isArray(body.connections))throw new Error('Calendar connections could not be loaded.');
+    const accepted=body.connections as CalendarConnection[];
+    connectionsRef.current=accepted;setConnections(accepted);
+  }
+  async function startOAuth(provider:"google"|"microsoft",connectionId?:string,returnTo?:'/onboarding'){
     const key=connectionId??provider;
     setLocal(key,{phase:"connecting",message:""});
     try{
       const response=await fetch(`/api/calendars/${provider}/start`,{
         method:"POST",
         headers:{"content-type":"application/json"},
-        body:JSON.stringify(connectionId?{connectionId}:{}),
+        body:JSON.stringify({...(connectionId?{connectionId}:{}),...(returnTo?{returnTo}:{})}),
       });
       const body=await readJson(response);
       if(!response.ok){
@@ -383,8 +391,9 @@ export function CalendarSyncProvider({
     connections,
     phaseFor,
     messageFor,
-    startGoogle:id=>startOAuth("google",id),
-    startMicrosoft:id=>startOAuth("microsoft",id),
+    startGoogle:(id,returnTo)=>startOAuth("google",id,returnTo),
+    startMicrosoft:(id,returnTo)=>startOAuth("microsoft",id,returnTo),
+    refreshAccepted,
     testIcloud,
     connectIcloud,
     syncConnection,

@@ -54,6 +54,18 @@ beforeEach(()=>{
 });
 
 describe("Calendar destinations",()=>{
+  it('saves wizard progress before OAuth and prevents departure if that save fails',async()=>{
+    const events:string[]=[];
+    const beforeOAuth=vi.fn(async()=>{events.push('save');});
+    state.startGoogle.mockImplementationOnce(async()=>{events.push('start');});
+    const view=render(<CalendarDestinations beforeOAuth={beforeOAuth} returnTo="/onboarding"/>);
+    await userEvent.setup().click(screen.getByRole('button',{name:'Connect Google Calendar'}));
+    expect(events).toEqual(['save','start']);expect(state.startGoogle).toHaveBeenCalledWith(undefined,'/onboarding');
+    view.unmount();state.startMicrosoft.mockClear();
+    render(<CalendarDestinations beforeOAuth={async()=>{throw new Error('conflict');}} returnTo="/onboarding"/>);
+    await userEvent.setup().click(screen.getByRole('button',{name:'Connect Microsoft Calendar'}));
+    expect(await screen.findByText(/progress could not be saved/)).toBeVisible();expect(state.startMicrosoft).not.toHaveBeenCalled();
+  });
   it("separates destinations from assignment sources and explains provider permissions",()=>{
     render(<CalendarDestinations/>);
     expect(screen.getByRole("heading",{name:"Calendar destinations"})).toBeVisible();

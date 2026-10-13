@@ -7,7 +7,7 @@ import {GoogleCalendarCard} from "./google-calendar-card";
 import {MicrosoftCalendarCard} from "./microsoft-calendar-card";
 import {IcloudCalendarCard} from "./icloud-calendar-card";
 
-export function CalendarDestinations(){
+export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Promise<void>;returnTo?:'/onboarding'}={}){
   const calendars=useCalendarSync();
   const google=calendars.connections.find(x=>x.provider==="google")??null;
   const microsoft=calendars.connections.find(x=>x.provider==="microsoft")??null;
@@ -107,8 +107,8 @@ export function CalendarDestinations(){
       </div>
 
       <div className="grid gap-4">
-        <GoogleCalendarCard connection={google}/>
-        <MicrosoftCalendarCard connection={microsoft}/>
+        <GoogleCalendarCard connection={google} beforeOAuth={beforeOAuth} returnTo={returnTo}/>
+        <MicrosoftCalendarCard connection={microsoft} beforeOAuth={beforeOAuth} returnTo={returnTo}/>
         <IcloudCalendarCard connection={icloud}/>
       </div>
     </section>
