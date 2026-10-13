@@ -55,12 +55,23 @@ function Consumer(){
     <button onClick={()=>void ed.refreshCourses()}>Refresh</button>
     <button onClick={()=>void ed.saveEnabledCourses(["123"])}>Save</button>
     <button onClick={()=>void ed.syncNow()}>Sync</button>
+    <button onClick={()=>void ed.syncNow({deferCalendarSync:true,syncAllRunId:'11111111-1111-4111-8111-111111111111'})}>Sync admitted</button>
   </div>;
 }
 
 function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
+
+it('forwards the admitted run only as an HTTP header for Ed sync',async()=>{
+  const requests=vi.fn(async()=>json({...emptyState,statusUpdatedCount:0,insertedCount:0,updatedCount:0}));
+  vi.stubGlobal('fetch',requests);
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Sync admitted'}));
+  await waitFor(()=>expect(requests).toHaveBeenCalledWith('/api/sources/ed/sync',{
+    method:'POST',headers:{'x-kairos-calendar-sync':'defer','x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111'},
+  }));
+});
 
 it.each([
   [false,'Test connection','/api/sources/ed/test'],[true,'Test connection','/api/sources/ed/test'],

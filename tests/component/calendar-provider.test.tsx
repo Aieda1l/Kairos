@@ -24,6 +24,30 @@ const microsoft:CalendarConnection={
   lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
 };
 
+function AdmittedHarness(){
+  const calendar=useCalendarSync();
+  return <>
+    <button onClick={()=>void calendar.syncAll()}>Manual batch</button>
+    <button onClick={()=>void calendar.syncAll('11111111-1111-4111-8111-111111111111')}>Admitted batch</button>
+  </>;
+}
+it('an admitted final calendar pass waits for older work then starts its own claimed request',async()=>{
+  let settle!:(response:Response)=>void;
+  const requests=vi.fn<typeof fetch>();
+  requests.mockImplementationOnce(()=>new Promise<Response>(resolve=>{settle=resolve;}));
+  requests.mockImplementation(async()=>Response.json({status:'success',results:[]}));
+  vi.stubGlobal('fetch',requests);
+  render(<CalendarSyncProvider initialConnections={[{...google,lastSyncCompletedAt:new Date().toISOString(),lastSyncStatus:'success'}]}><AdmittedHarness/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Manual batch'}));
+  await waitFor(()=>expect(requests).toHaveBeenCalledTimes(1));
+  await user.click(screen.getByRole('button',{name:'Admitted batch'}));
+  expect(requests).toHaveBeenCalledTimes(1);
+  await act(async()=>settle(Response.json({status:'success',results:[]})));
+  await waitFor(()=>expect(requests).toHaveBeenCalledTimes(2));
+  expect(requests.mock.calls[1]).toEqual(['/api/calendars/sync-all',{method:'POST',headers:{'x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111'}}]);
+});
+
 it.each([
   ['google',false,'Connect Google Calendar','/api/calendars/google/start'],
   ['google',true,'Reconnect Google Calendar','/api/calendars/google/start'],

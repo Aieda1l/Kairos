@@ -1,4 +1,6 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
+import type {SyncAllOptions} from '@/lib/sync-all/types';
 import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
@@ -118,7 +120,7 @@ type GradescopeContextValue=SubmissionStatusSyncState<GradescopeSyncErrorCode>&{
   extensionChecked:boolean;
   discoverCourses:()=>Promise<void>;
   saveEnabledCourses:(ids:string[])=>Promise<void>;
-  syncNow:(options?:{deferCalendarSync?:boolean})=>Promise<void>;
+  syncNow:(options?:SyncAllOptions)=>Promise<void>;
 };
 
 const Context=createContext<GradescopeContextValue|null>(null);
@@ -288,7 +290,7 @@ export function GradescopeProvider({
     }
   },[router,handleFailure]);
 
-  const syncNow=useCallback(async(options?:{deferCalendarSync?:boolean})=>{
+  const syncNow=useCallback(async(options?:SyncAllOptions)=>{
     if(syncInFlightRef.current||Date.now()<blockedUntil.current||connection?.lastErrorCode==="SYNC_RECOVERY_REQUIRED")return;
     setRecovery(null);setRecoveryOperation(null);
     syncInFlightRef.current=true;
@@ -296,7 +298,7 @@ export function GradescopeProvider({
     setMessage("");
     try{
       const started=syncStartSchema.parse(await expectJson(
-        await fetch("/api/sources/gradescope/sync/start",{method:"POST"}),
+        await fetch("/api/sources/gradescope/sync/start",{method:"POST",...syncAllRequestInit({syncAllRunId:options?.syncAllRunId})}),
         "Gradescope sync could not start.",
       ));
       const batches:GradescopeSyncResultV1[]=[];

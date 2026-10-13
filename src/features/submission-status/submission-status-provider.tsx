@@ -1,4 +1,6 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
+import type {SyncAllOptions} from '@/lib/sync-all/types';
 import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
@@ -65,7 +67,7 @@ type SubmissionStatusContextValue = SubmissionStatusSyncState & {
   extensionVersion: string | null;
   canvasTabDetected: boolean | null;
   message: string;
-  syncNow: (options?: { deferCalendarSync?: boolean }) => Promise<void>;
+  syncNow: (options?:SyncAllOptions) => Promise<void>;
 };
 
 const SubmissionStatusContext = createContext<SubmissionStatusContextValue | null>(null);
@@ -125,9 +127,10 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-async function startSyncRequest() {
+async function startSyncRequest(runId?:string) {
   const response = await fetch("/api/sources/canvas/submission-status/start", {
     method: "POST",
+    ...syncAllRequestInit({syncAllRunId:runId}),
   });
   const body = await readJson(response);
   if (!response.ok) {
@@ -217,7 +220,7 @@ export function SubmissionStatusProvider({
     return promise;
   }, []);
 
-  const syncNow = useCallback(async (options?: { deferCalendarSync?: boolean }) => {
+  const syncNow = useCallback(async (options?:SyncAllOptions) => {
     if (syncInFlightRef.current||Date.now()<blockedUntil.current) return;
     setRecovery(null);
     syncInFlightRef.current = true;
@@ -225,7 +228,7 @@ export function SubmissionStatusProvider({
     setMessage("");
 
     try {
-      const started = await startSyncRequest();
+      const started = await startSyncRequest(options?.syncAllRunId);
       const results: SubmissionStatusResultV1[] = [];
       let batchErrorCode: SubmissionSyncErrorCode | null = null;
 

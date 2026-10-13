@@ -1,5 +1,6 @@
 import {providerRuntime,withProviderService} from "@/lib/abuse/provider-operation";
 import {enforceBudget} from "@/lib/abuse/guard";
+import {isCalendarFanoutPrepaid} from '@/lib/abuse/sync-all';
 import {ownedWorkStopped,uncertainOwnedWork,throttleOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -474,7 +475,7 @@ export function reconcileAllCalendars(
   const options=arg3!;
   const repositories=hostedRepositories(db as D1DatabaseLike,scope);
   return (async()=>{
-    await enforceBudget(await providerRuntime(db as D1DatabaseLike),{class:"sync-all",userId:scope.userId});
+    if(!isCalendarFanoutPrepaid(db as D1DatabaseLike,scope))await enforceBudget(await providerRuntime(db as D1DatabaseLike),{class:"sync-all",userId:scope.userId});
     return reconcileAllWithRepositories(repositories,id=>reconcileCalendarConnection(db as D1DatabaseLike,scope,id,options));
   })();
 }

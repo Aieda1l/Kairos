@@ -1,4 +1,5 @@
 import {abuseErrorResponse} from "@/lib/abuse/guard";
+import {withSyncAllRequest} from '@/lib/abuse/sync-all';
 import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 import {getEdRouteFetch} from "@/lib/ed/e2e-fixture-fetch";
 import {EdSyncServiceError,syncEdConnection} from "@/lib/ed/sync-service";
@@ -10,6 +11,7 @@ export async function POST(request?:Request){
   const runtime=resolved.runtime;
 
   try{
+    return await withSyncAllRequest(runtime,request,'ed',async()=>{
     const result=runtime.kind==="legacy"
       ?await syncEdConnection(runtime.db,{fetchImpl:getEdRouteFetch()})
       :await syncEdConnection(
@@ -33,6 +35,7 @@ export async function POST(request?:Request){
       :result.lastErrorCode&&result.lastErrorCode!=="PARTIAL_SYNC"?502
       :200;
     return Response.json(result,{status});
+    });
   }catch(error){
     const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdSyncServiceError){

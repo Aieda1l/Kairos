@@ -1,20 +1,23 @@
 import {abuseErrorResponse} from "@/lib/abuse/guard";
+import {withSyncAllRequest} from '@/lib/abuse/sync-all';
 import {
   startGradescopeSync,
   GradescopeSyncServiceError,
 } from "@/lib/gradescope/sync-service";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 
-export async function POST(){
+export async function POST(request?:Request){
   const resolved=await resolveSourceApiRuntime();
   if(!resolved.ok)return resolved.response;
   const runtime=resolved.runtime;
 
   try{
+    return await withSyncAllRequest(runtime,request,'gradescope',async()=>{
     const result=runtime.kind==="legacy"
       ?startGradescopeSync(runtime.db)
       :await startGradescopeSync(runtime.db,runtime.scope);
     return Response.json(result);
+    });
   }catch(error){
     const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof GradescopeSyncServiceError){

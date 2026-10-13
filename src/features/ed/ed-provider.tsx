@@ -1,4 +1,6 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
+import type {SyncAllOptions} from '@/lib/sync-all/types';
 import {recoveryFromResponse,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
@@ -22,7 +24,7 @@ type EdContextValue=SubmissionStatusSyncState<string>&{
   refreshCourses():Promise<void>;
   refreshAccepted():Promise<void>;
   saveEnabledCourses(ids:string[]):Promise<void>;
-  syncNow(options?:{deferCalendarSync?:boolean}):Promise<void>;
+  syncNow(options?:SyncAllOptions):Promise<void>;
 };
 
 const Context=createContext<EdContextValue|null>(null);
@@ -172,14 +174,14 @@ export function EdProvider({
     }
   }
 
-  async function syncNow(options?:{deferCalendarSync?:boolean}):Promise<void>{
+  async function syncNow(options?:SyncAllOptions):Promise<void>{
     if(Date.now()<blockedUntil.current)return ;
     setRecovery(null);setRecoveryOperation(null);
     setPhase("syncing"); setMessage("");
     try{
       const response=await fetch("/api/sources/ed/sync",{
         method:"POST",
-        ...(options?.deferCalendarSync?{headers:{"x-kairos-calendar-sync":"defer"}}:{}),
+        ...syncAllRequestInit(options),
       });
       const body=await readJson(response);
       if(typeof body.lastAttemptedAt==="string"||body.lastAttemptedAt===null){

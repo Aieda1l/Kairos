@@ -1,4 +1,5 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
 import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
@@ -39,7 +40,7 @@ type CalendarSyncContextValue={
   testIcloud(username:string,secret:string):Promise<boolean>;
   connectIcloud(username:string,secret:string):Promise<boolean>;
   syncConnection(id:string):Promise<void>;
-  syncAll():Promise<void>;
+  syncAll(runId?:string):Promise<void>;
   removeEvents(id:string):Promise<void>;
   disconnect(id:string):Promise<void>;
 };
@@ -300,9 +301,14 @@ export function CalendarSyncProvider({
     }
   }
 
-  const syncAll=useCallback(async():Promise<void>=>{
-    if(syncAllPromiseRef.current){
-      return syncAllPromiseRef.current;
+  const syncAll=useCallback(async(runId?:string):Promise<void>=>{
+    while(syncAllPromiseRef.current){
+      const pending=syncAllPromiseRef.current;
+      if(runId===undefined)return pending;
+      // An admitted pass must reconcile the source writes preceding this run,
+      // so joining a batch that started earlier cannot satisfy its step.
+      await pending;
+      if(syncAllPromiseRef.current===pending)syncAllPromiseRef.current=null;
     }
 
     const run=(async()=>{
@@ -311,7 +317,7 @@ export function CalendarSyncProvider({
       // sync-all cannot exclude a blocked destination; wait instead of bypassing backoff.
       if(current.some(connection=>!canAttempt(connection.id)))return;
       try{
-        const response=await fetch("/api/calendars/sync-all",{method:"POST"});
+        const response=await fetch("/api/calendars/sync-all",{method:"POST",...syncAllRequestInit({syncAllRunId:runId})});
         const body=await readJson(response);
         if(!response.ok){
           for(const connection of current){
