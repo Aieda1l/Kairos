@@ -1,5 +1,5 @@
 "use client";
-import {providerRecoveryMessage} from "@/lib/abuse/client-errors";
+import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
   createContext,
@@ -57,6 +57,9 @@ type SyncPhase = "idle" | "syncing" | "success" | "partial" | "error";
 
 type SubmissionStatusContextValue = SubmissionStatusSyncState & {
   automaticEnabled:boolean;
+  enabled:boolean;
+  recovery:RecoveryNotice|null;
+  extensionChecked:boolean;
   phase: SyncPhase;
   extensionDetected: boolean;
   extensionVersion: string | null;
@@ -78,6 +81,7 @@ export function isSubmissionStatusStale(
 }
 
 function messageForError(code: SubmissionSyncErrorCode | null): string {
+  const safe=getRecoveryNotice(code);if(safe)return safe.message;
   switch (code) {
     case "EXTENSION_UNAVAILABLE":
       return "Firefox extension not detected";
@@ -127,11 +131,7 @@ async function startSyncRequest() {
   });
   const body = await readJson(response);
   if (!response.ok) {
-    const message = providerRecoveryMessage(body)??(
-      body && typeof body === "object" && "message" in body && typeof body.message === "string"
-        ? body.message
-        : "Submission status sync could not start.");
-    throw new Error(message);
+    throw new RecoveryRequestError(recoveryFromResponse(body,response),"Submission status sync could not start.");
   }
   return startResponseSchema.parse(body);
 }
@@ -151,11 +151,7 @@ async function completeSyncRequest(input: {
   });
   const body = await readJson(response);
   if (!response.ok) {
-    const message = providerRecoveryMessage(body)??(
-      body && typeof body === "object" && "message" in body && typeof body.message === "string"
-        ? body.message
-        : "Submission status could not be saved.");
-    throw new Error(message);
+    throw new RecoveryRequestError(recoveryFromResponse(body,response),"Submission status could not be saved.");
   }
   return completeResponseSchema.parse(body);
 }
@@ -175,6 +171,9 @@ export function SubmissionStatusProvider({
   const [syncState, setSyncState] = useState(initialSyncState);
   const [phase, setPhase] = useState<SyncPhase>("idle");
   const [message, setMessage] = useState("");
+  const [recovery,setRecovery]=useState<RecoveryNotice|null>(null);
+  const [extensionChecked,setExtensionChecked]=useState(false);
+  const blockedUntil=useRef(0);
   const [extensionDetected, setExtensionDetected] = useState(false);
   const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
   const [canvasTabDetected, setCanvasTabDetected] = useState<boolean | null>(null);
@@ -187,12 +186,14 @@ export function SubmissionStatusProvider({
 
     const promise = pingKairosExtension()
       .then((info) => {
+        setExtensionChecked(true);
         setExtensionDetected(true);
         setExtensionVersion(info.extensionVersion);
         setCanvasTabDetected(info.canvasTabDetected);
         return info;
       })
       .catch((error: unknown) => {
+        setExtensionChecked(true);
         setExtensionDetected(false);
         setExtensionVersion(null);
         setCanvasTabDetected(null);
@@ -217,7 +218,8 @@ export function SubmissionStatusProvider({
   }, []);
 
   const syncNow = useCallback(async (options?: { deferCalendarSync?: boolean }) => {
-    if (syncInFlightRef.current) return;
+    if (syncInFlightRef.current||Date.now()<blockedUntil.current) return;
+    setRecovery(null);
     syncInFlightRef.current = true;
     setPhase("syncing");
     setMessage("");
@@ -226,7 +228,7 @@ export function SubmissionStatusProvider({
       const started = await startSyncRequest();
       const results: SubmissionStatusResultV1[] = [];
       let batchErrorCode: SubmissionSyncErrorCode | null = null;
-      let bridgeFailureMessage = "";
+
 
       if (started.assignments.length > 0) {
         try {
@@ -252,12 +254,12 @@ export function SubmissionStatusProvider({
         } catch (error: unknown) {
           if (error instanceof ExtensionBridgeError) {
             batchErrorCode = error.code;
-            bridgeFailureMessage = error.message;
+
             if (error.code === "EXTENSION_UNAVAILABLE") setExtensionDetected(false);
             if (error.code === "CANVAS_TAB_UNAVAILABLE") setCanvasTabDetected(false);
           } else {
             batchErrorCode = "INVALID_RESULT";
-            bridgeFailureMessage = messageForError(batchErrorCode);
+
           }
         }
       }
@@ -275,6 +277,10 @@ export function SubmissionStatusProvider({
         failedCount: completed.failedCount,
       };
       setSyncState(nextState);
+      const diagnostic=completed.failureDiagnostics[0]?.code;
+      const notice=getRecoveryNotice(diagnostic==="HTTP_429"?diagnostic:completed.lastErrorCode,{key:"submission"});
+      setRecovery(notice);
+      if(notice?.retryAfterSeconds)blockedUntil.current=Date.now()+notice.retryAfterSeconds*1000;
 
       if (completed.lastErrorCode === "PARTIAL_SYNC") {
         setPhase("partial");
@@ -285,7 +291,7 @@ export function SubmissionStatusProvider({
         );
       } else if (completed.lastErrorCode) {
         setPhase("error");
-        setMessage(bridgeFailureMessage || (completed.failureDiagnostics[0] ? messageForFailureDiagnostic(completed.failureDiagnostics[0].code, completed.failureHttpStatuses[0]?.status) : messageForError(completed.lastErrorCode)));
+        setMessage((completed.failureDiagnostics[0] ? messageForFailureDiagnostic(completed.failureDiagnostics[0].code, completed.failureHttpStatuses[0]?.status) : messageForError(completed.lastErrorCode)));
       } else {
         setPhase("success");
         setMessage("");
@@ -299,13 +305,11 @@ export function SubmissionStatusProvider({
       }
     } catch (error: unknown) {
       setPhase("error");
-      if (error instanceof ExtensionBridgeError) {
-        setMessage(error.message);
-      } else if (error instanceof Error) {
-        setMessage(error.message);
-      } else {
-        setMessage("Submission status sync failed.");
-      }
+      const notice=error instanceof RecoveryRequestError?error.notice:error instanceof ExtensionBridgeError?getRecoveryNotice(error.code):getRecoveryNotice('SERVICE_UNAVAILABLE');
+      setRecovery(notice);
+      if(notice?.retryAfterSeconds)blockedUntil.current=Date.now()+notice.retryAfterSeconds*1000;
+      if(notice?.key==='SYNC_RECOVERY_REQUIRED')blockedUntil.current=Infinity;
+      setMessage(notice?.message??'Submission status sync failed. Previously saved data was kept.');
     } finally {
       syncInFlightRef.current = false;
     }
@@ -335,7 +339,7 @@ export function SubmissionStatusProvider({
     <SubmissionStatusContext.Provider
       value={{
         ...syncState,
-        automaticEnabled,
+        automaticEnabled,enabled,recovery,extensionChecked,
         phase,
         extensionDetected,
         extensionVersion,

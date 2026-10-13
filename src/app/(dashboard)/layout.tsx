@@ -4,6 +4,7 @@ import {headers} from 'next/headers';
 import {D1OnboardingRepository} from '@/lib/db/d1/repositories/onboarding';
 import {D1SettingsRepository} from '@/lib/db/d1/repositories/settings';
 import {dashboardPaths,resolveDashboardEntry} from '@/lib/onboarding/entry';
+import {ReturningRecoveryPrompts} from "@/features/recovery/recovery-prompts";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
@@ -127,7 +128,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
               automaticEnabled={submissionEnabled}
               initialSyncState={canvasSyncState}
             >
-              <AppShell>{children}</AppShell>
+              <AppShell>
+                {onboarding.status!=='active'&&pathname!=='/onboarding'&&<div className="mb-5"><ReturningRecoveryPrompts
+                  onboarding={{status:onboarding.status,revision:onboarding.revision}}
+                  initialSources={[canvasConnection,edConnection,gradescopeConnection].flatMap(source=>source?[{kind:source.kind,enabled:source.enabled,lastSyncCompletedAt:source.lastSyncCompletedAt,lastErrorCode:source.lastErrorCode}]:[])}
+                /></div>}
+                {children}
+              </AppShell>
             </SubmissionStatusProvider>
           </GradescopeProvider>
         </EdProvider>

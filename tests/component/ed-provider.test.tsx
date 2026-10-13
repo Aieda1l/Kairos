@@ -10,6 +10,7 @@ const {refresh}=vi.hoisted(()=>({refresh:vi.fn()}));
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh})}));
 
 import { EdProvider, useEd } from "@/features/ed/ed-provider";
+import {EdSourceCard} from '@/features/sources/ed-source-card';
 
 const connection:SourceConnection={
   id:"ed-connection",
@@ -60,6 +61,25 @@ function Consumer(){
 function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
+
+it.each([
+  [false,'Test connection','/api/sources/ed/test'],[true,'Test connection','/api/sources/ed/test'],
+  [false,'Connect Ed','/api/sources/ed/connect'],[true,'Update token','/api/sources/ed/connect'],
+  [true,'Refresh courses','/api/sources/ed/refresh'],[true,'Save selection','/api/sources/ed/courses'],
+  [true,'Sync Ed','/api/sources/ed/sync'],
+] as const)('card Retry retains the Ed operation and choices (%s): %s',async(accepted,buttonName,endpoint)=>{
+  const user=userEvent.setup();const requests:Array<{url:string;init?:RequestInit}>=[];
+  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{requests.push({url:String(input),init});return json({code:'SERVICE_UNAVAILABLE'},503);}));
+  render(<EdProvider connection={accepted?connection:null} initialCourses={accepted?[course]:[]} initialSyncState={emptyState}><EdSourceCard/></EdProvider>);
+  await user.type(screen.getByLabelText('Ed API token'),'fresh-memory');
+  if(accepted)await user.click(screen.getByRole('checkbox',{name:/CSE 331/}));
+  await user.click(screen.getByRole('button',{name:buttonName}));
+  await user.click(screen.getByRole('button',{name:'Retry'}));
+  expect(requests.map(request=>request.url)).toEqual([endpoint,endpoint]);
+  expect(requests[1]?.init).toEqual(requests[0]?.init);
+  if(accepted)expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBeChecked();
+  expect(screen.getByLabelText('Ed API token')).toHaveValue('fresh-memory');expect(document.documentElement.outerHTML).not.toContain('fresh-memory');
+});
 
 beforeEach(()=>{
   refresh.mockReset();

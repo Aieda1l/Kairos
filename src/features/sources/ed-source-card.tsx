@@ -1,4 +1,7 @@
 "use client";
+import {RecoveryPrompts} from '@/features/recovery/recovery-prompts';
+import {getRecoveryNotice} from '@/lib/recovery/presentation';
+
 
 import { useState } from "react";
 import type { SourceConnection } from "@/lib/assignments/types";
@@ -10,6 +13,7 @@ import {MemoryInput,PrivateDraftControls,usePrivateDrafts} from '@/features/onbo
 
 export function EdSourceCard(){
   const ed=useEd();
+  const recovery=ed.recovery??getRecoveryNotice(ed.lastErrorCode??ed.connection?.lastErrorCode,{key:"ed"});
   const drafts=usePrivateDrafts();
   const [token,setToken]=useState(drafts?.read('ed','token')??"");
   const [draftBusy,setDraftBusy]=useState(false),[draftMessage,setDraftMessage]=useState('');
@@ -39,11 +43,11 @@ export function EdSourceCard(){
 
   async function refreshCourses(){
     await ed.refreshCourses();
-    setSelectionOverrides({});
+    // Keep the visible choices through a failed refresh or save.
   }
 
   async function saveSelection(){
-    try{if(drafts)await drafts.progress({edCourseIds:selected});await ed.saveEnabledCourses(selected);setSelectionOverrides({});}
+    try{if(drafts)await drafts.progress({edCourseIds:selected});await ed.saveEnabledCourses(selected);}
     catch{setDraftMessage('Course selection could not be saved. Reload saved progress before continuing.');}
   }
 
@@ -64,6 +68,13 @@ export function EdSourceCard(){
     finally{setDraftBusy(false);}
   }
 
+  async function retry(){
+    if(ed.recoveryOperation==='test')await (drafts?actOnDraft('test'):ed.testToken(token));
+    else if(ed.recoveryOperation==='connect')await saveToken();
+    else if(ed.recoveryOperation==='refresh')await refreshCourses();
+    else if(ed.recoveryOperation==='selection')await saveSelection();
+    else await ed.syncNow();
+  }
   return <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -133,7 +144,8 @@ export function EdSourceCard(){
       {ed.lastSuccessfulAt&&<p>Last successful {new Date(ed.lastSuccessfulAt).toLocaleString()}</p>}
     </div>}
 
-    {ed.message&&<Alert className="mt-4">{ed.message}</Alert>}
+    {ed.message&&!recovery&&<Alert className="mt-4">{ed.message}</Alert>}
+    {recovery&&<div className="mt-4"><RecoveryPrompts notices={[recovery]} onRetry={retry}/></div>}
     {draftMessage&&<Alert className="mt-4">{draftMessage}</Alert>}
   </section>;
 }

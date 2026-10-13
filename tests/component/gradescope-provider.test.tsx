@@ -32,6 +32,7 @@ vi.mock("@/features/gradescope/extension-bridge",()=>({
 }));
 
 import { GradescopeProvider, useGradescope } from "@/features/gradescope/gradescope-provider";
+import {GradescopeSourceCard} from '@/features/sources/gradescope-source-card';
 
 const requestId="11111111-1111-4111-8111-111111111111";
 
@@ -74,15 +75,59 @@ function Consumer(){
     <span data-testid="courses">{value.courses.map(c=>`${c.externalCourseId}:${c.enabled}`).join(",")}</span>
     <span data-testid="tab">{String(value.gradescopeTabDetected)}</span>
     <span data-testid="message">{value.message}</span>
+    <span data-testid="recovery-operation">{value.recoveryOperation??'none'}</span>
     <button onClick={()=>void value.discoverCourses()}>Discover</button>
     <button onClick={()=>void value.saveEnabledCourses(["123"])}>Save</button>
     <button onClick={()=>void value.syncNow()}>Sync</button>
   </div>;
 }
 
+it('keeps fixed recovery safe and blocks repeat requests for bounded backoff',async()=>{
+  const user=userEvent.setup();const fetchMock=vi.fn(async()=>new Response(JSON.stringify({code:'RATE_LIMITED',message:'synthetic-private-marker'}),{status:429,headers:{'Retry-After':'3600'}}));vi.stubGlobal('fetch',fetchMock);
+  render(<GradescopeProvider connection={null} initialCourses={[]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+  await user.click(screen.getByRole('button',{name:'Discover'}));await user.click(screen.getByRole('button',{name:'Discover'}));
+  expect(fetchMock).toHaveBeenCalledTimes(1);expect(screen.getByTestId('message')).toHaveTextContent('3600');expect(screen.getByTestId('message')).not.toHaveTextContent('synthetic-private-marker');
+});
+
 function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
+
+it.each([
+  [false,'Discover courses','/api/sources/gradescope/discover/start'],
+  [true,'Discover courses','/api/sources/gradescope/discover/start'],
+  [true,'Save selection','/api/sources/gradescope/courses'],
+  [true,'Sync Gradescope','/api/sources/gradescope/sync/start'],
+] as const)('card Retry retains Gradescope operation and selection (%s): %s',async(accepted,buttonName,endpoint)=>{
+  const user=userEvent.setup();const requests:Array<{url:string;init?:RequestInit}>=[];
+  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{requests.push({url:String(input),init});return json({code:'SERVICE_UNAVAILABLE'},503);}));
+  render(<GradescopeProvider connection={accepted?connection:null} initialCourses={accepted?[course(false)]:[]} initialSyncState={{...emptyState,lastSuccessfulAt:new Date().toISOString()}}><GradescopeSourceCard/></GradescopeProvider>);
+  if(accepted)await user.click(screen.getByRole('checkbox',{name:/CSE 331/}));
+  await user.click(screen.getByRole('button',{name:buttonName}));await user.click(screen.getByRole('button',{name:'Retry'}));
+  expect(requests.map(request=>request.url)).toEqual([endpoint,endpoint]);expect(requests[1]?.init).toEqual(requests[0]?.init);
+  if(accepted)expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBeChecked();
+});
+
+it.each([false,true])('suppresses stored extension errors for ineligible Gradescope (%s) but preserves new discovery feedback',async(enabled)=>{
+  const user=userEvent.setup();const saved={...connection,enabled,lastErrorCode:'EXTENSION_UNAVAILABLE'};
+  vi.stubGlobal('fetch',vi.fn(async()=>json({code:'EXTENSION_UNAVAILABLE'},503)));
+  render(<GradescopeProvider connection={saved} initialCourses={[course(!enabled)]} initialSyncState={{...emptyState,lastErrorCode:'EXTENSION_UNAVAILABLE',lastSuccessfulAt:new Date().toISOString()}}><GradescopeSourceCard/></GradescopeProvider>);
+  expect(screen.queryByRole('link',{name:'Verify extension'})).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'Discover courses'}));
+  expect(screen.getByRole('link',{name:'Verify extension'})).toHaveAttribute('href','/settings');
+});
+
+it.each([
+  ['Discover','discovery','RATE_LIMITED'],['Save','selection','RATE_LIMITED'],['Sync','sync','RATE_LIMITED'],
+  ['Discover','discovery','SYNC_RECOVERY_REQUIRED'],['Save','selection','SYNC_RECOVERY_REQUIRED'],['Sync','sync','SYNC_RECOVERY_REQUIRED'],
+] as const)('keeps the local failure handler origin and admission behavior for %s %s %s',async(button,operation,code)=>{
+  const user=userEvent.setup();const fetchMock=vi.fn(async()=>json({code,retryAfterSeconds:120,message:'synthetic-private-marker'},code==='RATE_LIMITED'?429:409));vi.stubGlobal('fetch',fetchMock);
+  render(<GradescopeProvider connection={connection} initialCourses={[course(false)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+  await user.click(screen.getByRole('button',{name:button}));expect(screen.getByTestId('recovery-operation')).toHaveTextContent(operation);
+  expect(screen.getByTestId('courses')).toHaveTextContent('123:false');expect(screen.getByTestId('message')).not.toHaveTextContent('synthetic-private-marker');
+  await user.click(screen.getByRole('button',{name:button}));expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('message')).toHaveTextContent(code==='RATE_LIMITED'?'120 seconds':'uncertain outcome');
+});
 
 function installFetch({
   initialCourse=course(false),

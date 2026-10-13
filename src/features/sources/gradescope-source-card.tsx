@@ -1,4 +1,7 @@
 "use client";
+import {RecoveryPrompts} from '@/features/recovery/recovery-prompts';
+import {getRecoveryNotice} from '@/lib/recovery/presentation';
+
 
 import { useState } from "react";
 import type { SourceConnection } from "@/lib/assignments/types";
@@ -10,6 +13,9 @@ import {usePrivateDrafts} from '@/features/onboarding/private-drafts';
 
 export function GradescopeSourceCard(){
   const gradescope=useGradescope();
+  const code=gradescope.lastErrorCode??gradescope.connection?.lastErrorCode;
+  const browserEnabled=Boolean(gradescope.connection?.enabled&&gradescope.courses.some(course=>course.enabled));
+  const recovery=gradescope.recovery??(browserEnabled?getRecoveryNotice(code,{key:"gradescope"}):null);
   const drafts=usePrivateDrafts();
   const [localSelected,setSelected]=useState<string[]>(
     gradescope.courses.filter(course=>course.enabled).map(course=>course.externalCourseId),
@@ -33,6 +39,15 @@ export function GradescopeSourceCard(){
     if(drafts)drafts.selectCourses('gradescope',next);else setSelected(next);
   }
 
+  async function saveSelection(){
+    try{if(drafts)await drafts.progress({gradescopeCourseIds:selected});await gradescope.saveEnabledCourses(selected);}
+    catch{/* Wizard retains conflict and accepted selection. */}
+  }
+  async function retry(){
+    if(gradescope.recoveryOperation==='selection')await saveSelection();
+    else if(gradescope.recoveryOperation==='discovery'||!gradescope.connection)await gradescope.discoverCourses();
+    else await gradescope.syncNow();
+  }
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -65,7 +80,7 @@ export function GradescopeSourceCard(){
         {gradescope.courses.length>0&&(
           <Button
             variant="secondary"
-            onClick={()=>void (async()=>{try{if(drafts)await drafts.progress({gradescopeCourseIds:selected});await gradescope.saveEnabledCourses(selected);}catch{/* Wizard retains conflict and the accepted selection. */}})()}
+            onClick={()=>void saveSelection()}
             disabled={busy}
           >
             Save selection
@@ -115,14 +130,15 @@ export function GradescopeSourceCard(){
           )}
         </div>
       )}
-      <p className="mt-4 text-sm text-[var(--muted)]">
+      {(gradescope.extensionDetected||(gradescope.connection?.enabled&&selected.length>0))&&<p className="mt-4 text-sm text-[var(--muted)]">
         {gradescope.extensionDetected
           ?gradescope.gradescopeTabDetected
             ?"Firefox extension and Gradescope tab detected."
             :"Firefox extension detected · open a signed-in Gradescope tab to connect."
           :"Firefox extension not detected."}
-      </p>
-      {gradescope.message&&(
+      </p>}
+      {recovery&&<div className="mt-4"><RecoveryPrompts notices={[recovery]} onRetry={retry}/></div>}
+      {gradescope.message&&!recovery&&(
         <Alert className="mt-4 border-[var(--danger)]">{gradescope.message}</Alert>
       )}
     </section>

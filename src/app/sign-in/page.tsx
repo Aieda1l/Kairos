@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {safeReturnTo} from "@/lib/auth/return-to";
+import {identitySignInFailureMessage} from '@/lib/recovery/presentation';
 import {AuthInitiationForm} from "@/features/auth/auth-initiation-form";
 import {startPublicSignIn} from "../../../auth";
 
@@ -16,7 +17,7 @@ export default async function SignInPage({searchParams}:SignInPageProps){
   const params=await searchParams;
   const returnTo=safeReturnTo(first(params.returnTo));
   const errorCode=first(params.error);
-  const errorMessage=errorCode?"Sign-in could not be completed. Please try again.":null;
+  const errorMessage=identitySignInFailureMessage(errorCode);
   // Public site key only. Server verification never accepts widget success as proof.
   const siteKey=process.env.KAIROS_TURNSTILE_SITE_KEY??"";
 
