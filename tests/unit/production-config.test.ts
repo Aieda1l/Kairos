@@ -20,7 +20,7 @@ function validEnvironment():Record<string,unknown>{
     MICROSOFT_CALENDAR_CLIENT_ID:"fixture-microsoft-calendar-id",
     MICROSOFT_CALENDAR_CLIENT_SECRET:"fixture-microsoft-calendar-secret",
     MICROSOFT_CALENDAR_TENANT:"common",
-    KAIROS_CREDENTIAL_KEY_V1:"fixture-encryption-key",
+    KAIROS_CREDENTIAL_KEY_V1:Buffer.from(new Uint8Array(32).fill(1)).toString('base64url'),
     KAIROS_TURNSTILE_SITE_KEY:"dummy-site-key",
     KAIROS_TURNSTILE_SECRET_KEY:"dummy-turnstile-secret",
     KAIROS_ABUSE_KEY_V1:Buffer.from(new Uint8Array(32).fill(7)).toString("base64url"),
@@ -44,10 +44,14 @@ describe("production configuration",()=>{
     try{validateProductionConfig(env);}catch(error){expect((error as Error).message).not.toContain(value);}
   });
 
+  it('rejects reuse of the abuse key as the second encryption key',()=>{
+    const env=validEnvironment();env.KAIROS_CREDENTIAL_KEY_V2=env.KAIROS_ABUSE_KEY_V1;
+    expect(()=>validateProductionConfig(env)).toThrowError(expect.objectContaining({fields:['KAIROS_ABUSE_KEY_V1']}));
+  });
   it("rejects credential key reuse and returns the validated server policy",()=>{
     const env=validEnvironment();env.KAIROS_CREDENTIAL_KEY_V1=env.KAIROS_ABUSE_KEY_V1;
     expect(()=>validateProductionConfig(env)).toThrowError(expect.objectContaining({fields:["KAIROS_ABUSE_KEY_V1"]}));
-    env.KAIROS_CREDENTIAL_KEY_V1="separate-dummy-encryption-key";
+    env.KAIROS_CREDENTIAL_KEY_V1=Buffer.from(new Uint8Array(32).fill(1)).toString('base64url');
     env.KAIROS_ABUSE_BUDGETS='{"sync-all":{"limit":2,"windowSeconds":60}}';
     expect(validateProductionConfig(env)).toMatchObject({abusePolicy:{"sync-all":{limit:2,windowSeconds:60}},trustedIngress:"none"});
   });
@@ -56,7 +60,7 @@ describe("production configuration",()=>{
     const env=validEnvironment();
     env.KAIROS_ABUSE_KEY_V1="A".repeat(43);
     env.KAIROS_CREDENTIAL_KEY_V1="A".repeat(42)+"B";
-    expect(()=>validateProductionConfig(env)).toThrowError(expect.objectContaining({fields:["KAIROS_ABUSE_KEY_V1"]}));
+    expect(()=>validateProductionConfig(env)).toThrowError(expect.objectContaining({fields:["KAIROS_ABUSE_KEY_V1","KAIROS_CREDENTIAL_KEYRING"]}));
   });
 
   it("accepts the canonical hosted configuration",()=>{

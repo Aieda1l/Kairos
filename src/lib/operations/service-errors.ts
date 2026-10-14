@@ -1,6 +1,7 @@
 import 'server-only';
 import {ProductionConfigError} from '@/lib/platform/production-config';
 import {AbuseConfigurationError,AbuseStorageUnavailableError} from '@/lib/abuse/types';
+import {CredentialKeyConfigurationError} from '@/lib/security/credential-cipher';
 
 function value(error:unknown,key:string):unknown{
   if(!error||typeof error!=='object')return undefined;
@@ -21,7 +22,7 @@ export function isServiceUnavailable(error:unknown):boolean{
   if(isFrameworkControlFlow(error))return false;
   for(const cause of causes(error)){
     error=cause;
-    if(error instanceof ProductionConfigError||error instanceof AbuseConfigurationError||error instanceof AbuseStorageUnavailableError)return true;
+    if(error instanceof ProductionConfigError||error instanceof AbuseConfigurationError||error instanceof AbuseStorageUnavailableError||error instanceof CredentialKeyConfigurationError)return true;
     const code=value(error,'code'),message=value(error,'message');
     if(typeof code==='string'&&['D1_ERROR','D1_EXEC_ERROR','D1_BATCH_ERROR','SQLITE_BUSY','SQLITE_FULL','SQLITE_IOERR','SQLITE_CANTOPEN'].includes(code))return true;
     if(typeof message==='string'&&/^(D1_(ERROR|EXEC_ERROR|BATCH_ERROR):|KAIROS_CREDENTIAL_KEY_V1 )/.test(message.slice(0,128)))return true;

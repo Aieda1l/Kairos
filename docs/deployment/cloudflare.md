@@ -29,6 +29,9 @@ Configure these secret/provider values in the production deployment secret store
 - `MICROSOFT_CALENDAR_CLIENT_SECRET`
 - `MICROSOFT_CALENDAR_TENANT`
 - `KAIROS_CREDENTIAL_KEY_V1`
+- Optional `KAIROS_CREDENTIAL_KEY_V2` during a reviewed dual-key rotation;
+  `KAIROS_CREDENTIAL_ACTIVE_KEY_ID=v1` defaults to existing writes. Set `v2`
+  only with both distinct 32-byte keys and a verified dual-key runtime.
 
 Deployment credentials such as the Cloudflare account ID, API token, and real D1 database ID must also remain outside tracked files. Use placeholders when documenting commands.
 
@@ -73,6 +76,44 @@ Before directing normal traffic to a new deployment:
 7. Record the current known-good Worker deployment identifier before promotion.
 
 If smoke checks fail, route traffic back to the recorded known-good Worker deployment and investigate before retrying. Do not automatically advance traffic after a failed migration or deployment.
+
+## Release identity and recovery
+
+Before any remote change, capture the current Worker deployment/version,
+prior compatible target, exact Git revision and dirty-tree status, migration
+level, build/config identity and configured **secret names**. Do not export
+secret values or D1 rows into release evidence. Prefer a clean reviewed source
+checkpoint and the committed lockfile. Preserve the reviewed Firefox 0.4.0
+runtime/source ZIPs and record their immutable hashes separately from web builds.
+
+The manual workflow stamps public `GITHUB_SHA` into `KAIROS_RELEASE_ID`,
+preserves domain/routes and secret bindings, applies additive migrations,
+deploys the compiled module graph, then checks storage health. A storage health
+pass is one preflight check; run authenticated/provider/two-user smoke checks
+before normal use. Compare the actual active version after deployment, including
+versions created by dashboard secret updates. Do not treat a successful upload
+or public 200 response as complete acceptance.
+
+Re-read the actual deployment list before rollback. Use the recorded compatible
+version with the configured production Worker; the following are templates
+(replace only the non-secret recorded version identifier):
+
+```text
+npx wrangler deployments list --env production --config ./wrangler.deploy.local.jsonc
+npx wrangler rollback <RECORDED_COMPATIBLE_VERSION> --env production --config ./wrangler.deploy.local.jsonc
+node scripts/check-production-health.mjs
+```
+
+Check the target's additive-schema and encryption-key support **before** rollback.
+After `v2` writes, a v1-only build is incompatible. Keep both keys and all applied
+schema; no destructive database rollback is part of this procedure. Verify
+sign-in/logout, the two authorized users' isolation, source/extension access,
+calendar sync and duplicate-write prevention against the rolled-back runtime.
+Record time/version and outcomes, then forward-restore the verified release and
+repeat those checks. Restore lost data only from a privately retained, tested
+recovery point with every needed key and a separately authorized restoration;
+code rollback does not restore data. See [incident response](incident-response.md)
+for containment, key rotation, bounded cleanup and targeted owner recovery.
 
 ## Hosted integration troubleshooting
 

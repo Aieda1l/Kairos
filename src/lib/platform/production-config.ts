@@ -3,6 +3,7 @@ import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {abuseKeyFromEnvironment} from "@/lib/abuse/keys";
 import {policyFromEnvironment} from "@/lib/abuse/policy";
 import type {AbusePolicy,TrustedIngress} from "@/lib/abuse/types";
+import {credentialKeyringFromBindings} from '@/lib/security/keyring-environment';
 
 const CANONICAL_URL="https://mykairos.me";
 
@@ -67,7 +68,11 @@ export function validateProductionConfig(
 
   try{
     abuseKeyFromEnvironment(env.KAIROS_ABUSE_KEY_V1,env.KAIROS_CREDENTIAL_KEY_V1);
+    if(env.KAIROS_CREDENTIAL_KEY_V2!==undefined&&env.KAIROS_CREDENTIAL_KEY_V2!==''){
+      abuseKeyFromEnvironment(env.KAIROS_ABUSE_KEY_V1,env.KAIROS_CREDENTIAL_KEY_V2);
+    }
   }catch{invalid.add("KAIROS_ABUSE_KEY_V1");}
+  try{credentialKeyringFromBindings(env);}catch{invalid.add('KAIROS_CREDENTIAL_KEYRING');}
   for(const name of ["KAIROS_TURNSTILE_SITE_KEY","KAIROS_TURNSTILE_SECRET_KEY"]){
     if(typeof env[name]==="string"&&(env[name] as string).length>4096)invalid.add(name);
   }

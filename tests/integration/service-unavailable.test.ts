@@ -1,5 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {AuthenticationRequiredError} from '@/lib/auth/user-scope';
+import {CredentialKeyConfigurationError} from '@/lib/security/credential-cipher';
 const faults=vi.hoisted(()=>({source:vi.fn(),calendar:vi.fn()}));
 vi.mock('@/lib/platform/source-runtime',()=>({getSourceRuntimeContext:faults.source}));
 vi.mock('@/lib/platform/calendar-runtime',()=>({getCalendarRouteRuntime:faults.calendar}));
@@ -9,6 +10,13 @@ import {abuseErrorResponse} from '@/lib/abuse/guard';
 vi.mock('@/lib/operations/events',()=>({emitOperationEvent:vi.fn()}));
 import {emitOperationEvent} from '@/lib/operations/events';
 afterEach(()=>vi.clearAllMocks());
+it.each(['source','calendar'] as const)('maps invalid encryption bindings to a safe 503 for %s',async kind=>{
+  faults[kind].mockRejectedValue(new CredentialKeyConfigurationError('SYNTHETIC_PRIVATE_configuration'));
+  const result=await (kind==='source'?resolveSourceApiRuntime():resolveCalendarApiRuntime());
+  expect(result.ok).toBe(false);if(result.ok)throw new Error('Expected service failure');
+  expect(result.response.status).toBe(503);
+  expect(await result.response.json()).toEqual({code:'SERVICE_UNAVAILABLE',message:'Kairos is temporarily unavailable. Try again shortly.'});
+});
 it('maps a D1 failure after runtime resolution to safe service recovery',async()=>{
   const response=abuseErrorResponse(new Error('D1_ERROR: write quota; SYNTHETIC_PRIVATE_payload'));
   expect(response?.status).toBe(503);
