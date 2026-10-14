@@ -123,12 +123,20 @@ if(!fs.existsSync(deployPath)){
     "d1 migrations apply",
     "--remote",
     "npm run build:vinext",
-    "wrangler deploy",
+    "wrangler versions upload",
+    "wrangler versions deploy",
+    "scripts/verify-release-ci.mjs",
+    "scripts/check-staged-release.mjs",
+    "needs: preflight",
+    "github.ref == 'refs/heads/main'",
     "KAIROS_RELEASE_ID",
     "scripts/check-production-health.mjs",
   ]){
     if(!deploy.includes(required))errors.push(`Production deployment workflow is missing: ${required}`);
   }
+  const build=deploy.indexOf('npm run build:vinext'),upload=deploy.indexOf('wrangler versions upload'),stage=deploy.indexOf('node scripts/check-staged-release.mjs');
+  const migration=deploy.indexOf('npx wrangler d1 migrations apply'),promotion=deploy.indexOf('wrangler versions deploy');
+  if(!(build>=0&&build<upload&&upload<stage&&stage<migration&&migration<promotion))errors.push('Production release must build, upload, check staged health, migrate, then promote the exact version.');
   if(/E2E_FIXTURES\s*:\s*["']?1["']?/m.test(deploy)){
     errors.push("Production deployment workflow enables E2E fixtures.");
   }

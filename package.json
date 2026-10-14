@@ -4,7 +4,7 @@
   "license": "MIT",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "npm run db:migrate:local && npm run dev:vinext",
@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "build:extension": "node scripts/build-firefox-extension.mjs",
-    "lint:extension": "npm run package:extension && web-ext lint --source-dir artifacts/firefox/runtime --warnings-as-errors --no-config-discovery",
+    "lint:extension": "node scripts/prepare-firefox-lint.mjs && web-ext lint --source-dir artifacts/firefox-lint --warnings-as-errors --no-config-discovery",
     "package:extension": "node scripts/package-firefox-extension.mjs",
     "dev:vinext": "vite dev --port 3000",
     "build:vinext": "vite build",
@@ -73,7 +73,8 @@
     "wrangler": "^4.147.0",
     "cross-env": "^10.1.0",
     "better-sqlite3": "^13.0.3",
-    "web-ext": "10.7.0"
+    "web-ext": "10.7.0",
+    "js-yaml": "4.3.2"
   },
   "type": "module",
   "overrides": {

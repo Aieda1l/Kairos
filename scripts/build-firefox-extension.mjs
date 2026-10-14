@@ -5,7 +5,7 @@ import { build } from "esbuild";
 
 const root=fileURLToPath(new URL("../",import.meta.url));
 
-export async function buildFirefoxExtension(){
+export async function buildFirefoxExtension({outdir=path.join(root,"extension/firefox/dist")}={}){
   const config=JSON.parse(fs.readFileSync(path.join(root,"tsconfig.json"),"utf8"));
   await build({
     absWorkingDir:root,
@@ -21,7 +21,7 @@ export async function buildFirefoxExtension(){
       "gradescope-content":path.join(root,"extension/firefox/src/content/gradescope.ts"),
       popup:path.join(root,"extension/firefox/src/popup.ts"),
     },
-    outdir:path.join(root,"extension/firefox/dist"),
+    outdir,
     bundle:true,
     platform:"browser",
     format:"iife",

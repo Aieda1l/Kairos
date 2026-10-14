@@ -1,0 +1,30 @@
+import fs from 'node:fs';
+import {createRequire} from 'node:module';
+import {expect,it} from 'vitest';
+const yaml=createRequire(import.meta.url)('js-yaml') as {load:(text:string)=>{jobs:Record<string,{if?:string;needs?:string;environment?:string;permissions?:Record<string,string>;steps:Array<{run?:string;uses?:string;with?:Record<string,unknown>}>}>}};
+it('rejects production mutation before exact-main CI, artifact build and staged health',()=>{
+ const text=fs.readFileSync('.github/workflows/deploy-production.yml','utf8');
+ const workflow=yaml.load(text),preflight=workflow.jobs.preflight,deploy=workflow.jobs.deploy;
+ expect(preflight.environment).toBeUndefined();expect(preflight.if).toContain("github.ref == 'refs/heads/main'");
+ expect(deploy.needs).toBe('preflight');expect(deploy.environment).toBe('production');expect(deploy.if).toContain("github.ref == 'refs/heads/main'");
+ const commands=deploy.steps.flatMap(step=>step.run?[step.run]:[]);
+ expect(commands.findIndex(c=>c.includes('wrangler versions upload'))).toBeLessThan(commands.findIndex(c=>c.includes('check-staged-release.mjs')));
+ expect(commands.findIndex(c=>c.includes('check-staged-release.mjs'))).toBeLessThan(commands.findIndex(c=>c.includes('d1 migrations apply')));
+ expect(commands.findIndex(c=>c.includes('d1 migrations apply'))).toBeLessThan(commands.findIndex(c=>c.includes('wrangler versions deploy')));
+ expect(preflight.steps.some(step=>step.run?.includes('build:vinext'))).toBe(true);
+ expect(text).toContain("github.ref == 'refs/heads/main'");
+ expect(text).toContain('node scripts/verify-release-ci.mjs');expect(text).toContain('needs: preflight');
+ const build=text.indexOf('npm run build:vinext'),upload=text.indexOf('wrangler versions upload'),check=text.indexOf('node scripts/check-staged-release.mjs');
+ const migrate=text.indexOf('npx wrangler d1 migrations apply'),promote=text.indexOf('wrangler versions deploy');
+ expect(build).toBeGreaterThan(-1);expect(upload).toBeGreaterThan(build);expect(check).toBeGreaterThan(upload);expect(migrate).toBeGreaterThan(check);expect(promote).toBeGreaterThan(migrate);
+ expect(text).toContain('steps.stage.outputs.version_id');expect(text).toContain('--keep-vars');
+});
+it('keeps status-write authority out of repository/PR execution',()=>{
+ const text=fs.readFileSync('.github/workflows/milestone-2-ci.yml','utf8');const split=text.indexOf('  publish-status:');
+ const workflow=yaml.load(text);expect(workflow.jobs.verify.permissions?.statuses).toBeUndefined();
+ expect(workflow.jobs['publish-status'].permissions?.statuses).toBe('write');
+ expect(workflow.jobs['publish-status'].steps.some(step=>step.uses?.includes('checkout'))).toBe(false);
+ expect(split).toBeGreaterThan(-1);expect(text.slice(0,split)).not.toContain('statuses: write');
+ expect(text.slice(split)).toContain('statuses: write');expect(text.slice(split)).not.toContain('actions/checkout');
+ expect(text.slice(0,split)).toContain('persist-credentials: false');expect(text).toContain('- main');
+});
