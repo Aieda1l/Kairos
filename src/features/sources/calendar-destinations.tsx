@@ -13,6 +13,7 @@ export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Pr
   const microsoft=calendars.connections.find(x=>x.provider==="microsoft")??null;
   const icloud=calendars.connections.find(x=>x.provider==="caldav")??null;
   const [hideSubmitted,setHideSubmitted]=useState(true);
+  const [loadingPreference,setLoadingPreference]=useState(true);
   const [savingPreference,setSavingPreference]=useState(false);
   const [preferenceMessage,setPreferenceMessage]=useState("");
 
@@ -32,12 +33,14 @@ export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Pr
         if(active)setPreferenceMessage(
           "Calendar visibility preference could not be loaded; submitted assignments remain hidden by default.",
         );
-      });
+      })
+      .finally(()=>{if(active)setLoadingPreference(false);});
     return ()=>{active=false;};
   },[]);
 
   async function updateHideSubmitted(next:boolean){
     const previous=hideSubmitted;
+    let saved=false;
     setHideSubmitted(next);
     setSavingPreference(true);
     setPreferenceMessage("");
@@ -55,6 +58,7 @@ export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Pr
             :"Calendar visibility preference could not be saved.",
         );
       }
+      saved=true;
       await calendars.syncAll();
       setPreferenceMessage(
         next
@@ -62,9 +66,11 @@ export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Pr
           :"Submitted assignments remain visible in calendar destinations.",
       );
     }catch(error){
-      setHideSubmitted(previous);
+      if(!saved)setHideSubmitted(previous);
       setPreferenceMessage(
-        error instanceof Error
+        saved
+          ?"Calendar visibility preference saved. Calendar synchronization is unavailable; retry synchronization to apply it to existing events."
+          :error instanceof Error
           ?error.message
           :"Calendar visibility preference could not be saved.",
       );
@@ -89,7 +95,7 @@ export function CalendarDestinations({beforeOAuth,returnTo}:{beforeOAuth?:()=>Pr
             type="checkbox"
             aria-label="Hide submitted assignments"
             checked={hideSubmitted}
-            disabled={savingPreference}
+            disabled={loadingPreference||savingPreference}
             onChange={event=>void updateHideSubmitted(event.target.checked)}
             className="mt-1 h-4 w-4"
           />

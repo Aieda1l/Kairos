@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {render,screen} from "@testing-library/react";
+import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import type {CalendarConnection} from "@/lib/calendar/types";
@@ -54,6 +54,32 @@ beforeEach(()=>{
 });
 
 describe("Calendar destinations",()=>{
+  it('waits for the initial preference read before accepting edits',async()=>{
+    let finishRead!:(response:Response)=>void;
+    const pendingRead=new Promise<Response>(resolve=>{finishRead=resolve;});
+    const request=vi.fn(async(_input:RequestInfo|URL,init?:RequestInit)=>
+      init?.method==='PUT'?Response.json({hideSubmitted:false}):pendingRead);
+    vi.stubGlobal('fetch',request);
+    state.syncAll.mockRejectedValueOnce(new Error('Calendar synchronization unavailable.'));
+    render(<CalendarDestinations/>);
+    const checkbox=screen.getByRole('checkbox',{name:'Hide submitted assignments'});
+    expect(checkbox).toBeDisabled();
+    await userEvent.setup().click(checkbox);expect(request).toHaveBeenCalledOnce();
+    await act(async()=>{finishRead(Response.json({hideSubmitted:true}));});
+    expect(checkbox).toBeEnabled();
+    await userEvent.setup().click(checkbox);
+    expect(await screen.findByText(/preference saved.*synchronization/i)).toBeVisible();
+    expect(checkbox).not.toBeChecked();
+  });
+  it('retains a saved calendar visibility preference when subsequent synchronization fails',async()=>{
+    state.syncAll.mockRejectedValueOnce(new Error('Calendar synchronization unavailable.'));
+    render(<CalendarDestinations/>);
+    const checkbox=await screen.findByRole('checkbox',{name:/Hide submitted assignments/i});
+    expect(checkbox).toBeChecked();await userEvent.setup().click(checkbox);
+    expect(await screen.findByText(/preference saved.*synchronization/i)).toBeVisible();
+    expect(checkbox).not.toBeChecked();
+    expect(state.syncAll).toHaveBeenCalledOnce();
+  });
   it('saves wizard progress before OAuth and prevents departure if that save fails',async()=>{
     const events:string[]=[];
     const beforeOAuth=vi.fn(async()=>{events.push('save');});
@@ -66,7 +92,7 @@ describe("Calendar destinations",()=>{
     await userEvent.setup().click(screen.getByRole('button',{name:'Connect Microsoft Calendar'}));
     expect(await screen.findByText(/progress could not be saved/)).toBeVisible();expect(state.startMicrosoft).not.toHaveBeenCalled();
   });
-  it("separates destinations from assignment sources and explains provider permissions",()=>{
+  it("separates destinations from assignment sources and explains provider permissions",async()=>{
     render(<CalendarDestinations/>);
     expect(screen.getByRole("heading",{name:"Calendar destinations"})).toBeVisible();
     expect(screen.getByText(/Sources bring assignments into Kairos\. Calendar destinations publish Kairos deadlines/i)).toBeVisible();
@@ -76,6 +102,7 @@ describe("Calendar destinations",()=>{
     expect(screen.getByText(/Calendars\.ReadWrite/)).toBeVisible();
     expect(screen.getByRole("heading",{name:"Apple iCloud Calendar"})).toBeVisible();
     expect(screen.getByText(/Use an Apple app-specific password/i)).toBeVisible();
+    await waitFor(()=>expect(screen.getByRole('checkbox',{name:'Hide submitted assignments'})).toBeEnabled());
   });
 
   it("hides submitted assignments by default and resynchronizes when the preference changes",async()=>{
