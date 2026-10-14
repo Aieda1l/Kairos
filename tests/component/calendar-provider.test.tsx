@@ -124,6 +124,21 @@ it("explains a completed Microsoft sign-in followed by rejected Outlook calendar
   await screen.findByText(/Microsoft signed in successfully, but Outlook rejected calendar access/);
   expect(window.location.search).toBe("");
 });
+it.each([false,true])('shows denied Google consent safely for new or connected calendars (%s)',async connected=>{
+  window.history.replaceState(null,'','/onboarding?calendarProvider=google&calendarError=CALENDAR_AUTH_REQUIRED');
+  function ErrorHarness(){const calendar=useCalendarSync();return <span>{calendar.messageFor(connected?google.id:'google')}</span>;}
+  render(<CalendarSyncProvider initialConnections={connected?[{...google,lastSyncCompletedAt:new Date().toISOString()}]:[]}><ErrorHarness/></CalendarSyncProvider>);
+  await screen.findByText('Google Calendar authorization was not completed.');
+  expect(window.location.search).toBe('');
+});
+it('does not reflect an unknown Google callback error and removes query flags',async()=>{
+  const secret='SYNTHETIC_PRIVATE_untrusted_error';
+  window.history.replaceState(null,'','/onboarding?calendarProvider=google&calendarError='+secret+'&calendarStage='+secret);
+  function ErrorHarness(){const calendar=useCalendarSync();return <span>{calendar.messageFor('google')}</span>;}
+  render(<CalendarSyncProvider initialConnections={[]}><ErrorHarness/></CalendarSyncProvider>);
+  await screen.findByText('Google Calendar could not be connected. Try again.');
+  expect(document.body.textContent).not.toContain(secret);expect(window.location.search).toBe('');
+});
 
 beforeEach(()=>{
   vi.restoreAllMocks();

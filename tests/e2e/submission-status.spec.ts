@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {prepareFixtureUser,waitForAppHydration} from "./helpers";
+import {enableFixtureSubmissionStatus,prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type BridgeCapture = {
   messages: string[];
@@ -9,6 +9,7 @@ type BridgeCapture = {
 
 test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,context})=>{
   await prepareFixtureUser(context);
+  await enableFixtureSubmissionStatus(context);
   const apiBodies:string[]=[];
   let startRequests=0;
 

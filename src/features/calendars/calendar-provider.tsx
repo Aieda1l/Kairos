@@ -24,6 +24,15 @@ const OAUTH_ERROR_MESSAGES:Record<string,string>={
   CALENDAR_RATE_LIMITED:"Microsoft is temporarily limiting requests. Try again later.",
   CALENDAR_UPSTREAM_ERROR:"Microsoft Calendar could not be connected. Check the Entra configuration and try again.",
 };
+const GOOGLE_OAUTH_ERROR_MESSAGES:Record<string,string>={
+  CALENDAR_CONFIG_MISSING:'Google Calendar is temporarily unavailable. Try again later.',
+  CALENDAR_AUTH_EXPIRED:'Google Calendar rejected the authorization. Start a new connection.',
+  CALENDAR_PERMISSION_DENIED:'Google Calendar did not allow calendar access. Check permissions and connect again.',
+  CALENDAR_AUTH_REQUIRED:'Google Calendar authorization was not completed.',
+  CALENDAR_NETWORK_ERROR:'Kairos could not reach Google during calendar authorization. Try again.',
+  CALENDAR_RATE_LIMITED:'Google is temporarily limiting requests. Try again later.',
+  CALENDAR_UPSTREAM_ERROR:'Google Calendar could not be connected. Try again later.',
+};
 
 type CalendarPhase="idle"|"testing"|"connecting"|"syncing"|"success"|"error";
 type CalendarRecoveryOperation='authorize'|'test-icloud'|'connect-icloud'|'sync'|'sync-all'|'remove-events'|'disconnect';
@@ -116,16 +125,18 @@ export function CalendarSyncProvider({
 
   useEffect(()=>{
     const url=new URL(window.location.href);
-    if(url.searchParams.get("calendarProvider")!=="microsoft")return;
+    const provider=url.searchParams.get('calendarProvider');
+    if(provider!=='google'&&provider!=='microsoft')return;
     const code=url.searchParams.get("calendarError");
     if(!code)return;
-    const message=code==="CALENDAR_AUTH_EXPIRED"&&url.searchParams.get("calendarStage")==="calendar_setup"
+    const messages=provider==='google'?GOOGLE_OAUTH_ERROR_MESSAGES:OAUTH_ERROR_MESSAGES;
+    const message=provider==='microsoft'&&code==="CALENDAR_AUTH_EXPIRED"&&url.searchParams.get("calendarStage")==="calendar_setup"
       ?"Microsoft signed in successfully, but Outlook rejected calendar access. Try a fresh connection and confirm this Microsoft account can open Outlook Calendar."
-      :Object.hasOwn(OAUTH_ERROR_MESSAGES,code)
-      ?OAUTH_ERROR_MESSAGES[code]
-      :"Microsoft Calendar could not be connected. Try again.";
-    const connection=connectionsRef.current.find(item=>item.provider==="microsoft");
-    setLocal(connection?.id??"microsoft",{phase:"error",message});
+      :Object.hasOwn(messages,code)
+      ?messages[code]
+      :provider==='google'?'Google Calendar could not be connected. Try again.':'Microsoft Calendar could not be connected. Try again.';
+    const connection=connectionsRef.current.find(item=>item.provider===provider);
+    setLocal(connection?.id??provider,{phase:"error",message});
     url.searchParams.delete("calendarProvider");
     url.searchParams.delete("calendarError");
     url.searchParams.delete("calendarStage");

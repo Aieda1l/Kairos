@@ -4,7 +4,7 @@ export async function POST(){
   const runtime=await getAuthenticatedE2EFixtureRuntime();
   if(!runtime)return new Response("Not found",{status:404});
 
-  const alice=runtime.userId==="alice";
+  const alice=runtime.userId==="alice"||runtime.userId.startsWith('alice-');
   const name=alice?"Alice":"Bob";
   const sourceKind=alice?"canvas":"ed";
   const sourceId=`${runtime.userId}-source`;

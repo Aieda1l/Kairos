@@ -6,7 +6,7 @@ const users={
   alice:{id:"alice",name:"Alice",email:"alice@example.invalid"},
   bob:{id:"bob",name:"Bob",email:"bob@example.invalid"},
 } as const;
-const schema=z.object({user:z.enum(["alice","bob"])}).strict();
+const schema=z.object({user:z.enum(["alice","bob"]),isolationKey:z.string().uuid().optional()}).strict();
 
 function cookieValue(request:Request,name:string):string|null{
   const header=request.headers.get("cookie");
@@ -29,7 +29,8 @@ export async function POST(request:Request){
     return Response.json({message:"Invalid fixture user."},{status:400});
   }
 
-  const user=users[parsed.data.user];
+  const template=users[parsed.data.user],key=parsed.data.isolationKey;
+  const user=key?{...template,id:`${template.id}-${key}`,email:`${template.id}+${key}@example.invalid`}:template;
   await runtime.db.prepare(`
     INSERT INTO users(id,name,email) VALUES (?,?,?)
     ON CONFLICT(id) DO UPDATE SET name=excluded.name,email=excluded.email

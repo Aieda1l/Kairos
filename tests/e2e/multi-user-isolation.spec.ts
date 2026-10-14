@@ -1,5 +1,5 @@
 import {expect,test,type BrowserContext} from "@playwright/test";
-import {waitForAppHydration} from "./helpers";
+import {enableFixtureSubmissionStatus,prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type FixtureUser="alice"|"bob";
 
@@ -12,19 +12,16 @@ type SeededState={
 };
 
 async function prepareUser(context:BrowserContext,user:FixtureUser):Promise<SeededState>{
-  const session=await context.request.post("/api/test-fixtures/session",{
-    data:{user},
-  });
-  expect(session.ok()).toBe(true);
+  await prepareFixtureUser(context,user);
   const authCookie=(await context.cookies()).find(
     cookie=>cookie.name==="authjs.session-token",
   );
   if(!authCookie)throw new Error("fixture session cookie was not stored");
   const resolvedSession=await context.request.get("/api/auth/session");
-  const resolvedBody=await resolvedSession.text();
-  if(!resolvedSession.ok()||!resolvedBody.includes(`"${user}"`)){
+  const resolvedBody=await resolvedSession.json();
+  if(!resolvedSession.ok()||resolvedBody?.user?.name!==(user==='alice'?'Alice':'Bob')){
     throw new Error(
-      `fixture auth session did not resolve (${resolvedSession.status()}): ${resolvedBody}`,
+      `fixture auth session did not resolve (${resolvedSession.status()})`,
     );
   }
   const protectedCheck=await context.request.get("/api/settings/calendar");
@@ -32,14 +29,9 @@ async function prepareUser(context:BrowserContext,user:FixtureUser):Promise<Seed
     throw new Error("fixture auth session was rejected by a protected app API");
   }
 
-  const reset=await context.request.post("/api/test-fixtures/reset");
-  if(!reset.ok()){
-    throw new Error(`fixture reset failed (${reset.status()}): ${await reset.text()}`);
-  }
-
   const seed=await context.request.post("/api/test-fixtures/tenant-state");
   if(!seed.ok()){
-    throw new Error(`fixture seed failed (${seed.status()}): ${await seed.text()}`);
+    throw new Error(`fixture seed failed (${seed.status()})`);
   }
   return seed.json();
 }
@@ -95,6 +87,7 @@ test("multi-user isolation protects hosted state and extension results",async({b
     );
     expect(crossUser.status()).toBe(404);
 
+    await enableFixtureSubmissionStatus(aliceContext);
     const start=await aliceContext.request.post(
       "/api/sources/canvas/submission-status/start",
     );

@@ -32,11 +32,19 @@ test("connects Ed, selects courses, and syncs dated and undated lessons without 
   await expect(tokenInput).toHaveValue("");
 
   await edCard.getByRole("checkbox",{name:/CSE 331/i}).check();
+  const saved=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/sources/ed/courses'&&response.request().method()==='PUT');
+  const selectionRefreshed=page.waitForResponse(response=>new URL(response.url()).pathname==='/sources'&&response.request().headers().rsc==='1');
   await edCard.getByRole("button",{name:"Save selection"}).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(page.getByText('Ed course selection saved.',{exact:true})).toBeVisible();
+  await (await selectionRefreshed).finished();
+  const refreshed=page.waitForResponse(response=>new URL(response.url()).pathname==='/sources'&&response.request().headers().rsc==='1');
   await edCard.getByRole("button",{name:"Sync Ed"}).click();
   await expect(page.getByText(/Ed sync complete/i)).toBeVisible();
+  await (await refreshed).finished();
 
   await page.getByRole("link",{name:"All Assignments"}).click();
+  await expect(page).toHaveURL(/\/assignments$/);
   await expect(page.getByText("Ed Dated Lesson").first()).toBeVisible();
   await expect(page.getByText("Ed Undated Lesson").first()).toBeVisible();
   await expect(page.getByText("Ed Completed Lesson").first()).toBeVisible();

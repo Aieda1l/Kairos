@@ -29,6 +29,17 @@ export function getOAuthRedirectUri(
     let app:URL;
     try{app=new URL(configured);}
     catch{invalidOrigin("OAuth production origin is invalid.");}
+    if(env.KAIROS_LOCAL_AUTH==='loopback'){
+      let request:URL;
+      try{request=new URL(requestUrl);}catch{invalidOrigin('OAuth callback origin is invalid.');}
+      if(env.KAIROS_ABUSE_TRUSTED_INGRESS!=='loopback'||app.protocol!=='http:'||
+        !['localhost','127.0.0.1'].includes(app.hostname)||app.origin!==configured||
+        app.pathname!=='/'||app.search||app.hash||app.username||app.password||
+        request.origin!==app.origin||request.username||request.password){
+        invalidOrigin('OAuth local origin must match the configured loopback origin.');
+      }
+      return new URL(callbackPath,app.origin).toString();
+    }
     if(
       app.origin!==PRODUCTION_ORIGIN
       || app.pathname!=="/"

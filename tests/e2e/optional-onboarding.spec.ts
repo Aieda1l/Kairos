@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {prepareFixtureUser,waitForAppHydration} from './helpers';
 test('authenticated route guard overwrites spoofed path; optional setup defers, resumes and finishes without integrations',async({page,context,browserName})=>{
-  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice');
+  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','new');
   for(const path of ['/upcoming','/assignments','/calendar','/sources','/settings']){
     const response=await context.request.get(path,{headers:{'x-kairos-pathname':'/onboarding'}});
     expect(response.status()).toBe(200);expect(new URL(response.url()).pathname).toBe('/onboarding');
@@ -33,7 +33,7 @@ test('authenticated route guard overwrites spoofed path; optional setup defers, 
   await page.setViewportSize({width:320,height:800});await page.goto('/onboarding');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test('saved private Canvas candidate connects through admitted services and finishes with one source',async({page,context,browserName})=>{
-  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice');
+  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','new');
   const read=await context.request.get('/api/settings/onboarding');const {state}=await read.json();
   expect((await context.request.patch('/api/settings/onboarding',{data:{command:{type:'visit',step:'canvas'},expectedRevision:state.revision}})).ok()).toBe(true);
   await page.goto('/onboarding');await waitForAppHydration(page);
@@ -58,7 +58,7 @@ test('saved private Canvas candidate connects through admitted services and fini
   expect(await (await context.request.get('/sources')).text()).not.toContain('private-synthetic-candidate');
 });
 test('deferred resume conflict preserves progress and exposes reload before resuming',async({page,context,browserName})=>{
-  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice');
+  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','new');
   let {state}=await (await context.request.get('/api/settings/onboarding')).json();
   for(const command of [{type:'visit',step:'canvas'},{type:'defer'}]){
     const response=await context.request.patch('/api/settings/onboarding',{data:{command,expectedRevision:state.revision}});expect(response.ok()).toBe(true);({state}=await response.json());
