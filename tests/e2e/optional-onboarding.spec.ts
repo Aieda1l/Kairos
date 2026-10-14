@@ -1,12 +1,19 @@
 import {test,expect} from '@playwright/test';
 import {prepareFixtureUser,waitForAppHydration} from './helpers';
-test('authenticated route guard overwrites spoofed path; optional setup defers, resumes and finishes without integrations',async({page,context,browserName})=>{
+test('authenticated route guard overwrites spoofed path for new and completed users',async({context,browserName})=>{
   await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','new');
   for(const path of ['/upcoming','/assignments','/calendar','/sources','/settings']){
     const response=await context.request.get(path,{headers:{'x-kairos-pathname':'/onboarding'}});
     expect(response.status()).toBe(200);expect(new URL(response.url()).pathname).toBe('/onboarding');
   }
   const own=await context.request.get('/onboarding');expect(own.status()).toBe(200);expect(new URL(own.url()).pathname).toBe('/onboarding');
+  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','completed');
+  for(const path of ['/sources','/assignments','/settings']){
+    const response=await context.request.get(path,{headers:{'x-kairos-pathname':'/onboarding'}});expect(response.status()).toBe(200);expect(new URL(response.url()).pathname).toBe(path);
+  }
+});
+test('optional setup keeps private input in memory, defers, resumes and finishes without integrations',async({page,context,browserName})=>{
+  await prepareFixtureUser(context,browserName==='firefox'?'bob':'alice','new');
   expect((await context.request.get('/api/settings/submission-status')).ok()).toBe(true);
   expect(await (await context.request.get('/api/settings/submission-status')).json()).toEqual({enabled:false});
   await page.goto('/onboarding');await waitForAppHydration(page);
@@ -26,9 +33,6 @@ test('authenticated route guard overwrites spoofed path; optional setup defers, 
   await page.getByRole('button',{name:'Finish setup'}).click();await page.waitForURL('**/upcoming');
   const state=await (await context.request.get('/api/settings/onboarding')).json();expect(state.state.status).toBe('completed');
   expect(await (await context.request.get('/api/settings/submission-status')).json()).toEqual({enabled:false});
-  for(const path of ['/sources','/assignments','/settings']){
-    const response=await context.request.get(path,{headers:{'x-kairos-pathname':'/onboarding'}});expect(response.status()).toBe(200);expect(new URL(response.url()).pathname).toBe(path);
-  }
   expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('browser-memory-only');
   await page.setViewportSize({width:320,height:800});await page.goto('/onboarding');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
