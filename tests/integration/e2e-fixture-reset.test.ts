@@ -4,6 +4,7 @@ const fixture=vi.hoisted(()=>({runtime:vi.fn(),resetCalendar:vi.fn()}));
 vi.mock('@/lib/testing/e2e-runtime',()=>({getAuthenticatedE2EFixtureRuntime:fixture.runtime}));
 vi.mock('@/lib/calendar/e2e-fixture-fetch',()=>({resetE2ECalendarFixture:fixture.resetCalendar}));
 import {POST} from '@/app/api/test-fixtures/reset/route';
+const reset=()=>POST(new Request('http://127.0.0.1:3000/api/test-fixtures/reset',{method:'POST'}));
 let test:ReturnType<typeof openD1TestDatabase>;
 beforeEach(()=>{
   test=openD1TestDatabase();test.sqlite.exec("INSERT INTO users(id) VALUES ('synthetic-a'),('synthetic-b')");
@@ -16,7 +17,7 @@ beforeEach(()=>{
 afterEach(()=>test.close());
 it.each(['running','uncertain'])('does not erase data or run metadata while a %s owner exists',async state=>{
   test.sqlite.prepare('INSERT INTO operation_locks VALUES (?,?,?,?,?,?,?)').run('synthetic-a','source:canvas','synthetic-owner',state,0,0,0);
-  const response=await POST();expect(response.status).toBe(409);expect(await response.json()).toEqual({code:'FIXTURE_WORK_PENDING'});
+  const response=await reset();expect(response.status).toBe(409);expect(await response.json()).toEqual({code:'FIXTURE_WORK_PENDING'});
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM app_settings').get()).toEqual({n:2});
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_all_runs').get()).toEqual({n:1});
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM abuse_rate_events').get()).toEqual({n:1});
@@ -24,13 +25,13 @@ it.each(['running','uncertain'])('does not erase data or run metadata while a %s
 });
 it('resets only the settled actor and retains all run and ownership metadata',async()=>{
   test.sqlite.prepare('INSERT INTO operation_locks VALUES (?,?,?,?,?,?,?)').run('synthetic-a','source:canvas','synthetic-owner','idle',0,0,0);
-  expect((await POST()).status).toBe(200);
+  expect((await reset()).status).toBe(200);
   expect(test.sqlite.prepare('SELECT user_id FROM app_settings').all()).toEqual([{user_id:'synthetic-b'}]);
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM abuse_rate_events').get()).toEqual({n:0});
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM sync_all_runs').get()).toEqual({n:1});
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM operation_locks').get()).toEqual({n:1});
 });
 it('does nothing when fixture access is unavailable',async()=>{
-  fixture.runtime.mockResolvedValue(null);expect((await POST()).status).toBe(404);
+  fixture.runtime.mockResolvedValue(null);expect((await reset()).status).toBe(404);
   expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM app_settings').get()).toEqual({n:2});
 });

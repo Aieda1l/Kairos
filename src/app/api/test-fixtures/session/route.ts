@@ -19,7 +19,7 @@ function cookieValue(request:Request,name:string):string|null{
 }
 
 export async function POST(request:Request){
-  const runtime=await getE2EFixtureRuntime();
+  const runtime=await getE2EFixtureRuntime(request);
   if(!runtime)return new Response("Not found",{status:404});
 
   let body:unknown;
@@ -57,7 +57,7 @@ export async function POST(request:Request){
 }
 
 export async function DELETE(request:Request){
-  const runtime=await getE2EFixtureRuntime();
+  const runtime=await getE2EFixtureRuntime(request);
   if(!runtime)return new Response("Not found",{status:404});
 
   const sessionToken=cookieValue(request,SESSION_COOKIE);

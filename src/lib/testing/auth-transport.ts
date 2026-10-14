@@ -1,12 +1,16 @@
 import 'server-only';
 const transports=new WeakMap<object,typeof fetch>();
 const counters=new WeakMap<object,{siteverifyCalls:number;providerCalls:number}>();
+export function isLocalFixtureEnvironment(env:Record<string,unknown>):boolean{
+  if(env.E2E_FIXTURES!=='1'||env.KAIROS_LOCAL_AUTH!=='loopback'||env.KAIROS_ABUSE_TRUSTED_INGRESS!=='loopback')return false;
+  let origin:URL;
+  try{origin=new URL(String(env.KAIROS_APP_URL));}catch{return false;}
+  return origin.protocol==='http:'&&['localhost','127.0.0.1'].includes(origin.hostname)&&origin.origin===env.KAIROS_APP_URL;
+}
 /** Controlled transport only: real token/action/hostname validation remains in verifyTurnstile. */
 export function localAuthFixtureFetch(env:Record<string,unknown>):typeof fetch|undefined{
-  if(env.E2E_FIXTURES!=='1'||env.KAIROS_LOCAL_AUTH!=='loopback'||env.KAIROS_ABUSE_TRUSTED_INGRESS!=='loopback')return undefined;
-  let origin:URL;
-  try{origin=new URL(String(env.KAIROS_APP_URL));}catch{return undefined;}
-  if(origin.protocol!=='http:'||!['localhost','127.0.0.1'].includes(origin.hostname)||origin.origin!==env.KAIROS_APP_URL)return undefined;
+  if(!isLocalFixtureEnvironment(env))return undefined;
+  const origin=new URL(String(env.KAIROS_APP_URL));
   const prior=transports.get(env);if(prior)return prior;
   const counts={siteverifyCalls:0,providerCalls:0};
   const spent=new Set<string>();

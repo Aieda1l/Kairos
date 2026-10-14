@@ -1,8 +1,8 @@
 import {resetE2ECalendarFixture} from "@/lib/calendar/e2e-fixture-fetch";
 import {getAuthenticatedE2EFixtureRuntime} from "@/lib/testing/e2e-runtime";
 
-export async function POST(){
-  const runtime=await getAuthenticatedE2EFixtureRuntime();
+export async function POST(request:Request){
+  const runtime=await getAuthenticatedE2EFixtureRuntime(request);
   if(!runtime){
     return new Response("Not found",{status:404});
   }
