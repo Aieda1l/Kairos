@@ -38,12 +38,12 @@ export default defineConfig({
   projects:[
     {
       name:"chromium",
-      testMatch:/(canvas-onboarding|ed-sync|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding)\.spec\.ts/,
+      testMatch:/(canvas-onboarding|ed-sync|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
       name:"firefox",
-      testMatch:/(submission-status|gradescope-sync|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding)\.spec\.ts/,
+      testMatch:/(submission-status|gradescope-sync|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],

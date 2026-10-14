@@ -41,6 +41,15 @@ if(productionObservability?.enabled!==false
 if(String(productionVars.E2E_FIXTURES??"")==="1"){
   errors.push("Production Wrangler configuration enables E2E_FIXTURES.");
 }
+if(String(productionVars.KAIROS_LOCAL_AUTH??'').trim()||productionVars.KAIROS_ABUSE_TRUSTED_INGRESS==='loopback'){
+  errors.push('Production must not select local authentication or loopback ingress.');
+}
+for(const name of ['KAIROS_TURNSTILE_SITE_KEY','KAIROS_TURNSTILE_SECRET_KEY']){
+  const value=String(productionVars[name]??'').trim();
+  if(/^[123]x0+(?:AA|AB|BB|FF)$/.test(value)||['synthetic-site','synthetic-secret'].includes(value)){
+    errors.push(`Production must not use a known Turnstile test value for ${name}.`);
+  }
+}
 
 for(const file of collectFiles(path.join(process.cwd(),"src"))){
   if(fs.readFileSync(file,"utf8").includes("better-sqlite3")){
@@ -68,6 +77,7 @@ const requiredCiCommands=[
   "npm run lint",
   "npm run typecheck",
   "npm run db:verify",
+  "npm run verify:workerd:abuse",
   "npm run build:extension",
   "npm run test:e2e",
   "npm run build",
@@ -91,6 +101,8 @@ for(const command of requiredCiCommands){
 if(pkg.scripts?.["verify:hosted"]!=="node scripts/verify-production-safety.mjs"){
   errors.push("package.json is missing the verify:hosted safety script.");
 }
+if(pkg.scripts?.['verify:workerd:abuse']!=='node scripts/verify-workerd-abuse.mjs')errors.push('Native admission/ownership verification script is missing.');
+if(!ci.includes('feat/milestone-7-public-beta-readiness'))errors.push('Feature CI must cover the Milestone 7 branch.');
 
 const deployPath=path.join(process.cwd(),".github/workflows/deploy-production.yml");
 if(!fs.existsSync(deployPath)){
@@ -120,6 +132,7 @@ if(!fs.existsSync(deployPath)){
   if(/E2E_FIXTURES\s*:\s*["']?1["']?/m.test(deploy)){
     errors.push("Production deployment workflow enables E2E fixtures.");
   }
+  if(/KAIROS_(?:LOCAL_AUTH|ABUSE_TRUSTED_INGRESS)\s*:\s*["']?loopback/m.test(deploy))errors.push('Production deployment workflow selects local auth/ingress.');
 }
 
 const healthWorkflowPath=path.join(process.cwd(),'.github/workflows/production-health.yml');

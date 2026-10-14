@@ -59,9 +59,14 @@ it("groups and filters upcoming assignments while showing submission status",asy
 
 it("refreshes server-rendered assignments after a successful deadline sync",async()=>{
   const user=userEvent.setup();
-  vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({connectionId:"1",inserted:1,updated:0,skipped:0,errors:[],partial:false,completedAt:"2026-10-03T20:00:00Z"}),{status:200})));
+  const requests=vi.fn(async(input:RequestInfo|URL)=>{
+    if(String(input)==='/api/sync-all/start')return Response.json({runId:'11111111-1111-4111-8111-111111111111',expiresAt:new Date(Date.now()+600000).toISOString(),steps:['canvas-deadlines','canvas-submissions']});
+    return Response.json({connectionId:"1",inserted:1,updated:0,skipped:0,errors:[],partial:false,completedAt:"2026-10-03T20:00:00Z"});
+  });
+  vi.stubGlobal("fetch",requests);
   render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} canvasConnected/>);
   await user.click(screen.getByRole("button",{name:"Sync All"}));
   await waitFor(()=>expect(refresh).toHaveBeenCalledTimes(1));
   expect(statusSyncNow).toHaveBeenCalledTimes(1);
+  expect(requests.mock.calls[0][0]).toBe('/api/sync-all/start');
 });

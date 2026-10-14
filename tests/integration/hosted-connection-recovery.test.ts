@@ -185,7 +185,8 @@ describe("failure-safe hosted Canvas replacement",()=>{
     const {db,sqlite}=open();await seedSource(db);const before=state(sqlite);
     runtime.get.mockReturnValue({kind:"hosted",db,scope,keyring:brokenKeyring});
     vi.stubGlobal("fetch",async()=>new Response(feed(event("1","Candidate"))));
-    expect((await canvasPost()).status).toBe(502);expect(state(sqlite)).toEqual(before);
+    const unavailable=await canvasPost();expect(unavailable.status).toBe(503);
+    expect((await unavailable.json()).code).toBe('SERVICE_UNAVAILABLE');expect(state(sqlite)).toEqual(before);
   });
   it("rolls back metadata, envelope and assignments after a data statement fails",async()=>{
     const {db,sqlite}=open();await seedSource(db);const before=state(sqlite);

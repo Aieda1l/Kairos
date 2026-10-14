@@ -76,6 +76,10 @@ describe("diagnostic privacy at existing boundaries",()=>{
     expect(JSON.parse(warn.mock.calls[0][0] as string)).toMatchObject({...context,code:"AUTH_REQUIRED",result:"rejected",status:401});
     runtime[kind].mockRejectedValue(new Error("private-runtime-envelope"));
     await expect(resolver()).rejects.toThrow("private-runtime-envelope");
+    expect(warn).toHaveBeenCalledTimes(1);
+    runtime[kind].mockRejectedValue(new Error('D1_ERROR: private-runtime-envelope'));
+    const unavailable=await resolver();expect(unavailable.ok).toBe(false);
+    if(!unavailable.ok)expect(unavailable.response.status).toBe(503);
     expect(JSON.stringify(warn.mock.calls)).not.toContain("private");
     expect(JSON.parse(warn.mock.calls[1][0] as string)).toMatchObject({code:"SERVICE_UNAVAILABLE",result:"error",status:503});
     runtime[kind].mockResolvedValue({kind:"hosted",db:{private:"private-db"},scope:{userId:"private-id"},keyring:{private:"private-key"}});
@@ -113,7 +117,7 @@ describe("diagnostic privacy at existing boundaries",()=>{
 
 describe("persistent observability safety gate",()=>{
   const files=["package.json","wrangler.jsonc",".env.example",".github/workflows/milestone-2-ci.yml",
-    ".github/workflows/deploy-production.yml","extension/firefox/manifest.json","extension/firefox/src/content/kairos-bridge.ts"];
+    ".github/workflows/deploy-production.yml",".github/workflows/production-health.yml","extension/firefox/manifest.json","extension/firefox/src/content/kairos-bridge.ts"];
   it("rejects persistence, invocation metadata, and tracing regressions in isolated config fixtures",()=>{
     const fixture=mkdtempSync(join(tmpdir(),"kairos-ops-safety-"));
     try{
@@ -128,6 +132,12 @@ describe("persistent observability safety gate",()=>{
         const config=structuredClone(base);
         config.env.production.observability={...base.observability,...patch};
         writeFileSync(join(fixture,"wrangler.jsonc"),JSON.stringify(config));
+        expect(verify().status).toBe(1);
+      }
+      for(const [name,value] of [['E2E_FIXTURES','1'],['KAIROS_LOCAL_AUTH','loopback'],
+        ['KAIROS_ABUSE_TRUSTED_INGRESS','loopback'],['KAIROS_TURNSTILE_SITE_KEY','1x00000000000000000000AA']]){
+        const config=structuredClone(base);config.env.production.vars[name]=value;
+        writeFileSync(join(fixture,'wrangler.jsonc'),JSON.stringify(config));
         expect(verify().status).toBe(1);
       }
     }finally{rmSync(fixture,{recursive:true,force:true});}

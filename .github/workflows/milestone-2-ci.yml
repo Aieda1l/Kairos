@@ -9,6 +9,7 @@ on:
       - feat/milestone-2-submission-status
       - feat/milestone-3-gradescope-connector
       - feat/milestone-6-multi-user-hosted-foundation
+      - feat/milestone-7-public-beta-readiness
   workflow_dispatch:
 
 concurrency:
@@ -22,7 +23,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +48,8 @@ jobs:
           set -o pipefail
           npm run typecheck 2>&1 | tee typecheck.log
       - run: npm run db:verify
+      - name: Verify independent workerd admission and ownership
+        run: npm run verify:workerd:abuse
       - run: npm run build:extension
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e

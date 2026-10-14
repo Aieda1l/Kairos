@@ -3,6 +3,8 @@ import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import {authDiagnostics} from "./diagnostics";
+import {customFetch} from '@auth/core';
+import {localAuthFixtureFetch} from '@/lib/testing/auth-transport';
 
 export type AuthDatabase=Parameters<typeof D1Adapter>[0];
 
@@ -23,6 +25,8 @@ export function createAuthConfig(
   env:AuthEnvironment,
 ):NextAuthConfig{
   const adapter=D1Adapter(db);
+  const fixtureFetch=localAuthFixtureFetch(env as unknown as Record<string,unknown>);
+  const transport=fixtureFetch?{[customFetch]:fixtureFetch}:{};
   const linkAccount=adapter.linkAccount!;
   return {
     secret:env.AUTH_SECRET,
@@ -42,12 +46,14 @@ export function createAuthConfig(
     session:{strategy:"database"},
     providers:[
       Google({
+        ...transport,
         clientId:env.AUTH_GOOGLE_ID,
         clientSecret:env.AUTH_GOOGLE_SECRET,
         checks:["pkce","state"],
         authorization:{params:{scope:GOOGLE_IDENTITY_SCOPE}},
       }),
       MicrosoftEntraID({
+        ...transport,
         clientId:env.AUTH_MICROSOFT_ENTRA_ID_ID,
         clientSecret:env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
         checks:["pkce","state"],
@@ -55,7 +61,7 @@ export function createAuthConfig(
           ?? "https://login.microsoftonline.com/common/v2.0",
         authorization:{params:{scope:MICROSOFT_IDENTITY_SCOPE}},
       }),
-    ],
+    ].map(provider=>fixtureFetch?{...provider,[customFetch]:fixtureFetch}:provider),
     callbacks:{
       session({session,user}){
         return {

@@ -169,6 +169,12 @@ Implementation plan:
 - User selected an AMO listing; Google OAuth is published. Mozilla account creation/signing, Turnstile setup, support/security routing, provider verification evidence, monitoring, and live rollback remain launch gates.
 - ECC and Superpowers plan review precedes implementation. No Milestone 7 runtime change has been deployed.
 
+## Local guest mode — Planned after Milestone 7, not yet numbered
+
+User selected this follow-up on October 14, 2026. People should be able to use Kairos without creating or signing into a Kairos account, with assignments and preferences stored on their device. This changes storage and integration boundaries and needs an architectural design before implementation; it is outside Milestone 7's launch acceptance.
+
+The proposed starting scope is a browser guest experience with local persistence, import/export and backup controls, clear behavior when browser data is cleared, and an optional later move to an account. Live source connections, calendar authorization, credential storage, offline support, and the Firefox bridge must be assessed during that design. A Kairos account and a provider account are separate concerns; guest mode must not imply access to provider data without its required authorization. The exact feature set and migration behavior remain to be agreed.
+
 ## Later extension follow-ups — Planned, not yet numbered
 
 - Chromium support for the Canvas submission-status extension

@@ -54,3 +54,24 @@ For CPU/query/subrequest per-invocation limits, inspect real distributions and w
 Free-plan native measurements, actual alert availability, and notification delivery remain required before public-beta readiness. Local tests and workerd compatibility do not establish those facts.
 
 Primary references: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Cloudflare alert setup](https://developers.cloudflare.com/notifications/get-started/), [GitHub workflow notification ownership](https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs).
+
+## Admission measurements and release handoff
+
+`npm run verify:workerd:abuse` runs two independent native workerd services against a fresh shared synthetic D1 database. Forty concurrent Sync All admissions produce exactly six accepted and 34 rate-limited responses; another actor remains independent, and a controlled expired window admits again. The same command runs the native ownership probes, including held requests, stale continuations, interruption/restart, uncertainty and absence of competing remote writes. It does not access production or establish live provider correctness.
+
+The controlled admission-only snapshot on October 14, 2026 measured:
+
+| Outcome | D1 statements | Rows read | Rows written |
+| --- | ---: | ---: | ---: |
+| Accepted Sync All budget claim | 1 | 2 | 5 |
+| Rejected claim plus retry-window lookup | 2 | 8 | 0 |
+
+These are local D1 metadata from one synthetic window, including index accounting; they exclude control lookups, authentication, operation ownership, source imports, calendar writes, cleanup and dashboard queries. Rejection also consumes reads, and costs depend on retained history and indexes. Neither this table nor local request latency estimates production CPU, daily headroom or a safe user count. Current primary documentation was checked again on October 14: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [D1 row allowances/accounting](https://developers.cloudflare.com/d1/platform/pricing/).
+
+Before release, record actual UTC daily account totals, representative accepted/rejected invocation metadata, CPU/error distributions, current alert types and storage headroom through authorized platform metrics. Keep measurements aggregate. Existing notification delivery is operator-confirmed; activation and delivery for the new workflows remain separate evidence. If admission/control storage is unavailable, expect a safe service-unavailable response and no provider start. Shared-network sign-in attempts deliberately share their provider/network budget; show retry guidance rather than ask users to recreate provider credentials. Authenticated reads and logout do not require a Turnstile challenge.
+
+Feature CI covers the Milestone 7 branch and requires the native probe. Production configuration and runtime reject known public Turnstile test keys and fixture/loopback promotion; the controlled browser transport requires explicit HTTP loopback fixture bindings and still exercises server token, hostname and action checks. See [Cloudflare's separate test-key guidance](https://developers.cloudflare.com/turnstile/troubleshooting/testing/). Browser fixtures do not satisfy production authorization or hosted acceptance.
+
+Cleanup uses `scripts/lib/abuse-maintenance.mjs`: four D1 statements per dry-run/apply sweep and a validated batch size from one to 100 **per category** (rate events, runs, OAuth and settled bridge metadata). Thus at most 400 parent rows are selected/deleted; run-step FK cascades and index changes add writes. The expiry indexes are `abuse_rate_events_purge_idx`, `sync_all_runs_expiry_idx`, `oauth_requests_expiry_idx` and `sync_requests_expiry_idx`. The ownership primary key supports correlated owner checks. Active/uncertain owners and unconsumed/legacy bridge rows are retained. See [safe cleanup and recovery](incident-response.md#expired-state-maintenance).
+
+The batch bound limits selected/deleted rows, not every row scanned. Retained expired metadata, ownership filtering and ordering can increase reads even when fewer rows are removed. Cleanup cost remains an explicit measurement gate before activation: capture query plans and D1 rows-read/written metadata in an isolated representative backlog (including retained owners), then compare authorized live aggregate metrics. Never extrapolate the admission-only table to cleanup or erase unresolved ownership to improve measurements. Existing bounded-maintenance integration tests prove deletion/retention semantics, not production quota headroom.

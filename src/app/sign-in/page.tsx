@@ -2,7 +2,6 @@ import Link from "next/link";
 import {safeReturnTo} from "@/lib/auth/return-to";
 import {identitySignInFailureMessage} from '@/lib/recovery/presentation';
 import {AuthInitiationForm} from "@/features/auth/auth-initiation-form";
-import {startPublicSignIn} from "../../../auth";
 
 type SignInPageProps={
   searchParams:Promise<{returnTo?:string|string[];error?:string|string[]}>;
@@ -21,16 +20,6 @@ export default async function SignInPage({searchParams}:SignInPageProps){
   // Public site key only. Server verification never accepts widget success as proof.
   const siteKey=process.env.KAIROS_TURNSTILE_SITE_KEY??"";
 
-  async function signInWithGoogle(formData:FormData){
-    "use server";
-    return startPublicSignIn("google",formData);
-  }
-
-  async function signInWithMicrosoft(formData:FormData){
-    "use server";
-    return startPublicSignIn("microsoft-entra-id",formData);
-  }
-
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-16">
       <Link href="/" className="text-sm underline underline-offset-4">← Kairos</Link>
@@ -42,8 +31,8 @@ export default async function SignInPage({searchParams}:SignInPageProps){
         </p>
       )}
       <div className="mt-8 space-y-3">
-        <AuthInitiationForm provider="google" siteKey={siteKey} returnTo={returnTo} action={signInWithGoogle}/>
-        <AuthInitiationForm provider="microsoft-entra-id" siteKey={siteKey} returnTo={returnTo} action={signInWithMicrosoft}/>
+        <AuthInitiationForm provider="google" siteKey={siteKey} returnTo={returnTo}/>
+        <AuthInitiationForm provider="microsoft-entra-id" siteKey={siteKey} returnTo={returnTo}/>
       </div>
       <p className="mt-6 text-sm leading-6 text-[var(--muted)]">Calendar permissions are connected separately after sign-in.</p>
     </main>

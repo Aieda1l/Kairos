@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createAuthConfig } from "@/lib/auth/config";
+import {customFetch} from '@auth/core';
+import {localAuthFixtureFetch} from '@/lib/testing/auth-transport';
 
 const env={
   AUTH_SECRET:"test-auth-secret",
@@ -15,6 +17,17 @@ function providersOf(config:ReturnType<typeof createAuthConfig>){
 }
 
 describe("hosted Auth.js configuration",()=>{
+  it('overrides both providers actual custom fetch only in local fixture mode',()=>{
+    const local={...env,E2E_FIXTURES:'1',KAIROS_LOCAL_AUTH:'loopback',KAIROS_ABUSE_TRUSTED_INGRESS:'loopback',KAIROS_APP_URL:'http://127.0.0.1:3000'};
+    const transport=localAuthFixtureFetch(local)!;
+    for(const provider of createAuthConfig({} as never,local).providers){
+      expect((provider as {[customFetch]?:typeof fetch})[customFetch]).toBe(transport);
+    }
+    const hosted={...local,KAIROS_APP_URL:'https://mykairos.me'};
+    for(const provider of createAuthConfig({} as never,hosted).providers){
+      expect((provider as {[customFetch]?:typeof fetch})[customFetch]).not.toBe(transport);
+    }
+  });
   it("uses D1 database sessions and only Google/Microsoft identity providers",()=>{
     const config=createAuthConfig({} as never,env);
     expect(config.adapter).toBeTruthy();

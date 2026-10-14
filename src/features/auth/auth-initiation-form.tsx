@@ -4,18 +4,19 @@ import Script from "next/script";
 import {useActionState,useCallback,useEffect,useRef,useState} from "react";
 import {Button} from "@/components/ui/button";
 import type {AuthActionState,IdentityProvider} from "@/lib/auth/initiation";
+import {submitPublicSignIn} from './submit-public-sign-in';
 
 type Turnstile={render:(element:HTMLElement,options:Record<string,unknown>)=>string;reset:(id:string)=>void;remove:(id:string)=>void};
 function widget():Turnstile|undefined{return (window as unknown as {turnstile?:Turnstile}).turnstile;}
 
 export function AuthInitiationForm({provider,siteKey,returnTo,action}:{
-  provider:IdentityProvider;siteKey:string;returnTo:string;action:(data:FormData)=>Promise<AuthActionState>;
+  provider:IdentityProvider;siteKey:string;returnTo:string;action?:(data:FormData)=>Promise<AuthActionState>;
 }){
   const element=useRef<HTMLDivElement>(null),id=useRef<string|null>(null);
   const [ready,setReady]=useState(false),[token,setToken]=useState("");
   const refresh=useCallback(()=>{setToken("");if(id.current)widget()?.reset(id.current);},[]);
   const [state,submit,pending]=useActionState(async(_previous:AuthActionState|null,data:FormData)=>{
-    try{return await action(data);}finally{refresh();}
+    try{return await (action?action(data):submitPublicSignIn(provider,data,{fetch:(...args)=>window.fetch(...args),navigate:url=>window.location.assign(url),origin:window.location.origin}));}finally{refresh();}
   },null);
   useEffect(()=>{
     const api=widget();if(!ready||!element.current||!api)return;

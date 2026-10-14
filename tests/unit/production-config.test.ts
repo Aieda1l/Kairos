@@ -28,6 +28,16 @@ function validEnvironment():Record<string,unknown>{
 }
 
 describe("production configuration",()=>{
+  it.each([
+    ['E2E_FIXTURES','1'],['KAIROS_LOCAL_AUTH','loopback'],['KAIROS_ABUSE_TRUSTED_INGRESS','loopback'],
+    ['KAIROS_TURNSTILE_SITE_KEY','1x00000000000000000000AA'],
+    ['KAIROS_TURNSTILE_SITE_KEY','synthetic-site'],
+    ['KAIROS_TURNSTILE_SECRET_KEY','1x0000000000000000000000000000000AA'],
+    ['KAIROS_TURNSTILE_SECRET_KEY','synthetic-secret'],
+  ])('rejects promotion of local test binding %s',(name,value)=>{
+    const env=validEnvironment();env[name]=value;
+    expect(()=>validateProductionConfig(env)).toThrowError(expect.objectContaining({fields:[name]}));
+  });
   it.each(["KAIROS_TURNSTILE_SITE_KEY","KAIROS_TURNSTILE_SECRET_KEY","KAIROS_ABUSE_KEY_V1"])
   ("requires abuse binding %s without leaking configuration",name=>{
     const env=validEnvironment();delete env[name];

@@ -207,3 +207,9 @@ operations paused and deploy a verified forward fix. Record public health,
 authorized sign-in, two-user isolation, provider sync and idempotency results
 before reopening. Actual controlled production rollback remains a release gate
 until performed with a checked compatible target and authorized identities.
+
+## Admission and diagnostic handoff
+
+Use stable service/rate-limit codes and bounded Retry-After guidance to distinguish admission/control outages from expired provider authorization. Pause affected starts, preserve reads/logout and local data, and inspect actual aggregate capacity before reopening. Shared-network sign-ins share a provider/network budget; a rate rejection is not evidence that users need new provider credentials. Draft and regular credential entry share their provider budget, and rejected draft attempts retain saved input and working connections. Provider shutdown does not prevent local account deletion; confirmation admission still applies.
+
+Native probe output distinguishes partial admission success from completion of admission plus ownership. Failures include only an allowlisted stage, never exceptions or provider payloads. In isolated local browser tests, `/api/test-fixtures/auth-transport` reports only counts of Siteverify and server provider requests; it is unavailable under hosted configuration. Negative tests require unchanged provider counts, independently of browser navigation. These fixtures are diagnostic acceptance tools and must never be enabled in production. Follow [privacy controls](privacy-operations.md) and [capacity/cleanup measurement gates](monitoring.md#admission-measurements-and-release-handoff).

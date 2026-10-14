@@ -4,6 +4,7 @@ import {abuseKeyFromEnvironment} from "@/lib/abuse/keys";
 import {policyFromEnvironment} from "@/lib/abuse/policy";
 import type {AbusePolicy,TrustedIngress} from "@/lib/abuse/types";
 import {credentialKeyringFromBindings} from '@/lib/security/keyring-environment';
+import {isKnownTurnstileTestKey} from '@/lib/auth/turnstile-test-key';
 
 const CANONICAL_URL="https://mykairos.me";
 
@@ -55,6 +56,8 @@ export function validateProductionConfig(
   if(env.KAIROS_APP_URL!==CANONICAL_URL)invalid.add("KAIROS_APP_URL");
   if(env.AUTH_URL!==CANONICAL_URL)invalid.add("AUTH_URL");
   if(!hasD1Shape(env.DB))invalid.add("DB");
+  if(env.E2E_FIXTURES!==undefined&&env.E2E_FIXTURES!==''&&env.E2E_FIXTURES!=='0')invalid.add('E2E_FIXTURES');
+  if(env.KAIROS_LOCAL_AUTH!==undefined&&env.KAIROS_LOCAL_AUTH!=='')invalid.add('KAIROS_LOCAL_AUTH');
 
   const values={} as ProductionConfig["values"];
   for(const name of REQUIRED_STRINGS){
@@ -74,7 +77,7 @@ export function validateProductionConfig(
   }catch{invalid.add("KAIROS_ABUSE_KEY_V1");}
   try{credentialKeyringFromBindings(env);}catch{invalid.add('KAIROS_CREDENTIAL_KEYRING');}
   for(const name of ["KAIROS_TURNSTILE_SITE_KEY","KAIROS_TURNSTILE_SECRET_KEY"]){
-    if(typeof env[name]==="string"&&(env[name] as string).length>4096)invalid.add(name);
+    if(isKnownTurnstileTestKey(env[name])||(typeof env[name]==="string"&&(env[name] as string).length>4096))invalid.add(name);
   }
   let abusePolicy:AbusePolicy|undefined;
   try{abusePolicy=policyFromEnvironment(env);}catch{invalid.add("KAIROS_ABUSE_BUDGETS");}

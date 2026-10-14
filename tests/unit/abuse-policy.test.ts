@@ -13,6 +13,16 @@ function environment():Record<string,unknown>{
 }
 
 describe("server-owned abuse policy and runtime",()=>{
+  it.each([
+    ['E2E_FIXTURES','1'],['KAIROS_TURNSTILE_SITE_KEY','1x00000000000000000000AA'],
+    ['KAIROS_TURNSTILE_SECRET_KEY','1x0000000000000000000000000000000AA'],
+    ['KAIROS_TURNSTILE_SECRET_KEY','synthetic-secret'],
+  ])('rejects hosted test configuration before any request %s',async(name,value)=>{
+    const {resolveAbuseRuntime}=await import('@/lib/platform/abuse-runtime');
+    const env=environment();env[name]=value;const request=vi.fn<typeof fetch>();
+    expect(()=>resolveAbuseRuntime(env,request)).toThrowError(expect.objectContaining({code:'ABUSE_CONFIG_INVALID'}));
+    expect(request).not.toHaveBeenCalled();
+  });
   it("selects all six exact rolling defaults from server-derived subjects",async()=>{
     const {budgetForSubject}=await import("@/lib/abuse/policy");
     const cases=[
