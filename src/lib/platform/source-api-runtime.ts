@@ -1,4 +1,5 @@
 import "server-only";
+import {isFrameworkControlFlow,isServiceUnavailable,serviceUnavailableResponse} from '@/lib/operations/service-errors';
 import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
 import {emitOperationEvent} from "@/lib/operations/events";
 import {AuthenticationRequiredError} from "@/lib/auth/user-scope";
@@ -36,8 +37,12 @@ export async function resolveSourceApiRuntime():Promise<SourceApiRuntimeResult>{
     try{
       return {ok:true,runtime:await getSourceRouteRuntime()};
     }catch(error){
+      if(isFrameworkControlFlow(error))throw error;
       if(!isAuthenticationRequired(error)){
-        emitOperationEvent(context,{code:"SERVICE_UNAVAILABLE",result:"error",status:503});
+        if(isServiceUnavailable(error)){
+          emitOperationEvent(context,{code:"SERVICE_UNAVAILABLE",result:"error",status:503});
+          return {ok:false,response:serviceUnavailableResponse()};
+        }
         throw error;
       }
       emitOperationEvent(context,{code:"AUTH_REQUIRED",result:"rejected",status:401});

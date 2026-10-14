@@ -112,12 +112,25 @@ if(!fs.existsSync(deployPath)){
     "--remote",
     "npm run build:vinext",
     "wrangler deploy",
+    "KAIROS_RELEASE_ID",
+    "scripts/check-production-health.mjs",
   ]){
     if(!deploy.includes(required))errors.push(`Production deployment workflow is missing: ${required}`);
   }
   if(/E2E_FIXTURES\s*:\s*["']?1["']?/m.test(deploy)){
     errors.push("Production deployment workflow enables E2E fixtures.");
   }
+}
+
+const healthWorkflowPath=path.join(process.cwd(),'.github/workflows/production-health.yml');
+if(!fs.existsSync(healthWorkflowPath)){
+  errors.push('Production health workflow is missing.');
+}else{
+  const health=fs.readFileSync(healthWorkflowPath,'utf8');
+  for(const required of ['*/15 * * * *','workflow_dispatch:','contents: read','concurrency:','cancel-in-progress: false','timeout-minutes: 2','scripts/check-production-health.mjs']){
+    if(!health.includes(required))errors.push(`Production health workflow is missing: ${required}`);
+  }
+  if(/secrets\.|CLOUDFLARE_API_TOKEN|(?:contents|actions|id-token):\s*write/.test(health))errors.push('Public health workflow must not require secrets or write permissions.');
 }
 
 const sensitiveName=/(SECRET|TOKEN|PASSWORD|CREDENTIAL_KEY|CLIENT_SECRET)/i;

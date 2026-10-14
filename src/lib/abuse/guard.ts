@@ -1,5 +1,6 @@
 import {getOperationContext} from "@/lib/operations/context";
 import {emitOperationEvent} from "@/lib/operations/events";
+import {isServiceUnavailable,serviceUnavailableResponse} from '@/lib/operations/service-errors';
 import {OperationOwnershipError,OperationControlVersionChangedError} from "./operation-lock";
 import "server-only";
 import {D1RateLimitRepository} from "@/lib/db/d1/repositories/rate-limits";
@@ -18,6 +19,10 @@ export async function enforceBudget(runtime:AbuseRuntime,subject:RateSubject):Pr
 
 export function abuseErrorResponse(error:unknown):Response|null{
   const headers=new Headers({"Cache-Control":"no-store"});
+  if(!(error instanceof AbuseStorageUnavailableError||error instanceof AbuseConfigurationError)&&isServiceUnavailable(error)){
+    const context=getOperationContext();if(context)emitOperationEvent(context,{code:'SERVICE_UNAVAILABLE',result:'error',status:503});
+    return serviceUnavailableResponse();
+  }
   if(error instanceof OperationControlVersionChangedError){
     const context=getOperationContext();if(context)emitOperationEvent(context,{code:"CREDENTIAL_REJECTED",result:"rejected",status:409});
     return Response.json({code:error.code,message:error.message},{status:409,headers});
