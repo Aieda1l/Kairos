@@ -1,6 +1,6 @@
 # Kairos Cloudflare Deployment Runbook
 
-This runbook prepares the Milestone 6 hosted acceptance deployment. Checked-in Cloudflare account and D1 identifiers are placeholders; real identifiers belong in the deployment environment, not committed configuration.
+This runbook covers the hosted foundation and controlled Milestone 7 release. Checked-in Cloudflare account and D1 identifiers are placeholders; real identifiers belong in the deployment environment, not committed configuration. Production release actions require explicit operator approval after local review.
 
 ## Production resources
 
@@ -53,7 +53,21 @@ The generic vinext deployment command is:
 npm run deploy:cloudflare
 ```
 
-For production, dispatch `.github/workflows/deploy-production.yml`. Its temporary
+For production, dispatch `.github/workflows/deploy-production.yml` on protected
+`main`. Its unprivileged preflight checks the latest feature workflow result for
+the exact SHA and builds the compiled artifact before production mutation.
+The protected job uploads a Worker version without switching traffic, validates
+its alias metadata and checks the immutable version URL matching the uploaded
+version ID, applies additive migrations, then promotes that exact checked version.
+The version URL uses production bindings; only the
+public storage check runs there. Real authenticated/provider acceptance follows
+controlled promotion and remains a separate gate. A migration followed by a
+failed promotion is a partial release: retain the applied schema and recorded
+old version, inspect compatibility and settle outstanding work before recovery.
+The staged public check does not prove authenticated provider behavior, configured
+environment protection, or complete release acceptance.
+
+Its temporary
 Wrangler config substitutes the real production D1 ID, points `main` at the
 generated `dist/server/index.js`, sets `no_bundle: true`, and adds ESModule
 rules for `**/*.js` and `**/*.mjs`. It also preserves the `mykairos.me`
@@ -75,7 +89,7 @@ Before directing normal traffic to a new deployment:
 6. Verify the Firefox bridge communicates only with the exact production origin.
 7. Record the current known-good Worker deployment identifier before promotion.
 
-If smoke checks fail, route traffic back to the recorded known-good Worker deployment and investigate before retrying. Do not automatically advance traffic after a failed migration or deployment.
+If smoke checks fail, retain or restore the recorded compatible Worker deployment and investigate before retrying. Do not automatically advance traffic after a failed migration or deployment. A compatible fallback must preserve identity-token minimization, required credential keys, current admission/control semantics and durable owner/SQL fences as well as additive schema compatibility. A pre-M7 build that ignores retained ownership is not an acceptable active-operation fallback. Pause affected starts and establish settlement before recovery; never erase uncertainty to make an older build run.
 
 ## Release identity and recovery
 

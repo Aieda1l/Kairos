@@ -8,7 +8,7 @@ Kairos is an independent student project, not an official University of Washingt
 
 The Milestone 6 foundation is hosted at `https://mykairos.me`. Historical acceptance and security review are recorded in [acceptance-milestone-6.md](docs/deployment/acceptance-milestone-6.md) and [security-review-2026-10-10.md](docs/deployment/security-review-2026-10-10.md). Public beta launch, independent-account acceptance and provider verification remain pending. The current milestone plan is [milestone-7-public-beta.md](docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md).
 
-The user reports Google OAuth is published. Google brand verification rejected ownership, privacy and purpose/public-home checks. The user has since confirmed Search Console domain ownership using the associated OAuth-project account; Google's user-reported notice requires a 24-hour wait before retry. The existing home already returns anonymous HTTP 200, but provider acceptance remains unverified. Public-page changes require parent review and controlled deployment. Prepared rate guards and Turnstile are not yet wired/deployed; persistent application observability remains disabled.
+Recorded operator evidence establishes published Google OAuth, verified domain ownership, deployed public-page corrections and successful Search Console access. Manual verification was last reported unresolved, citing privacy content. Milestone 7 onboarding, admission, recovery and operational changes are implemented and locally reviewed; this continuation made no production deployment. Persistent application observability remains disabled. See [the acceptance checklist](docs/deployment/acceptance-milestone-7.md) and [current readiness](docs/deployment/readiness-milestone-7.md).
 
 Public pages: [Home](https://mykairos.me/), [Privacy](https://mykairos.me/privacy), [Terms](https://mykairos.me/terms), [Support](https://mykairos.me/support), [Security](https://mykairos.me/security). New content may be pending deployment. See [provider configuration and approval runbook](docs/deployment/public-beta-providers.md) and [contact routing and support runbook](docs/deployment/public-beta-support.md).
 
@@ -16,7 +16,7 @@ Kairos and the Firefox extension use the [MIT License](LICENSE), with Copyright 
 
 ## Requirements and local development
 
-- Node.js 22+ and npm 10+
+- Node.js 22.13+ and npm 10+
 - Firefox 140+ on desktop for Canvas submission status and Gradescope browser-local sync
 - A Canvas private calendar feed URL and/or Ed personal API token for the sources you select
 - Google and Microsoft confidential Web OAuth identity clients with server-held secrets for sign-in
@@ -35,7 +35,7 @@ Open `http://localhost:3000`. The root is the public homepage; authenticated das
 
 Build with `npm run build:extension`, then open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `extension/firefox/manifest.json`. Temporary add-ons are removed when Firefox restarts. This remains a developer/acceptance workflow, not public signed installation.
 
-The user's AMO Developer Hub is ready, but the extension is unsigned/unlisted and Mozilla-signed public distribution is pending. `src/lib/extension-distribution.ts` returns a pending descriptor until an actual validated AMO listing URL is configured. Do not invent a listing URL or claim store approval.
+Kairos Bridge 0.4.0 was submitted and passed AMO validation; the last operator report was awaiting review with developer installation available. Ordinary-user signed distribution and install/update acceptance remain pending. `src/lib/extension-distribution.ts` returns a pending descriptor until an actual validated AMO listing URL is configured. Do not invent a listing URL or claim store approval.
 
 The prepared, unsigned/unlisted 0.4.0 manifest requests `tabs` and explicit Kairos, Canvas and Gradescope host access. Its required Firefox data categories are `websiteContent` and `browsingActivity`: normalized source reads and supported-tab detection. This is prepared release behavior, not an extension upgrade bundled with the C2 public-page deployment. The page bridge accepts exactly `http://localhost:3000`, `http://127.0.0.1:3000`, and `https://mykairos.me`. It does not request cookie, history, downloads, `<all_urls>`, or webRequest interception permissions.
 
@@ -113,7 +113,7 @@ Hosted source/calendar credentials and persisted pending PKCE verifiers use AES-
 
 **Disconnect** removes the Kairos connection, credentials and mappings, leaving remote events/calendars and provider grants. **Remove generated events** attempts deletion while connected; verify its result, then disconnect to stop later reconciliation from recreating eligible events. **Settings → Delete account** removes live user records, not remote events or provider consent. Revoke access separately in Google/Microsoft account controls, Ed token settings, Apple app-specific password controls, or reset an exposed Canvas feed URL.
 
-D1 recovery history can retain deleted records for 7 days (Free) or 30 days (Paid); the deployed plan is unconfirmed. Persistent application logs are currently disabled. The full [privacy notice](https://mykairos.me/privacy) explains third-party processing, email correspondence, recovery history and prepared controls.
+D1 recovery history can retain deleted records for 7 days (Free) or 30 days (Paid); the operator reports Workers Free, with actual recovery settings and capacity still requiring final acceptance. Persistent application logs are currently disabled. The full [privacy notice](https://mykairos.me/privacy) explains third-party processing, email correspondence, recovery history and prepared controls.
 
 Legacy local SQLite adapters remain in historical tests; their plaintext model is not the current hosted implementation. The development server uses local D1. Deleting `.data/assignments.sqlite` does not reset current D1 or the hosted account. Use account deletion in the relevant environment; tests use isolated temporary D1 instances. Do not issue remote database deletion/reset commands as a local reset.
 

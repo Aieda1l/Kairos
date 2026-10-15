@@ -1,0 +1,15 @@
+# Milestone 7 source and security review
+
+Decision: **INCOMPLETE for production acceptance**. Executable source is `9401d79`; the release base is Milestone 6 `6a4f908`. No production action or provider approval is implied.
+
+The resumed review retained existing reconnaissance/task evidence, completed missing source assignments, independently checked candidate records and obtained distinct clean post-wave/final coverage critiques. The 151-unit ledger and 17 current-source records pass the unchanged bundled validators. Three units remain blocked by actual external D1 backup/export/restore controls. Source reviews and local fixtures do not establish those controls.
+
+The review fixed calendar persistence/loading races, fixture admission, release authority/sequencing and missing Sync All origin-middleware coverage. It also found an expired-session linking path in the locked Auth.js/D1 adapter composition: callback linking accepted a retained database bearer without the expiry check normally performed by session reads. The shared adapter now returns identity only for a finite expiry strictly after the current time; expired sessions are deleted and rejected. Independent review accepted the fix and preserved valid-session behavior. This fix is local, not deployed.
+
+The 17 final records distinguish superseded/fixed paths from refuted hypotheses; rejected on current source does not mean an earlier defect never existed. Proposed issues involving intentional extension origin/tab authority, absent explicit cache/body-size defenses, legacy-only state, same-principal reconnection/disconnection and unobserved custom-domain-only controls did not establish the claimed boundary violation. No current confirmed vulnerability or speculative severity is asserted. Hardening observations remain separate.
+
+Coverage includes identity/callback/session guards, tenant/credential isolation, onboarding drafts, durable admission/ownership, source/calendar/extension boundaries, server rendering/hydration/cache choices, diagnostics, packaging, CI/release scripts and operational docs. Selected locked dependency code was inspected where its contracts were decisive; no fresh exhaustive dependency-advisory audit is claimed.
+
+External evidence remains necessary for D1 historical-copy access/retention/restore and key custody; actual bindings/secrets/ingress/environment controls; stored platform/framework privacy; real hosted two-account/provider/revocation/deletion flows; signed Firefox install/update; Google/Mozilla outcomes; capacity/cleanup/notification checks and compatible live rollback. Logging persistence stays off. No risk acceptance is inferred.
+
+Fresh verification passes 1,433 tests, 54 browser cases, 18 offline deployment simulations and the relevant lint/types/build/migration/safety/extension/native checks. Vinext retains its documented compatibility warning; online provider probes remain unverified. See [readiness](readiness-milestone-7.md) and [acceptance](acceptance-milestone-7.md). Ignored artifacts/task7c-6/audit-pointer.json locates the private full reports.

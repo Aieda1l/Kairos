@@ -2,9 +2,9 @@
 
 Prepared October 10, 2026. Public aliases are `support@mykairos.me` and `security@mykairos.me`; their static mailto links live in `src/lib/public-contacts.ts`. Never publish the private destination inbox in app HTML, source, screenshots, README, provider review material, logs or this runbook.
 
-## Verified configuration, pending delivery
+## Verified configuration and operator-confirmed delivery
 
-Controller evidence supersedes the earlier research note that routing was disabled: Email Routing is enabled, the privately selected destination is verified, both explicit alias rules are enabled and point to that inbox. Public DNS checks found three Cloudflare MX records and one Cloudflare SPF record. Actual end-to-end inbox delivery confirmation is **pending** for both aliases. This worker has no new inbox evidence and sends no test messages. The pages therefore state routing is active and delivery confirmation pending, with no monitoring or response-time guarantee.
+Controller evidence supersedes the earlier research note that routing was disabled: Email Routing is enabled, the privately selected destination is verified, both explicit alias rules are enabled and point to that inbox. Public DNS checks found three Cloudflare MX records and one Cloudflare SPF record. The operator confirmed by October 13, 2026 that separate messages to both aliases arrived. This is attributed operator evidence; no automated inbox inspection or message sending is claimed. Receipt does not establish outbound alias sending or a fixed response-time commitment.
 
 | Check | Status |
 | --- | --- |
@@ -12,8 +12,8 @@ Controller evidence supersedes the earlier research note that routing was disabl
 | `support@mykairos.me` explicit rule | Enabled, routing verified |
 | `security@mykairos.me` explicit rule | Enabled, routing verified |
 | Authoritative DNS | Three Cloudflare MX, one Cloudflare SPF; controller independently verified |
-| Actual external test receipt: support | Pending operator confirmation |
-| Actual external test receipt: security | Pending operator confirmation |
+| Actual external test receipt: support | Operator-confirmed arrived, recorded by October 13, 2026 |
+| Actual external test receipt: security | Operator-confirmed arrived, recorded by October 13, 2026 |
 | Reply handling / mailbox monitoring | No verified operating cadence or reply workflow claimed |
 | Outbound transactional mail | Not implemented; do not treat aliases as password-reset senders |
 

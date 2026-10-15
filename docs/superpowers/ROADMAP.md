@@ -145,9 +145,9 @@ Implementation plans:
 Hosted acceptance:
 - `docs/deployment/acceptance-milestone-6.md`
 
-## Milestone 7 — Public beta readiness — Approved design; implementation planning prepared
+## Milestone 7 — Public beta readiness — In progress; local verification complete, launch gates open
 
-Planned:
+Scope:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
 - UW-first product positioning and continued `canvas.uw.edu` browser integration rather than arbitrary Canvas institutions;
 - first-run onboarding with skippable source/calendar setup and targeted returning-user recovery;
@@ -165,9 +165,10 @@ Primary design:
 
 Implementation plan:
 - `docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md` links the onboarding/recovery, admission/bounded-work, and distribution/operations slices.
-- Isolated planning branch `feat/milestone-7-public-beta-readiness` starts from the finalized Milestone 6 tag.
-- User selected an AMO listing; Google OAuth is published. Mozilla account creation/signing, Turnstile setup, support/security routing, provider verification evidence, monitoring, and live rollback remain launch gates.
-- ECC and Superpowers plan review precedes implementation. No Milestone 7 runtime change has been deployed.
+- Existing implementation branch `feat/milestone-7-public-beta-readiness` continues from the finalized Milestone 6 tag; verified local changes are committed through `9401d79`.
+- Local verification passes 1,433 tests, 54 browser cases, 18 simulated deployment cases and relevant builds/runtime checks. Source reviews and report validators are complete, with three external D1 coverage blocks; the readiness decision remains INCOMPLETE.
+- Google/Mozilla outcomes, signed Firefox install/update, exact hosted/two-account/provider acceptance, actual operational/privacy/protection/capacity evidence and live rollback remain launch gates. Earlier support/security delivery is operator-confirmed; new workflow activation is separate.
+- This continuation did not publish or deploy. Production changes require explicit approval. See `docs/deployment/readiness-milestone-7.md`, `security-review-milestone-7.md` and `acceptance-milestone-7.md` for evidence and remaining work.
 
 ## Local guest mode — Planned after Milestone 7, not yet numbered
 
