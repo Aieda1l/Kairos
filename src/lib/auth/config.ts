@@ -28,12 +28,25 @@ export function createAuthConfig(
   const fixtureFetch=localAuthFixtureFetch(env as unknown as Record<string,unknown>);
   const transport=fixtureFetch?{[customFetch]:fixtureFetch}:{};
   const linkAccount=adapter.linkAccount!;
+  const getSessionAndUser=adapter.getSessionAndUser!;
   return {
     secret:env.AUTH_SECRET,
     pages:{signIn:"/sign-in",error:"/sign-in"},
     logger:authDiagnostics,
     adapter:{
       ...adapter,
+      // OAuth linking reads the adapter directly, bypassing Auth.js's normal
+      // session-read expiry check. An expired bearer must grant no authority.
+      async getSessionAndUser(token){
+        const result=await getSessionAndUser(token);
+        if(!result)return null;
+        const expiresAt=result.session.expires.getTime();
+        if(!Number.isFinite(expiresAt)||expiresAt<=Date.now()){
+          await adapter.deleteSession!(token);
+          return null;
+        }
+        return result;
+      },
       // Identity tokens are used during sign-in only. Calendar offline grants
       // live separately in the encrypted, user-scoped credential repository.
       linkAccount:account=>linkAccount({
