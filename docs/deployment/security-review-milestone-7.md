@@ -1,6 +1,6 @@
 # Milestone 7 source and security review
 
-Decision: **INCOMPLETE for production acceptance**. Executable source is `9401d79`; the release base is Milestone 6 `6a4f908`. No production action or provider approval is implied.
+Decision: **INCOMPLETE for production acceptance**. The base source audit covers checkpoint `9401d79`; the release base is Milestone 6 `6a4f908`. The later scoped release follow-up is described below. No production action or provider approval is implied.
 
 The resumed review retained existing reconnaissance/task evidence, completed missing source assignments, independently checked candidate records and obtained distinct clean post-wave/final coverage critiques. The 151-unit ledger and 17 current-source records pass the unchanged bundled validators. Three units remain blocked by actual external D1 backup/export/restore controls. Source reviews and local fixtures do not establish those controls.
 
@@ -13,3 +13,11 @@ Coverage includes identity/callback/session guards, tenant/credential isolation,
 External evidence remains necessary for D1 historical-copy access/retention/restore and key custody; actual bindings/secrets/ingress/environment controls; stored platform/framework privacy; real hosted two-account/provider/revocation/deletion flows; signed Firefox install/update; Google/Mozilla outcomes; capacity/cleanup/notification checks and compatible live rollback. Logging persistence stays off. No risk acceptance is inferred.
 
 Fresh verification passes 1,433 tests, 54 browser cases, 18 offline deployment simulations and the relevant lint/types/build/migration/safety/extension/native checks. Vinext retains its documented compatibility warning; online provider probes remain unverified. See [readiness](readiness-milestone-7.md) and [acceptance](acceptance-milestone-7.md). Ignored artifacts/task7c-6/audit-pointer.json locates the private full reports.
+
+## Operational preflight follow-up
+
+The [current preflight](preflight-milestone-7.md) records actual configuration/schema observations and configured GitHub protections. The operator confirms Google branding approval, Workers Free, Pseudo IPv4 Off, possession of the original credential key and sole export/restore authorization. Key custody policy does not establish effective IAM, safe restore or historical deletion controls; those evidence gaps remain open. Mozilla review and exact-release acceptance remain pending.
+
+A scoped independent source review accepted explicit health-workflow activation, unconditional proxy coverage with Workers.dev health-only admission, authenticated account-subdomain binding of uploaded URLs, and repeated active-version/migration/configuration checks before successive release mutations. Regressions reproduced the Host-matcher and cross-account URL gaps before correction. Actual YAML/CLI simulations cover baseline, configuration, preview-exposure, partial migration and between-phase drift failures. No Critical/Important or minor findings remain in the final release follow-up review. That source-only review does not reissue the historical 151-unit audit or establish production certification; new verification is recorded in readiness.
+
+Observed production CPU quantiles exceed the nominal Free budget, despite zero sampled runtime invocation errors. Capacity is a concrete open preflight issue; no paid-plan change is authorized. Production code/data, cloud release credentials, persistent logging and operational activation remain unchanged by this follow-up.

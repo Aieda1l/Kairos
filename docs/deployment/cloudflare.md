@@ -54,16 +54,32 @@ npm run deploy:cloudflare
 ```
 
 For production, dispatch `.github/workflows/deploy-production.yml` on protected
-`main`. Its unprivileged preflight checks the latest feature workflow result for
+`main` only after explicit release approval. Supply the freshly approved current
+100% Worker UUID in `expected_active_version`; do not reuse a historical value
+without reading current deployment state. Its unprivileged preflight checks the latest feature workflow result for
 the exact SHA and builds the compiled artifact before production mutation.
 The protected job uploads a Worker version without switching traffic, validates
 its alias metadata and checks the immutable version URL matching the uploaded
 version ID, applies additive migrations, then promotes that exact checked version.
+The first-cutover state gate requires migrations `0001`-`0003` before upload and
+again before migration, validates the exact uploaded version's effective
+configuration, then requires exactly `0001`-`0007` and unchanged active traffic
+before promotion. Unknown local migrations or state/configuration drift stop the
+next mutation. The authenticated account's Workers subdomain binds both uploaded
+URLs; public probes must confirm health and fixed rejection of application paths.
+Workers.dev dynamic requests are health-only, including the ordinary Worker URL;
+the canonical domain remains the application entry. Platform-served static assets
+may remain public without invoking application code.
 The version URL uses production bindings; only the
 public storage check runs there. Real authenticated/provider acceptance follows
 controlled promotion and remains a separate gate. A migration followed by a
 failed promotion is a partial release: retain the applied schema and recorded
 old version, inspect compatibility and settle outstanding work before recovery.
+An ordinary redispatch after partial migration intentionally fails the initial
+schema gate. Review and separately authorize a recovery procedure; never reverse
+schema or erase retained owners to make that gate pass. These repeated checks are
+snapshots, so preserve an exclusive operator release window and settle or contain
+prior M6 provider/browser work before cutover.
 The staged public check does not prove authenticated provider behavior, configured
 environment protection, or complete release acceptance.
 

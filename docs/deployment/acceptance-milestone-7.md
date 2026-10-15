@@ -4,6 +4,8 @@ Status: in progress. This checklist consumes the approved public-beta specificat
 
 The starting source was `0cccc21`; the resumed executable-source checkpoint is `9401d79`. Fresh isolated Linux verification passes 1,433 tests in 148 files, 54 Chromium/Firefox cases, 18 offline deployment simulations and the relevant lint/types/migration/safety/native/extension/Next/Workers/dynamic checks. Independent current-source reviews and validated reports are complete; three external D1 coverage blocks and the hosted/operational/provider gates keep the decision INCOMPLETE. See [readiness](readiness-milestone-7.md) and [source review](security-review-milestone-7.md).
 
+The later [operational preflight](preflight-milestone-7.md) confirms production remains on migrations `0001`-`0003`, establishes GitHub main/environment protections, and records a retrievable recovery bookmark plus operator-held key/sole export/restore authorization. Release follow-up `0fa7090` passes 1,472 tests in 149 files, 54 browser cases and 30 release simulations; it adds preview isolation and live cutover checks. The operator confirms Workers Free and Pseudo IPv4 Off. Exact-main CI, production credentials, effective backup/IAM/privacy/remaining ingress facts, observed CPU pressure, compatible recovery and hosted acceptance remain open.
+
 ## Required evidence
 
 | # | Condition | Evidence available | Remaining closure |
