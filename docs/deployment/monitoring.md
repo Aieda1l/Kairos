@@ -57,6 +57,10 @@ Primary references: [Workers limits](https://developers.cloudflare.com/workers/p
 
 ## Admission measurements and release handoff
 
+The October 15 Free CPU investigation identified repeated native timezone validation in synthetic dashboard rendering. The bounded successful-zone cache retains at most 128 public identifiers per isolate; invalid inputs are never retained, and aliases/error behavior are preserved. Run `node scripts/benchmark-timezone-validation.mjs` locally with the locked dependencies to replay two native workerd variants, correctness/DST/alias/invalid and 160-zone holdouts, warmup and four alternating measurement pairs. It writes a synthetic result under `artifacts/benchmarks/`, without production credentials or provider requests.
+
+For 500 format/classify pairs, the recorded median local wall time was **86.072 ms before / 13.303 ms after (6.47x)**, with identical outputs and 1,000 versus zero warm native validator constructions. The frozen baseline is the validator behavior at `4167dc2`. This is a repeated-helper diagnostic, not a full dashboard benchmark or Cloudflare CPU accounting. Cold starts, real M7 workloads and production Free headroom remain open; the earlier live CPU observations are unchanged.
+
 `npm run verify:workerd:abuse` runs two independent native workerd services against a fresh shared synthetic D1 database. Forty concurrent Sync All admissions produce exactly six accepted and 34 rate-limited responses; another actor remains independent, and a controlled expired window admits again. The same command runs the native ownership probes, including held requests, stale continuations, interruption/restart, uncertainty and absence of competing remote writes. It does not access production or establish live provider correctness.
 
 The controlled admission-only snapshot on October 14, 2026 measured:
