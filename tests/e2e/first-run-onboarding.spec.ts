@@ -24,6 +24,13 @@ test('new-user direct dashboard entry redirects to optional setup',async({page,c
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.getByRole('heading',{name:'Welcome to Kairos'})).toBeVisible();
   expect(await (await context.request.get('/api/settings/submission-status')).json()).toEqual({enabled:false});
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  const install=page.getByRole('link',{name:'Install from Mozilla Add-ons'});
+  await expect(install).toBeVisible();
+  await expect(install).toHaveAttribute('href','https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/');
+  await expect(install).toHaveAttribute('target','_blank');
+  await expect(install).toHaveAttribute('rel','noreferrer');
+  await expect(page.getByText(/awaiting review/)).toHaveCount(0);
 });
 
 test('two users retain independent setup progress and revisions',async({context,browser},testInfo)=>{

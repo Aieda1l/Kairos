@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type {Metadata} from "next";
 import {PUBLIC_CONTACTS} from "@/lib/public-contacts";
+import {FIREFOX_ADDON_LISTING_URL} from "@/lib/extension-distribution";
 
 export const metadata:Metadata={
   title:"Support — Kairos",
@@ -18,12 +19,12 @@ export default function SupportPage(){
         <p>Domain alias routing is active to a verified private destination; actual inbox delivery confirmation is pending. No fixed response time is promised. This contact is for inbound correspondence, not an automated password-reset or transactional email system.</p>
         <section className="space-y-3" aria-labelledby="support-details">
           <h2 id="support-details" className="text-xl font-semibold text-[var(--foreground)]">What to include</h2>
-          <p>Describe what you tried, what you expected, and what happened. Include the affected source or calendar provider, browser version, approximate time and timezone, and the visible error category. For Firefox, read the installed extension version from its local popup. The prepared, unsigned 0.4.0 bridge uses a not-shared webpage version field; earlier development builds can report their installed version for compatibility.</p>
+          <p>Describe what you tried, what you expected, and what happened. Include the affected source or calendar provider, browser version, approximate time and timezone, and the visible error category. For Firefox, read the installed extension version from its local popup. The published 0.4.0 bridge uses a not-shared webpage version field; earlier development builds can report their installed version for compatibility.</p>
           <p>Redact screenshots. Do not send passwords, private Canvas feed URLs, Ed tokens, cookies, authorization codes, refresh tokens or Apple app-specific passwords. Avoid including other students&apos; data. Send security concerns through <Link href="/security" className="underline underline-offset-4">Security</Link>; keep credentials and private account data out of public issues.</p>
         </section>
         <section className="space-y-3" aria-labelledby="support-access">
           <h2 id="support-access" className="text-xl font-semibold text-[var(--foreground)]">Sign-in and connections</h2>
-          <p>Use Google or Microsoft for your Kairos identity. Calendar consent is a separate optional step in Sources. Kairos is UW-first; the Firefox Canvas connector supports canvas.uw.edu. Account or administrator restrictions can prevent provider access. A public Mozilla-signed extension listing is still pending.</p>
+          <p>Use Google or Microsoft for your Kairos identity. Calendar consent is a separate optional step in Sources. Kairos is UW-first; the Firefox Canvas connector supports canvas.uw.edu. Account or administrator restrictions can prevent provider access. Install <a href={FIREFOX_ADDON_LISTING_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">Kairos Bridge from Mozilla Add-ons</a> in Firefox desktop 140+.</p>
           <p>For stale coursework, check the official source and try its manual sync. A failed or partial sync preserves previously known data. For iCloud, create a writable calendar named Kairos before connecting with an Apple app-specific password.</p>
         </section>
         <section className="space-y-3" aria-labelledby="support-data">

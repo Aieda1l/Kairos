@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type {Metadata} from "next";
+import {FIREFOX_ADDON_LISTING_URL} from "@/lib/extension-distribution";
 
 export const metadata:Metadata={
   title:"Kairos — coursework and deadline dashboard",
@@ -46,8 +47,9 @@ export default function HomePage(){
           Kairos is an independent student project and is not affiliated with or endorsed by the University of Washington.
         </p>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-          The hosted service is under active development. Public beta launch and a Mozilla-signed Firefox listing remain pending;
-          source availability and provider consent may limit access.
+          The hosted service is under active development and public beta launch remains pending.
+          Kairos Bridge is <a href={FIREFOX_ADDON_LISTING_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">available from Mozilla Add-ons</a> for Firefox desktop 140+.
+          Source availability and provider consent may limit access.
         </p>
         <nav aria-label="Legal and contact" className="mt-5 flex flex-wrap gap-4 text-sm">
           <Link href="/privacy" className="underline underline-offset-4">Privacy</Link>

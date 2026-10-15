@@ -66,9 +66,9 @@ it('keeps fresh visible credentials in memory across Back without writing storag
   expect(document.documentElement.outerHTML).not.toContain('memory-secret');
   expect(localStorage.length).toBe(0);expect(sessionStorage.length).toBe(0);
 });
-it('shows truthful pending Firefox availability, checks presence and never blocks Canvas or Ed',async()=>{
+it('keeps Firefox optional without a configured listing, checks presence and never blocks Canvas or Ed',async()=>{
   mount({...state,currentStep:'firefox'});
-  expect(screen.getByText(/awaiting review/i)).toBeVisible();
+  expect(screen.getByText(/Firefox setup is optional/i)).toBeVisible();
   expect(screen.queryByRole('link',{name:/Install/})).toBeNull();
   await click('Check extension');expect(await screen.findByText(/not detected/i)).toBeVisible();
   await click('Continue');expect(screen.getByRole('heading',{name:'Canvas'})).toBeVisible();expect(screen.getByRole('button',{name:'Skip'})).toBeEnabled();

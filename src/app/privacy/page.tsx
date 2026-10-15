@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type {Metadata} from "next";
 import {PUBLIC_CONTACTS} from "@/lib/public-contacts";
+import {FIREFOX_ADDON_LISTING_URL} from "@/lib/extension-distribution";
 
 export const metadata:Metadata={
   title:"Privacy — Kairos",
@@ -13,7 +14,7 @@ export default function PrivacyPage(){
     <main className="mx-auto max-w-3xl px-6 py-16">
       <Link href="/" className="text-sm underline underline-offset-4">← Kairos</Link>
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">Privacy</h1>
-      <p className="mt-3 text-sm text-[var(--muted)]">Updated October 11, 2026</p>
+      <p className="mt-3 text-sm text-[var(--muted)]">Updated October 15, 2026</p>
       <div className="mt-6 space-y-8 leading-7 text-[var(--muted)]">
         <section className="space-y-3" aria-labelledby="privacy-purpose">
           <h2 id="privacy-purpose" className="text-xl font-semibold text-[var(--foreground)]">Purpose and operator</h2>
@@ -32,9 +33,9 @@ export default function PrivacyPage(){
         </section>
         <section className="space-y-3" aria-labelledby="privacy-firefox">
           <h2 id="privacy-firefox" className="text-xl font-semibold text-[var(--foreground)]">Firefox bridge: website content and browsing activity</h2>
-          <p>The prepared Firefox extension 0.4.0 release declares required <code>websiteContent</code> and <code>browsingActivity</code> data permissions. It remains unsigned and unlisted; the public-page update does not release that extension. Firefox bridge builds read normalized course, assignment, status and published grade information from already signed-in Canvas and Gradescope tabs. Browsing activity here includes detecting whether supported tabs are open and reporting their presence to the Kairos page. The bridge does not request browser history or cookie API access.</p>
-          <p>The prepared 0.4.0 PONG presence response tells Kairos whether the bridge and supported tabs are available, but its version field is <code>not-shared</code>. Earlier development builds can send their installed extension version to the Kairos page as compatibility information in PONG. The local extension popup shows the actual installed version. Source-derived diagnostics include HTTP status categories and DOM structure/count results used to explain discovery or extraction failures; these and version compatibility information are source/connection results, not optional telemetry.</p>
-          <p>Authenticated reads happen within Firefox. Canvas and Gradescope passwords, session cookies, authorization headers and raw authenticated HTML are not sent through the page bridge. Normalized results reach the Kairos page and are saved to your hosted account when you sync. Website bridge origins are restricted to mykairos.me and the two supported local development origins. The extension has no separate advertising or analytics transmission path. Public Mozilla-signed distribution is pending.</p>
+          <p>The published Firefox extension 0.4.0 declares required <code>websiteContent</code> and <code>browsingActivity</code> data permissions. It reads normalized course, assignment, status and published grade information from already signed-in Canvas and Gradescope tabs. Browsing activity here includes detecting whether supported tabs are open and reporting their presence to the Kairos page. The bridge does not request browser history or cookie API access.</p>
+          <p>The 0.4.0 PONG presence response tells Kairos whether the bridge and supported tabs are available, but its version field is <code>not-shared</code>. Earlier development builds can send their installed extension version to the Kairos page as compatibility information in PONG. The local extension popup shows the actual installed version. Source-derived diagnostics include HTTP status categories and DOM structure/count results used to explain discovery or extraction failures; these and version compatibility information are source/connection results, not optional telemetry.</p>
+          <p>Authenticated reads happen within Firefox. Canvas and Gradescope passwords, session cookies, authorization headers and raw authenticated HTML are not sent through the page bridge. Normalized results reach the Kairos page and are saved to your hosted account when you sync. Website bridge origins are restricted to mykairos.me and the two supported local development origins. The extension has no separate advertising or analytics transmission path. Kairos Bridge is <a href={FIREFOX_ADDON_LISTING_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">published on Mozilla Add-ons</a> for Firefox desktop 140+.</p>
         </section>
         <section className="space-y-3" aria-labelledby="privacy-calendars">
           <h2 id="privacy-calendars" className="text-xl font-semibold text-[var(--foreground)]">Optional calendar access and Google data use</h2>

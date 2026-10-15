@@ -1,3 +1,5 @@
+export const FIREFOX_ADDON_LISTING_URL="https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/";
+
 export type FirefoxDistribution = {
   state:"pending"|"available";
   installUrl:string|null;

@@ -8,15 +8,17 @@ The reviewed release follow-up is committed at **0fa7090**, continuing the base 
 
 | Check | Result |
 | --- | --- |
-| Full Vitest suite | 1,472 tests in 149 files passed |
-| Chromium and Firefox | 54 cases passed, including forged settings/Sync All requests |
+| Full Vitest suite | 1,475 tests in 149 files passed |
+| Chromium and Firefox | Prior 4167dc2 CI passed 54 cases; current local run 53/54, one Firefox timeout; affected case passes alone unchanged |
 | Offline deployment workflow | 30 simulations passed; 16 health activation cases also pass |
 | Typecheck and lint | Passed; zero lint errors, six existing warnings |
-| Next compatibility build | Passed in prior published 32fca25 CI; final published-head CI remains required |
+| Next compatibility build | Published 4167dc2 CI passed; feature CI repeats this build for each published head |
 | Workers build and dynamic dashboard verifier | Passed |
 | D1 migrations and production safety | Passed locally |
 | Native workerd | Fresh compiled preview probe: nine rejected requests and three health reads; prior admission/ownership, six keyring and offline Canvas checks retained |
 | Extension lint | Zero errors/warnings/notices; submitted 0.4.0 ZIP hashes unchanged |
+| Published Firefox 0.4.0 | Signed artifact matches reviewed payloads; ordinary install/native consent/source reads operator-confirmed |
+| Timezone diagnostic | Identical native workerd outputs, bounded 128-zone cache; 86.072 to 13.303 ms median local repeated-helper wall time |
 
 Simulations execute actual YAML shell commands and release CLIs with cloud/package commands and fetch mocked. They cover missing/failed/stale/pending CI, non-main dispatch, build/upload/metadata/staged-health/isolation failures, wrong bindings/release/secret configuration, logging, migration failure, between-phase traffic/schema/configuration drift, failed promotion after migration, post-promotion health failure and exact-version promotion. Applied schema survives partial releases; no automatic rollback is invented. Mock cloud state is distinct from the actual local migration-preservation checks. The native preview probe rebundles the compiled Worker for Miniflare with synthetic D1 and an ASSETS stub; it does not establish actual Cloudflare ingress/configuration or provider acceptance.
 
@@ -33,12 +35,13 @@ The optional live-provider probe cannot succeed with external networking disable
 - **9401d79:** Sync All origin middleware and a matcher regression covering every non-fixture mutating API namespace.
 - **32fca25:** health checks require explicit activation, with exact-value shell checks before work.
 - **0fa7090:** URL-authoritative Workers.dev health-only admission, account-bound preview URLs and live baseline/configuration/migration checks before successive release mutations. Independent scoped follow-up review accepted the changes without remaining findings.
+- **55afdb9:** bounded reuse of successful timezone validation, regression coverage and native local correctness/performance replay. Production CPU headroom remains open.
 
 Independent source reviews accepted the fixes. The audit validates **151 coverage units and 17 candidate records**: 128 covered units, 20 with assessed candidate traces, and three external D1 backup/export/restore blocks. The 17 current-source paths are fixed or refuted; none remains a confirmed current-source finding. Distinct post-wave/final-clean critics found no remaining source assignment. Unmodified validators pass. Overall security/readiness stays INCOMPLETE for external evidence. See [security review](security-review-milestone-7.md).
 
 ## Latest operator update
 
-The operator reports Google branding fully approved after review, Mozilla extension review still pending, and two Kairos accounts tested with apparently successful results. Record the account test as an operator-reported smoke pass; the tested revision, individual flows and cross-account assertions were not specified. This closes the reported branding-review wait, without establishing calendar-scope approval or exact-release hosted acceptance.
+The operator reports Google branding fully approved after review and two Kairos accounts tested with apparently successful results. Mozilla has published signed 0.4.0, independently checked against the reviewed packet, and the operator confirms normal store installation, native consent and Canvas/Gradescope reads. The onboarding source now links the verified listing. Actual version-upgrade acceptance and missing detailed AMO description/privacy/homepage/support fields remain open; exact owner copy is prepared. See [publication evidence](firefox-0.4.0-publication.md). Record the account test as an operator-reported smoke pass; the tested revision, individual flows and cross-account assertions were not specified. Branding approval does not establish calendar-scope approval or exact-release hosted acceptance.
 
 Operational follow-up: [production preflight and release proposal](preflight-milestone-7.md) records production identity/schema, four unconsumed legacy bridge records, a retrievable recovery bookmark and actual usage. The operator confirms possession of the original encryption key, sole export/restore authority, **Workers Free** and **Pseudo IPv4 Off**; the latter two were unreadable through the CLI and remain attributed to operator evidence. Production CPU quantiles of **29.362 ms P50 / 251.633 ms P99** exceed Free's nominal 10 ms budget despite zero sampled runtime invocation errors. Capacity requires investigation; no paid change is authorized. Effective IAM, historical deletion/restore, platform privacy and the remaining launch gates stay open.
 
@@ -47,7 +50,7 @@ Operational follow-up: [production preflight and release proposal](preflight-mil
 1. Establish effective D1 backup/export permissions, historical deletion/retention, safe restore and key-retirement evidence beyond the operator's custody policy. GitHub main/environment protections are configured; verify their enforcement and the exact-main CI/deployment chain. Verify remaining production binding/ingress facts.
 2. Complete stored platform/framework log privacy assessment, including vendor database-error logging. Persistent logs, invocation metadata and traces remain disabled.
 3. After explicit approval, release the exact reviewed source and perform two-account hosted acceptance: identity/onboarding, sources, all three calendars, challenge/rate/duplicate-work behavior, revocation and deletion preserving the second account.
-4. Verify the actual signed Firefox listing/artifact and normal install/update after Mozilla review. Google branding is operator-confirmed approved; establish any applicable separate calendar/data-access state during provider preflight.
+4. Complete the missing AMO listing disclosure fields using prepared owner copy and verify an actual version upgrade with the next legitimate extension release. Signing, publication and ordinary installation/consent/reads are verified as attributed above. Google branding is operator-confirmed approved; establish any applicable separate calendar/data-access state during provider preflight.
 5. Investigate observed Free CPU pressure and establish representative M7 headroom, query/cleanup costs and backlog/retention; verify protected health/maintenance activation and success/failure delivery after approval. Earlier email receipt does not verify new workflows.
 6. Exercise compatible live rollback/forward restore, preserving additive schema, required keys and unsettled ownership. Reconcile onto reviewed protected main before release.
 
@@ -57,6 +60,8 @@ The [23-condition checklist](acceptance-milestone-7.md) separates local, histori
 
 Verification used the previously authorized pinned Linux sandbox: Node 22.23.3, matching Playwright browsers, no external network, empty allowlisted environment, unprivileged execution, read-only original input/toolchain/root, scratch-only writes and bounded resources/time. Next's temporary tooling copy preserved internal links; no application/Next configuration workaround was retained. Reviewers are source-only; ordinary parent test logs are not formal promoted audit execution evidence.
 
-The latest browser run passed all 54 cases after one earlier Firefox page/context closure; the affected test also passed alone, without browser-test/assertion/deadline changes. Six old unit assertions inspected literal matcher-list entries; they now execute Next's actual matcher to preserve route-coverage checks under unconditional admission. The subsequent full suite passes. The 151-unit base audit remains historical; the release delta has a separate accepted source review and current engineering verification.
+The prior browser checkpoint passed all 54 cases after one earlier Firefox page/context closure. The publication/CPU run initially exposed stale review-pending assertions in both projects, now replaced by the exact published-link check. The fresh full run passes 53/54: Firefox's unchanged Canvas-replacement journey reaches its 30-second deadline during final rendering. It and an earlier empty-account navigation timeout pass individually unchanged; no assertions or deadlines were weakened. Retain these local failures as evidence and require fresh feature CI on the published delta. Six old unit assertions inspected literal matcher-list entries; they now execute Next's actual matcher to preserve route-coverage checks under unconditional admission. The subsequent full suite passes. The 151-unit base audit remains historical; scoped follow-up reviews do not reissue it.
+
+The publication/CPU continuation extends the real first-run browser journey to check the exact Mozilla install URL and safe new-tab attributes. A stale component assertion expecting review-pending copy was updated to assert the neutral optional state for an absent listing. Timezone regressions reproduce repeated native formatter construction before the cache and verify preserved errors/aliases plus eviction. The [local benchmark](monitoring.md#admission-measurements-and-release-handoff) supports the helper optimization, without closing production CPU headroom.
 
 Ignored artifacts/task7c-6 contains detailed local evidence; audit-pointer.json locates the private full audit and readiness reports. The original checkout, developer database, M6 history and submitted extension packets are preserved.

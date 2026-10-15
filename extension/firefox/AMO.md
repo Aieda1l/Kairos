@@ -1,6 +1,16 @@
 # Kairos Bridge — AMO review material
 
-This is preparation for **listed** AMO distribution. Version `0.4.0` keeps the existing ID `kairos-local@kairos`. The packages produced here are **unsigned**. There is no submitted, accepted, signed, or published artifact and no known listing URL. `amo-metadata.json` is local draft copy, not an AMO API submission payload.
+Version **0.4.0 is published** at [Kairos Bridge on Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/), retaining `kairos-local@kairos`. Mozilla's public API confirms approved/public status, desktop minimum 140.0, the reviewed permissions/data categories and MIT license. The operator confirms ordinary Firefox store installation, native consent and Canvas/Gradescope reads. This does not establish Android QA or an actual version upgrade.
+
+The downloaded XPI is file **5111578**, SHA-256 **`7f28cbdacf44aba62466e34bb508d2a2026eaa4059e32a5511b94416b15abf64`**. Its executable files match the immutable reviewed runtime ZIP; the manifest differs only in JSON formatting. Signing records are present and PKCS7 content verification passes; Firefox trust/installation is operator evidence. The API's `is_mozilla_signed_extension` flag means a Mozilla-internal certificate, not ordinary AMO signing. Keep the original unsigned runtime/source ZIPs and their hashes unchanged; the signed XPI is separate. `amo-metadata.json` records evidence and prepared owner copy, not an API submission payload.
+
+## Post-publication listing corrections
+
+The public AMO API currently returns no detailed description, homepage/support URL or privacy-policy entry. No remote edits were made. In Developer Hub, use the reviewed `description` in `amo-metadata.json`, set the homepage to `https://mykairos.me`, support URL to `https://mykairos.me/support`, and supply this privacy-policy entry:
+
+> Kairos Bridge reads normalized Canvas UW and Gradescope coursework from your already signed-in Firefox tabs. It sends coursework and whether those named tabs are open to the Kairos page at mykairos.me, or the explicitly permitted local development origins. It does not send passwords, session cookies, authorization headers, raw authenticated pages or general browsing history through the bridge. Synced results are saved to your signed-in Kairos account. There is no optional telemetry. The full privacy policy, including hosted storage, retention, deletion and provider processing, is at https://mykairos.me/privacy.
+
+These fields can be corrected without rebuilding or overwriting the reviewed extension packets. Recheck the public API afterward. The later signing instructions below remain maintainer procedures; publication itself is no longer pending.
 
 Kairos is an independent coursework planner designed first for UW Seattle students. Anyone may create a Kairos account. It is not an official University of Washington product and uses no UW logos. This extension does not add arbitrary Canvas institutions or configurable host permissions. The verified release scope is Firefox **desktop 140.0 or later**. The Android `142.0` manifest floor enforces native-consent compatibility; Android QA and public-distribution acceptance remain outside this task's verified scope.
 
@@ -10,7 +20,7 @@ The approved license for Kairos and the standalone Kairos Bridge extension is **
 
 The runtime ZIP includes `LICENSE` and `THIRD_PARTY_NOTICES`. The reviewer-source ZIP includes the root `LICENSE`, `extension/firefox/LICENSE`, and `extension/firefox/THIRD_PARTY_NOTICES`. The notices preserve the complete installed MIT copyright and license text for bundled **Zod 4.6.5** (`node_modules/zod/LICENSE`, Copyright (c) 2025 Colin McDonnell) and the generated runtime helpers from **esbuild 0.28.2** (`node_modules/esbuild/LICENSE.md`, Copyright (c) 2020 Evan Wallace). Bundle-graph inspection identified Zod as the only third-party input package; the emitted `__defProp` and `__export` helpers also require esbuild's notice, although the build executable is not shipped.
 
-Kairos's MIT license applies to its own code and does not relicense third-party dependencies, user coursework, provider data, trademarks, or credentials. Third-party code retains its own copyright and license terms. Mozilla's [add-on policies](https://extensionworkshop.com/documentation/publish/add-on-policies/) and the pending review/signing gates still apply.
+Kairos's MIT license applies to its own code and does not relicense third-party dependencies, user coursework, provider data, trademarks, or credentials. Third-party code retains its own copyright and license terms. Mozilla's [add-on policies](https://extensionworkshop.com/documentation/publish/add-on-policies/) continue to apply to the published listing and future releases.
 
 ## Permissions, recipients, and read-only behavior
 
@@ -70,9 +80,9 @@ Check both ZIP member lists, validate CRCs and SHA-256 values, then compare the 
 
 `lint:extension` uses pinned `web-ext@10.7.0` with `--warnings-as-errors` and `--no-config-discovery`. The controller-approved native-consent floors are desktop `140.0` and Android `142.0`; neither warning suppression nor a weaker lint check is used. AMO listing/reviewer material must continue to describe the verified desktop scope. Any Android QA or public-distribution claim requires separately recorded acceptance evidence.
 
-## Submission, native signed-install consent, and updates (pending)
+## Submission, native signed-install consent, and future updates
 
-The operator reports Mozilla Developer Hub is ready. Submission and signing await controller review of this packet; the following store and signed-install/update steps remain external. Do not treat a temporary `about:debugging` install or an unsigned ZIP as signed-install evidence.
+The following steps remain maintainer procedures. Steps 1-3 are completed for published 0.4.0, with artifact evidence above. Ordinary store installation, accepting native consent and Canvas/Gradescope reads in steps 4-5 are operator-confirmed. Cancellation, older-browser rejection and Android checks are not recorded. Step 6, an actual version upgrade, remains unverified because 0.4.0 is the only public version. A temporary `about:debugging` install or unsigned ZIP does not establish signed-install acceptance.
 
 1. Review runtime/source member lists, hashes, lint, metadata, and website privacy/onboarding disclosures together. Keep the stable ID and exact origins. Complete any AMO-required account/listing fields with real values, including owner/publisher metadata and rights confirmation. Select the approved **MIT License** (`MIT`) and retain the packaged licenses and third-party notices described above. Do not invent a support destination, listing slug, or approval status.
 2. Using the ready Mozilla developer account, submit the runtime ZIP for **listed** review/signing and attach the reviewer-source ZIP and build instructions. Keep signing credentials outside the source tree and packages. Resolve automated/manual review findings and record Mozilla's actual decision separately.
@@ -81,4 +91,4 @@ The operator reports Mozilla Developer Hub is ready. Submission and signing awai
 5. With separately authorized signed-in Canvas/Gradescope tabs, verify PING/tab detection and normalized read-only source behavior at `https://mykairos.me`. Record outcomes without private coursework or account identifiers. Removing the add-on stops extension reads; use Kairos account/settings controls for already saved coursework.
 6. For the next release, increment the extension version while retaining the ID; rerun build/lint/package and review. Submit it to the same AMO listing with matching source. Verify Firefox's normal AMO update path preserves identity, upgrades version, and shows consent for any added required category/permission. Record actual signed-install/update results before claiming release readiness.
 
-No signing, submission, publication, native signed-install acceptance, or update acceptance has been performed by this task. Those are public-beta gates, not implied by passing local tests or lint.
+The operator published the extension and performed the ordinary installation/consent/read checks. This continuation independently verified the public record and signed artifact; it made no remote listing changes or extension publication. Listing disclosure corrections and future upgrade acceptance remain open as described above.

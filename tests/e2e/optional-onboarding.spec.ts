@@ -18,7 +18,8 @@ test('optional setup keeps private input in memory, defers, resumes and finishes
   expect(await (await context.request.get('/api/settings/submission-status')).json()).toEqual({enabled:false});
   await page.goto('/onboarding');await waitForAppHydration(page);
   await page.getByLabel('Display timezone').fill('Asia/Kathmandu');await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Firefox',exact:true})).toBeVisible();await expect(page.getByText(/awaiting review/)).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Firefox',exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Install from Mozilla Add-ons'})).toHaveAttribute('href','https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/');
   await page.getByRole('button',{name:'Check extension'}).click();await expect(page.getByText(/not detected.*continue/)).toBeVisible();
   await page.getByRole('button',{name:'Skip',exact:true}).click();
   const secret='https://canvas.uw.edu/feeds/calendars/synthetic.ics?token=browser-memory-only';

@@ -4,7 +4,7 @@ Prepared October 10, 2026 for Task7C-2; cross-release disclosures updated Octobe
 
 ## Latest operator update
 
-Google branding is now operator-confirmed fully approved after review. Mozilla extension review remains pending. The operator also reports testing two Kairos accounts with apparently successful results, without specifying the tested revision or individual flows. Branding approval does not by itself establish any separate calendar/data-access review state or every hosted acceptance condition. The dated preparation snapshot below is historical; use the [current readiness record](readiness-milestone-7.md) for remaining gates.
+Google branding is operator-confirmed fully approved after review. Mozilla has published signed 0.4.0; the public artifact matches reviewed runtime behavior, and normal Firefox installation, native consent and Canvas/Gradescope reads are operator-confirmed. An actual version upgrade and missing public listing disclosures remain open; see [publication evidence](firefox-0.4.0-publication.md). The operator also reports testing two Kairos accounts with apparently successful results, without specifying the tested revision or individual flows. Branding approval does not by itself establish any separate calendar/data-access review state or every hosted acceptance condition. The dated preparation snapshot below is historical; use the [current readiness record](readiness-milestone-7.md) for remaining gates.
 
 ## Historical preparation state
 
