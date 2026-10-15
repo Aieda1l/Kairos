@@ -4,7 +4,7 @@ Kairos's public check is GET https://mykairos.me/api/health. It executes only `S
 
 The standalone `node scripts/check-production-health.mjs` accepts only `https://mykairos.me`, refuses redirects, uses a ten-second total deadline, limits body reading to256 bytes, and accepts only the exact healthy object. Its logs contain fixed code/status and no response body or addressing. A nonzero exit fails the check. No dependency installation or production credential is needed.
 
-`.github/workflows/production-health.yml` schedules it every15 minutes and permits manual runs, with read-only repository permissions and one concurrent check. GitHub schedules can be delayed; this is a periodic check, not a guaranteed uptime or delivery SLA. Deployment remains manual, preserves remote variables, records the public Git revision as KAIROS_RELEASE_ID, and runs the health smoke afterward. Automation promotion requires the rollback drill and all release gates.
+`.github/workflows/production-health.yml` schedules it every15 minutes and permits manual runs, with read-only repository permissions and one concurrent check. Both paths require `main` and the repository variable `KAIROS_HEALTH_ENABLED=true`; leave it unset until the M7 health endpoint is deployed and activation is explicitly approved. Merging the workflow alone must not start production checks. GitHub schedules can be delayed; this is a periodic check, not a guaranteed uptime or delivery SLA. Deployment remains manual, preserves remote variables, records the public Git revision as KAIROS_RELEASE_ID, and runs the health smoke afterward. Automation promotion requires the rollback drill and all release gates.
 
 ## Operator and delivery evidence
 
