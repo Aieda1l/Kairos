@@ -46,7 +46,9 @@ it("policy_explains_extension_data_and_deletion_limits",()=>{
   const {container}=render(<PrivacyPage/>);
   const text=container.textContent!;
   expect(text).toMatch(/websiteContent.*browsingActivity/);
-  expect(text).toMatch(/prepared.*0\.4\.0/i);
+  const bridge=screen.getByRole("region",{name:/Firefox bridge:/i});
+  expect(bridge.textContent).toMatch(/published.*0\.4\.0/i);
+  expect(within(bridge).getByRole("link",{name:"published on Mozilla Add-ons"})).toHaveAttribute("href","https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/");
   expect(text).toMatch(/earlier development builds.*installed.*version.*compatibility/i);
   expect(text).toMatch(/not-shared/);
   expect(text).toMatch(/local.*popup.*installed version/i);
@@ -54,7 +56,8 @@ it("policy_explains_extension_data_and_deletion_limits",()=>{
   expect(text).toMatch(/does not.*automatically.*remote.*events.*revoke.*consent/i);
   expect(text).toMatch(/Time Travel.*7 days.*30 days/i);
   expect(text).toMatch(/persistent.*logs.*disabled/i);
-  expect(text).toMatch(/Turnstile.*not.*active.*production/i);
+  expect(text).toMatch(/Sign-in may require a Cloudflare Turnstile check/i);
+  expect(text).toMatch(/Reading saved coursework and signing out do not require this challenge/i);
   expect(screen.getByRole("link",{name:/Google account connections/i})).toHaveAttribute("href","https://myaccount.google.com/connections");
 });
 
@@ -65,7 +68,7 @@ it("security_page_discourages_credentials_in_public_issues",async()=>{
   expect(screen.getByRole("link",{name:"security@mykairos.me"})).toHaveAttribute("href","mailto:security@mykairos.me");
   expect(container.textContent).toMatch(/do not post.*credentials.*public issues/i);
   expect(container.textContent).toMatch(/feed URLs.*tokens.*cookies/i);
-  expect(container.textContent).toMatch(/delivery.*pending/i);
+  expect(container.textContent).toMatch(/delivery.*confirmed/i);
 });
 
 it("contact_links_never_publish_personal_destination",async()=>{
@@ -83,7 +86,7 @@ it("contact_links_never_publish_personal_destination",async()=>{
   }
   render(<SupportPage/>);
   expect(screen.getByRole("link",{name:"support@mykairos.me"})).toHaveAttribute("href","mailto:support@mykairos.me");
-  expect(screen.getByText(/routing.*active/i)).toHaveTextContent(/delivery.*pending/i);
+  expect(screen.getByText(/routing.*active/i)).toHaveTextContent(/delivery.*confirmed/i);
 });
 
 it("public_routes_render_information_without_session_or_client_javascript",async()=>{

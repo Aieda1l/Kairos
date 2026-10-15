@@ -132,7 +132,7 @@ Completed hosted acceptance:
 - 509 automated tests and 14 Chromium/Firefox browser cases, with build/runtime verification;
 - sign-off commit `6a4f9089319a01818853183298ee6f16827c22ab`, annotated tag `milestone-6`, runtime commit `f068e24bd45b46dee4c5a5a8d219115efaf769ef`.
 
-Acceptance attribution, production identifiers, and documented limits are in `docs/deployment/acceptance-milestone-6.md` and `docs/deployment/security-review-2026-10-10.md`. Milestone 6's rollback readiness review does not satisfy Milestone 7's required live rollback drill. The release commits/tag are local; source-control integration into `main` remains to be reconciled.
+Acceptance attribution, production identifiers, and documented limits are in `docs/deployment/acceptance-milestone-6.md` and `docs/deployment/security-review-2026-10-10.md`. Milestone 6's rollback readiness review does not satisfy Milestone 7's required live rollback drill. Its release commits/tag are published, and PR #14 integrated them into protected `main` with history preserved as `4eb597e` on October 15. M7 integration and resulting-main CI remain separate.
 
 Primary design:
 - `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
@@ -145,7 +145,7 @@ Implementation plans:
 Hosted acceptance:
 - `docs/deployment/acceptance-milestone-6.md`
 
-## Milestone 7 — Public beta readiness — In progress; local verification complete, launch gates open
+## Milestone 7 — Public beta readiness — Engineering complete; release acceptance open
 
 Scope:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
@@ -165,10 +165,11 @@ Primary design:
 
 Implementation plan:
 - `docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md` links the onboarding/recovery, admission/bounded-work, and distribution/operations slices.
-- Existing implementation branch `feat/milestone-7-public-beta-readiness` continues from the finalized Milestone 6 tag; verified local changes are committed through `9401d79`.
-- Local verification passes 1,433 tests, 54 browser cases, 18 simulated deployment cases and relevant builds/runtime checks. Source reviews and report validators are complete, with three external D1 coverage blocks; the readiness decision remains INCOMPLETE.
-- Google/Mozilla outcomes, signed Firefox install/update, exact hosted/two-account/provider acceptance, actual operational/privacy/protection/capacity evidence and live rollback remain launch gates. Earlier support/security delivery is operator-confirmed; new workflow activation is separate.
-- This continuation did not publish or deploy. Production changes require explicit approval. See `docs/deployment/readiness-milestone-7.md`, `security-review-milestone-7.md` and `acceptance-milestone-7.md` for evidence and remaining work.
+- M6 is merged with history preserved; M7 PR #15 targets protected `main`, with final integration and exact-main CI recorded there.
+- Published-source 72a5b2a CI passes 1,475 tests, 54 browser cases, 30 simulated deployment cases and the build/native/type/lint/safety checks. Source reviews retain three external D1 evidence blocks; readiness remains INCOMPLETE until required external controls and hosted checks close.
+- Google branding is operator-confirmed approved. Signed Firefox 0.4.0, ordinary installation/native consent/source reads and the public description/privacy-link/homepage update are verified as attributed. A real version upgrade is a next-release follow-up, not an added signed-installability criterion.
+- A compatible recovery candidate is built/native-verified and representative cleanup costs are measured. Exact hosted/two-account/provider acceptance, actual operational/privacy/token/capacity evidence and live rollback remain release gates. Support/security delivery is operator-confirmed; new workflow activation remains separate.
+- No production upload, remote migration, traffic change, export or restore was performed. Explicit production approval is still required. See `docs/deployment/closeout-milestone-7.md` and the readiness/security/acceptance records.
 
 ## Local guest mode — Planned after Milestone 7, not yet numbered
 

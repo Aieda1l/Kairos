@@ -16,7 +16,7 @@ export default function SupportPage(){
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">Support</h1>
       <div className="mt-6 space-y-6 leading-7 text-[var(--muted)]">
         <p>For sign-in, coursework sync, calendar connections, privacy requests or project ownership questions, email <a href={PUBLIC_CONTACTS.support.href} className="underline underline-offset-4">{PUBLIC_CONTACTS.support.address}</a>. Kairos is an independent student project, not a University of Washington help desk.</p>
-        <p>Domain alias routing is active to a verified private destination; actual inbox delivery confirmation is pending. No fixed response time is promised. This contact is for inbound correspondence, not an automated password-reset or transactional email system.</p>
+        <p>Domain alias routing is active to a verified private destination; delivery to both public aliases has been confirmed. No fixed response time is promised. This contact is for inbound correspondence, not an automated password-reset or transactional email system.</p>
         <section className="space-y-3" aria-labelledby="support-details">
           <h2 id="support-details" className="text-xl font-semibold text-[var(--foreground)]">What to include</h2>
           <p>Describe what you tried, what you expected, and what happened. Include the affected source or calendar provider, browser version, approximate time and timezone, and the visible error category. For Firefox, read the installed extension version from its local popup. The published 0.4.0 bridge uses a not-shared webpage version field; earlier development builds can report their installed version for compatibility.</p>

@@ -24,7 +24,7 @@ export default function TermsPage(){
         <p>Calendar connections are optional and separate from sign-in. They create or update deadline copies, and may delete generated events as assignments or settings change. Disconnecting or deleting your Kairos account leaves remote events and provider consent in place; follow the removal and revocation steps in <Link href="/privacy" className="underline underline-offset-4">Privacy</Link>.</p>
         <p>Kairos is an independent student project and is not affiliated with or endorsed by the University of Washington.</p>
         <p>Connecting a source does not grant rights to third-party coursework, names or materials. Provider terms and account permissions still apply.</p>
-        <p>For questions about these terms or project ownership, contact <a href={PUBLIC_CONTACTS.support.href} className="underline underline-offset-4">{PUBLIC_CONTACTS.support.address}</a>. Alias routing is active; actual inbox delivery confirmation is pending. No fixed response time is promised.</p>
+        <p>For questions about these terms or project ownership, contact <a href={PUBLIC_CONTACTS.support.href} className="underline underline-offset-4">{PUBLIC_CONTACTS.support.address}</a>. Alias routing is active; delivery to both public aliases has been confirmed. No fixed response time is promised.</p>
       </div>
       <nav aria-label="Legal and contact" className="mt-10 flex flex-wrap gap-4 text-sm">
         <Link href="/privacy" className="underline underline-offset-4">Privacy</Link>

@@ -198,6 +198,8 @@ after recovery; do not broaden cleanup to erase it merely to reduce counts.
 
 ## Rollback and reopening
 
+Database restoration follows the separate [owner-only recovery/deletion policy](privacy-operations.md#recovery-access-deleted-accounts-and-key-retention). A code rollback does not authorize a database export or restore. Preserve a verified current live-account inventory before an owner restoration, remove recovered deleted accounts, invalidate recovered sessions and reconcile restored authorizations before reopening; otherwise remain closed.
+
 Follow [deployment preflight and recovery](cloudflare.md#release-identity-and-recovery).
 Rollback changes Worker code, not database schema or keys. After any v2 write,
 the rollback target must support dual reads and contain both bindings. Preserve
