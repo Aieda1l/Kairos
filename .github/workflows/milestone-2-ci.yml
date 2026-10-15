@@ -52,6 +52,8 @@ jobs:
       - run: npm run db:verify
       - name: Verify independent workerd admission and ownership
         run: npm run verify:workerd:abuse
+      - name: Verify Turnstile with native workerd fetch
+        run: node scripts/verify-workerd-turnstile.mjs
       - run: npm run build:extension
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e

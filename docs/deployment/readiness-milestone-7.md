@@ -2,7 +2,7 @@
 
 STATUS: INCOMPLETE
 
-The reviewed release follow-up continues the base M7 review at **9401d79** and Milestone 6 tag 6a4f908. Engineering implementation is complete. M6 PR #14 is merged with history preserved as `4eb597e`; M7 PR #15 now targets protected `main`, with final integration/CI tracked there. The [engineering closeout and release boundary](closeout-milestone-7.md) records updated Mozilla disclosures, a locally verified recovery candidate and representative cleanup costs. No production upload, remote migration or traffic/operational activation occurred. Hosted acceptance, external security controls and Free CPU headroom remain open. Guest mode is a separate follow-up.
+The reviewed release follow-up continues the base M7 review at **9401d79** and Milestone 6 tag 6a4f908. M6 PR #14 and M7 PR #15 are merged with history preserved. After exact-main CI passed, the operator explicitly approved the controlled rollout: M7 is deployed, migrations 0004–0007 are applied and compatible code rollback/forward restoration was exercised. Actual acceptance exposed a shared Turnstile verification failure and widget overlap; the focused repair has native and browser regression evidence but still requires protected CI, publication and real sign-in confirmation. The new remote health check receives 403 despite local health 200. See the current [rollout and repair record](closeout-milestone-7.md#approved-rollout-and-authentication-repair-october-15); older sections below describe pre-release evidence. Hosted acceptance, stored-log privacy and Free CPU headroom remain open. Guest mode follows M7.
 
 ## Verified local work
 

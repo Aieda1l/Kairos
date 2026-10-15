@@ -21,7 +21,7 @@ export function AuthInitiationForm({provider,siteKey,returnTo,action}:{
   useEffect(()=>{
     const api=widget();if(!ready||!element.current||!api)return;
     const widgetId=api.render(element.current,{
-      sitekey:siteKey,action:provider==="google"?"auth_google":"auth_microsoft",appearance:"interaction-only",
+      sitekey:siteKey,action:provider==="google"?"auth_google":"auth_microsoft",appearance:"interaction-only",size:"compact",
       "response-field":false,callback:(value:string)=>setToken(value),"expired-callback":refresh,
       "error-callback":()=>setToken(""),"timeout-callback":refresh,
     });
@@ -32,7 +32,7 @@ export function AuthInitiationForm({provider,siteKey,returnTo,action}:{
     <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" onReady={()=>setReady(true)}/>
     <input type="hidden" name="cf-turnstile-response" value={token}/>
     <input type="hidden" name="returnTo" value={returnTo}/>
-    <div ref={element}/>
+    <div ref={element} className="relative mx-auto h-[140px] w-[150px]"/>
     {state&&<p role="alert" className="text-sm text-red-600">{state.message}</p>}
     <Button className="w-full" type="submit" variant={provider==="google"?"primary":"secondary"} disabled={!token||pending}>
       {pending?"Signing in…":provider==="google"?"Continue with Google":"Continue with Microsoft"}

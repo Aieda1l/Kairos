@@ -52,3 +52,30 @@ test('direct identity GET and POST routes cannot bypass public initiation',async
   }
   expect(await providerCalls(context)).toBe(before);
 });
+
+test('interactive verification stays above both sign-in buttons on narrow and wide screens',async({page})=>{
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=>route.fulfill({contentType:'application/javascript',body:`
+    window.turnstile={render:function(el,o){
+      el.style.position='relative';
+      const frame=document.createElement('iframe');frame.title='Controlled verification '+o.action;
+      frame.style.cssText='position:absolute;top:0;left:0;border:0;width:'+(o.size==='compact'?150:300)+'px;height:'+(o.size==='compact'?140:65)+'px';
+      el.append(frame);o.callback('fixture-'+(o.action==='auth_google'?'google':'microsoft')+'-'+crypto.randomUUID());
+      return o.action;
+    },reset:function(){},remove:function(){}};
+  `}));
+  for(const width of [320,768]){
+    await page.setViewportSize({width,height:900});
+    await page.goto('/sign-in');await waitForAppHydration(page);
+    for(const provider of ['Google','Microsoft']){
+      const button=page.getByRole('button',{name:'Continue with '+provider,exact:true});
+      await expect(button).toBeEnabled();
+      const frame=button.locator('..').locator('iframe');
+      const widgetBounds=await frame.boundingBox(),buttonBounds=await button.boundingBox();
+      expect(widgetBounds).not.toBeNull();expect(buttonBounds).not.toBeNull();
+      expect(widgetBounds!.y+widgetBounds!.height+8).toBeLessThanOrEqual(buttonBounds!.y);
+      expect(widgetBounds!.x).toBeGreaterThanOrEqual(0);
+      expect(widgetBounds!.x+widgetBounds!.width).toBeLessThanOrEqual(width);
+      expect(await button.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));})).toBe(true);
+    }
+  }
+});

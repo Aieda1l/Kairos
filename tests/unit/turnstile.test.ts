@@ -22,7 +22,7 @@ describe("bounded server-side Turnstile verification",()=>{
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const [url,options]=fetchImpl.mock.calls[0] as unknown as [string,RequestInit];
     expect(url).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
-    expect(options).toMatchObject({method:"POST",redirect:"error",cache:"no-store"});
+    expect(options).toMatchObject({method:"POST",redirect:"manual",cache:"no-store"});
     expect(new URLSearchParams(String(options.body)).has("remoteip")).toBe(false);
   });
   it.each([async()=>{throw new Error("private transport");},async()=>new Response("invalid json"),async()=>new Response(null,{status:302})])
