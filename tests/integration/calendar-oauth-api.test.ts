@@ -22,6 +22,51 @@ function post(url:string,body:unknown={}){
 }
 
 describe("calendar OAuth and CalDAV connection routes",()=>{
+  it.each(['google','microsoft'] as const)('returns %s denial to the registered onboarding target without provider detail or a token request',async provider=>{
+    const start=provider==='google'?await googleStart():await microsoftStart();
+    const started=await start.POST(post(`http://127.0.0.1:3000/api/calendars/${provider}/start`,{returnTo:'/onboarding'}));
+    expect(started.status).toBe(200);
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get('state')!;
+    const transport=vi.fn(()=>{throw new Error('No remote calls on denial');});vi.stubGlobal('fetch',transport);
+    try{
+      const callback=provider==='google'?await googleCallback():await microsoftCallback();
+      const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/${provider}/callback?state=${state}&error=access_denied&error_description=private-denial-detail`));
+      expect(response.status).toBe(303);
+      const destination=new URL(response.headers.get('location')!);
+      expect(destination.pathname).toBe('/onboarding');expect(destination.searchParams.get('calendarError')).toBe('CALENDAR_AUTH_REQUIRED');
+      expect(destination.href).not.toContain('private-denial-detail');expect(transport).not.toHaveBeenCalled();
+      expect((await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/${provider}/callback?state=${state}&code=synthetic`))).status).toBe(400);
+    }finally{vi.unstubAllGlobals();}
+  });
+  it.each(['google','microsoft'] as const)('rejects unapproved %s OAuth return paths',async provider=>{
+    const route=provider==='google'?await googleStart():await microsoftStart();
+    for(const returnTo of ['//evil.invalid','/%252f%252fevil.invalid','/upcoming','/onboarding?token=synthetic']){
+      expect((await route.POST(post(`http://127.0.0.1:3000/api/calendars/${provider}/start`,{returnTo}))).status).toBe(400);
+    }
+  });
+  it.each(['google','microsoft'] as const)('keeps the registered onboarding target for %s success and upstream failure',async provider=>{
+    const start=provider==='google'?await googleStart():await microsoftStart();
+    const callback=provider==='google'?await googleCallback():await microsoftCallback();
+    for(const fail of [false,true]){
+      const started=await start.POST(post(`http://127.0.0.1:3000/api/calendars/${provider}/start`,{returnTo:'/onboarding'}));
+      const state=new URL((await started.json()).authorizationUrl).searchParams.get('state')!;
+      const transport=vi.fn(async(input:RequestInfo|URL)=>{
+        const url=String(input);
+        if(url==='https://oauth2.googleapis.com/token'||url.startsWith('https://login.microsoftonline.com/'))return fail?Response.json({error:'invalid_grant',error_description:'private-upstream-detail'},{status:401}):Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600});
+        if(url==='https://www.googleapis.com/calendar/v3/calendars')return Response.json({id:'synthetic-calendar',summary:'Kairos'});
+        if(url==='https://www.googleapis.com/calendar/v3/users/me/calendarList/synthetic-calendar')return Response.json({id:'synthetic-calendar',summary:'Kairos',accessRole:'owner'});
+        if(url==='https://graph.microsoft.com/v1.0/me/calendars')return Response.json({value:[{id:'synthetic-calendar',name:'Kairos',canEdit:true}]});
+        if(url==='https://graph.microsoft.com/v1.0/me/calendars/synthetic-calendar')return Response.json({id:'synthetic-calendar',name:'Kairos',canEdit:true});
+        throw new Error('Synthetic transport rejected an unexpected destination');
+      });vi.stubGlobal('fetch',transport);
+      try{
+        const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/${provider}/callback?state=${state}&code=synthetic-code`));
+        expect(response.status).toBe(fail?303:307);const target=new URL(response.headers.get('location')!);
+        expect(target.pathname).toBe('/onboarding');expect(target.href).not.toContain('synthetic-code');expect(target.href).not.toContain('private-upstream-detail');
+        if(fail)expect(target.searchParams.get('calendarError')).toBe('CALENDAR_AUTH_EXPIRED');
+      }finally{vi.unstubAllGlobals();}
+    }
+  });
   beforeEach(()=>{
     process.env.ASSIGNMENTS_DB_PATH=":memory:";
     process.env.GOOGLE_CALENDAR_CLIENT_ID="fixture-google-client";
@@ -115,6 +160,10 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       expect(destination.searchParams.get("calendarStage")).toBe("token_exchange");
       expect(response.headers.get("location")).not.toContain(secret);
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_CONFIG_MISSING",provider:"microsoft",result:"error",
+      });
       expect(fetchMock).toHaveBeenCalledTimes(1);
     }finally{
       warning.mockRestore();
@@ -146,14 +195,54 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       expect(new URL(location).searchParams.get("calendarError")).toBe("CALENDAR_PERMISSION_DENIED");
       expect(new URL(location).searchParams.get("calendarStage")).toBe("calendar_setup");
       expect(location).not.toContain(secret);
-      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Calendar connection failed",{
-        stage:"calendar_setup",code:"CALENDAR_PERMISSION_DENIED",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_PERMISSION_DENIED",provider:"microsoft",result:"error",
       });
       expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
     }finally{
       vi.unstubAllGlobals();
       warning.mockRestore();
     }
+  });
+
+  it("records one successful Microsoft connection without tokens, identity, or callback URL",async()=>{
+    const start=await microsoftStart();
+    const started=await start.POST(post("http://127.0.0.1:3000/api/calendars/microsoft/start"));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get("state")!;
+    const info=vi.spyOn(console,"info").mockImplementation(()=>{});
+    vi.stubGlobal("fetch",async(input:RequestInfo|URL)=>String(input).startsWith("https://login.microsoftonline.com/")
+      ?Response.json({access_token:"private-access",refresh_token:"private-refresh",expires_in:3600})
+      :String(input).endsWith("/me/calendars")
+        ?Response.json({value:[{id:"private-calendar",name:"Kairos",canEdit:true}]})
+        :Response.json({id:"private-calendar",name:"Kairos",canEdit:true}));
+    const callback=await microsoftCallback();
+    const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/microsoft/callback?state=${state}&code=private-code`,{
+      headers:{cookie:"private-cookie","x-request-id":"private-trace"},
+    }));
+    expect(response.status).toBe(307);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(info.mock.calls[0][0] as string)).toMatchObject({
+      event:"kairos.operation",action:"calendar.connect",code:"CALENDAR_CONNECTED",result:"ok",provider:"microsoft",status:307,
+    });
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private");
+    vi.unstubAllGlobals();
+  });
+
+  it("records missing Microsoft callback parameters using fresh IDs instead of supplied trace values",async()=>{
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const callback=await microsoftCallback();
+    for(let i=0;i<2;i++){
+      const response=await callback.GET(new Request("http://127.0.0.1:3000/api/calendars/microsoft/callback?error=private-error",{
+        headers:{"x-request-id":"private-trace"},
+      }));
+      expect(response.status).toBe(400);
+    }
+    expect(warning).toHaveBeenCalledTimes(2);
+    const events=warning.mock.calls.map(([value])=>JSON.parse(value as string));
+    expect(events[0]).toMatchObject({action:"calendar.connect",code:"CALENDAR_AUTH_REQUIRED",result:"rejected",status:400});
+    expect(events[0].requestId).not.toBe(events[1].requestId);
+    expect(JSON.stringify(events)).not.toContain("private");
   });
 
   it("rejects unknown or replayed Google state before any token request",async()=>{
@@ -179,6 +268,10 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
       }
       if(url==="https://www.googleapis.com/calendar/v3/calendars"){
         return Response.json({id:"remote-google",summary:"Kairos"});
+      }
+      if(url==="https://www.googleapis.com/calendar/v3/users/me/calendarList/remote-google"){
+        expect(init?.method).toBe("GET");
+        return Response.json({id:"remote-google",summary:"Kairos",accessRole:"owner"});
       }
       throw new Error("unexpected "+url);
     });

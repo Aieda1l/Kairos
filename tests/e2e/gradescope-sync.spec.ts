@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {prepareFixtureUser,waitForAppHydration} from "./helpers";
+import {enableFixtureSubmissionStatus,prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type GradescopeCapture={
   messages:string[];
@@ -9,6 +9,7 @@ type GradescopeCapture={
 
 test("discovers and syncs Gradescope without exposing authenticated page data",async({page,context})=>{
   await prepareFixtureUser(context);
+  await enableFixtureSubmissionStatus(context);
 
   const apiBodies:string[]=[];
   page.on("request",req=>{

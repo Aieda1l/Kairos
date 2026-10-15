@@ -1,7 +1,9 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {startGradescopeDiscovery} from "@/lib/gradescope/discovery-service";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 
 export async function POST(){
+  try{
   const resolved=await resolveSourceApiRuntime();
   if(!resolved.ok)return resolved.response;
   const runtime=resolved.runtime;
@@ -9,4 +11,5 @@ export async function POST(){
     ?startGradescopeDiscovery(runtime.db)
     :await startGradescopeDiscovery(runtime.db,runtime.scope);
   return Response.json(result);
+  }catch(error){const ownership=abuseErrorResponse(error);if(ownership)return ownership;throw error;}
 }

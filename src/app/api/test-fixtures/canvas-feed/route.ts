@@ -1,2 +1,3 @@
-const FIXTURE=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Kairos E2E//EN\r\nBEGIN:VEVENT\r\nUID:event-assignment-4242\r\nDTSTAMP:20261003T200000Z\r\nDTSTART:20261009T065900Z\r\nDTEND:20261009T065900Z\r\nSUMMARY:Fixture Homework [CSE 999]\r\nURL:https://canvas.uw.edu/calendar?include_contexts=course_999#assignment_4242\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
-export async function GET(){if(process.env.E2E_FIXTURES!=="1")return new Response("Not found",{status:404});return new Response(FIXTURE,{headers:{"content-type":"text/calendar; charset=utf-8","cache-control":"no-store"}});}
+import {canvasFixtureResponse} from "@/lib/sources/canvas-ical/e2e-fixture-fetch";
+import {getE2EFixtureRuntime} from '@/lib/testing/e2e-runtime';
+export async function GET(request:Request){if(!await getE2EFixtureRuntime(request))return new Response("Not found",{status:404});return canvasFixtureResponse();}

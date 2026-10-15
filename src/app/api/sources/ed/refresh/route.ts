@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {
   EdDiscoveryServiceError,
   refreshEdCourses,
@@ -19,6 +20,7 @@ export async function POST(){
       );
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdDiscoveryServiceError){
       return Response.json({code:error.code,message:error.message},{status:409});
     }

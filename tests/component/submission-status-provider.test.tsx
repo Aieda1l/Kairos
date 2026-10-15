@@ -45,6 +45,13 @@ function Consumer(){
   </div>;
 }
 
+it('keeps fixed recovery safe and blocks repeat requests for bounded backoff',async()=>{
+  const user=userEvent.setup();const fetchMock=vi.fn(async()=>new Response(JSON.stringify({code:'RATE_LIMITED',message:'synthetic-private-marker'}),{status:429,headers:{'Retry-After':'3600'}}));vi.stubGlobal('fetch',fetchMock);
+  render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+  await user.click(screen.getByRole('button',{name:'Manual status sync'}));await user.click(screen.getByRole('button',{name:'Manual status sync'}));
+  expect(fetchMock).toHaveBeenCalledTimes(1);expect(screen.getByTestId('message')).toHaveTextContent('3600');expect(screen.getByTestId('message')).not.toHaveTextContent('synthetic-private-marker');
+});
+
 function startPayload(count:number){
   return {
     requestId:"11111111-1111-4111-8111-111111111111",
@@ -115,6 +122,14 @@ beforeEach(()=>{
 });
 
 describe("SubmissionStatusProvider",()=>{
+  it('does not refresh browser submission data until explicit opt-in, then refreshes once',async()=>{
+    const {started,calls}=installFetch(1);syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    const view=render(<SubmissionStatusProvider enabled automaticEnabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await waitFor(()=>expect(screen.getByTestId('detected')).toHaveTextContent('true'));
+    expect(calls.start).toBe(0);expect(calls.complete).toBe(0);
+    view.rerender(<SubmissionStatusProvider enabled automaticEnabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await waitFor(()=>expect(calls.complete).toBe(1));expect(calls.start).toBe(1);
+  });
   it("pings the Firefox extension and does not auto-sync fresh status",async()=>{
     installFetch(1);
     render(<SubmissionStatusProvider enabled initialSyncState={{

@@ -11,6 +11,8 @@ import {build} from "esbuild";
 
 const root=resolve(fileURLToPath(new URL("..",import.meta.url)));
 const tmp=await mkdtemp(join(tmpdir(),"kairos-workerd-check-"));
+const canvasOnly=process.argv.includes("--canvas-only");
+const keepEvidence=process.argv.includes("--keep-evidence");
 
 const entry=`
 import {EdApiClient} from "./src/lib/sources/ed/client";
@@ -20,6 +22,18 @@ import {CalDavClient} from "./src/lib/calendar/caldav/client";
 import {fetchCanvasFeed} from "./src/lib/sources/canvas-ical/fetch-feed";
 
 const canvasBase="http://127.0.0.1:__CANVAS_PORT__";
+const canvasOnly=__CANVAS_ONLY__;
+let forbiddenAttempts=0;
+const canvasFixtureFetch=async(input,init)=>{
+  const url=new URL(String(input));
+  if(url.origin!=="https://canvas.uw.edu"){
+    forbiddenAttempts++;
+    throw new Error("Fixture transport rejected a forbidden destination");
+  }
+  // Real workerd fetch reaches only the local fixture; URL policy still sees UW URLs.
+  return fetch(canvasBase+url.pathname+url.search,init);
+};
+const canvasUrl=path=>new URL("https://canvas.uw.edu"+path);
 
 async function run(name, action) {
   try { await action(); return {provider:name, code:"OK"}; }
@@ -29,15 +43,22 @@ export default {
   async fetch(request) {
     if(new URL(request.url).pathname==="/ready")return new Response("ready");
     const results=await Promise.all([
+      ...(!canvasOnly?[
       run("ed",()=>new EdApiClient("invalid-worker-probe-token").fetchUser()),
       run("google",()=>new GoogleCalendarClient("invalid-worker-probe-token").getCalendar("invalid-probe-id")),
       run("microsoft",()=>new MicrosoftCalendarClient("invalid-worker-probe-token").getCalendar("invalid-probe-id")),
       run("caldav",()=>new CalDavClient("invalid-probe@example.com","invalid-probe-secret").discoverCalendars()),
-      run("canvas-ok",()=>fetchCanvasFeed(new URL(canvasBase+"/canvas-ok"))),
-      run("canvas-401",()=>fetchCanvasFeed(new URL(canvasBase+"/canvas-401"))),
-      run("canvas-403",()=>fetchCanvasFeed(new URL(canvasBase+"/canvas-403"))),
-      run("canvas-redirect",()=>fetchCanvasFeed(new URL(canvasBase+"/canvas-redirect"))),
+      ]:[]),
+      run("canvas-ok",()=>fetchCanvasFeed(canvasUrl("/canvas-ok"),canvasFixtureFetch)),
+      run("canvas-401",()=>fetchCanvasFeed(canvasUrl("/canvas-401"),canvasFixtureFetch)),
+      run("canvas-403",()=>fetchCanvasFeed(canvasUrl("/canvas-403"),canvasFixtureFetch)),
+      run("canvas-redirect",()=>fetchCanvasFeed(canvasUrl("/canvas-redirect"),canvasFixtureFetch)),
+      run("canvas-initial-unsupported",()=>fetchCanvasFeed(new URL("https://unsupported.example.invalid/feed.ics"),canvasFixtureFetch)),
+      run("canvas-redirect-escape",()=>fetchCanvasFeed(canvasUrl("/canvas-escape"),canvasFixtureFetch)),
+      run("canvas-later-hop-escape",()=>fetchCanvasFeed(canvasUrl("/canvas-hop-one"),canvasFixtureFetch)),
+      run("canvas-redirect-loop",()=>fetchCanvasFeed(canvasUrl("/canvas-loop"),canvasFixtureFetch)),
     ]);
+    results.push({provider:"canvas-forbidden-transport",code:forbiddenAttempts===0?"OK":"UNEXPECTED_ERROR"});
     return Response.json(results);
   },
 };`;
@@ -54,17 +75,26 @@ let worker;
 let canvasStub;
 let workerLog="";
 let canvasRequestHeaders;
+let forbiddenRequests=0;
 try{
   canvasStub=createHttpServer((request,response)=>{
     const path=new URL(request.url,"http://localhost").pathname;
+    if(path==="/canvas-forbidden")forbiddenRequests++;
     if(path==="/canvas-ok"||path==="/canvas-agent-required"){
       canvasRequestHeaders={
         acceptsCalendar:request.headers.accept?.includes("text/calendar")??false,
         hasUserAgent:typeof request.headers["user-agent"]==="string",
       };
     }
-    if(path==="/canvas-redirect"){
-      response.writeHead(302,{location:"/canvas-agent-required"});
+    const redirects={
+      "/canvas-redirect":"/canvas-agent-required",
+      "/canvas-escape":`http://${request.headers.host}/canvas-forbidden`,
+      "/canvas-hop-one":"/canvas-hop-two",
+      "/canvas-hop-two":`http://${request.headers.host}/canvas-forbidden`,
+      "/canvas-loop":"/canvas-loop",
+    };
+    if(redirects[path]){
+      response.writeHead(302,{location:redirects[path]});
       response.end();
       return;
     }
@@ -77,7 +107,7 @@ try{
   await new Promise((ok,reject)=>canvasStub.once("error",reject).listen(0,"127.0.0.1",ok));
   const canvasPort=canvasStub.address().port;
   await build({
-    stdin:{contents:entry.replace("__CANVAS_PORT__",String(canvasPort)),resolveDir:root,sourcefile:"workerd-probe.ts",loader:"ts"},
+    stdin:{contents:entry.replace("__CANVAS_PORT__",String(canvasPort)).replace("__CANVAS_ONLY__",String(canvasOnly)),resolveDir:root,sourcefile:"workerd-probe.ts",loader:"ts"},
     absWorkingDir:root,
     outfile:join(tmp,"worker.mjs"),
     bundle:true,
@@ -122,9 +152,13 @@ try{
   if(!response.ok)throw new Error("workerd probe returned HTTP "+response.status);
   const results=await response.json();
   for(const result of results)console.log(`${result.provider}: ${result.code}`);
-  const failures=results.filter(result=>result.code==="UNEXPECTED_ERROR"||result.code.endsWith("NETWORK_ERROR"));
+  const failures=results.filter(result=>result.code==="UNEXPECTED_ERROR"||(result.code.endsWith("NETWORK_ERROR")&&result.provider!=="canvas-redirect-loop"));
   if(failures.length)throw new Error("Fetch failed inside workerd for: "+failures.map(r=>r.provider).join(", "));
-  const canvasExpected={"canvas-ok":"OK","canvas-401":"UNAUTHORIZED_OR_EXPIRED_FEED","canvas-403":"UNAUTHORIZED_OR_EXPIRED_FEED","canvas-redirect":"OK"};
+  const canvasExpected={
+    "canvas-ok":"OK","canvas-401":"UNAUTHORIZED_OR_EXPIRED_FEED","canvas-403":"UNAUTHORIZED_OR_EXPIRED_FEED","canvas-redirect":"OK",
+    "canvas-initial-unsupported":"INVALID_FEED_URL","canvas-redirect-escape":"INVALID_FEED_URL",
+    "canvas-later-hop-escape":"INVALID_FEED_URL","canvas-redirect-loop":"NETWORK_ERROR","canvas-forbidden-transport":"OK",
+  };
   for(const [provider,expected] of Object.entries(canvasExpected)){
     if(results.find(result=>result.provider===provider)?.code!==expected){
       throw new Error(`Canvas workerd fixture ${provider} did not return ${expected}`);
@@ -132,7 +166,9 @@ try{
   }
   if(!canvasRequestHeaders?.acceptsCalendar)throw new Error("Canvas workerd request omitted the calendar Accept header");
   if(!canvasRequestHeaders?.hasUserAgent)throw new Error("Canvas workerd request omitted the required User-Agent header");
+  if(forbiddenRequests!==0)throw new Error("Canvas workerd requested a forbidden redirect destination");
   console.log(`canvas outbound User-Agent present: ${canvasRequestHeaders.hasUserAgent}`);
+  console.log(`canvas forbidden requests: ${forbiddenRequests}`);
 }catch(error){
   console.error(error.message);
   process.exitCode=1;
@@ -143,5 +179,6 @@ try{
     }else worker.kill("SIGTERM");
   }
   if(canvasStub)await new Promise(ok=>canvasStub.close(ok));
-  await rm(tmp,{recursive:true,force:true,maxRetries:4,retryDelay:200});
+  if(keepEvidence)console.log("workerd evidence retained: "+tmp);
+  else await rm(tmp,{recursive:true,force:true,maxRetries:4,retryDelay:200});
 }

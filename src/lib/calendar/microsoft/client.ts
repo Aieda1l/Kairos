@@ -4,6 +4,8 @@ import {z} from "zod";
 import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {createOperationContext,getOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 
 const GRAPH_API="https://graph.microsoft.com/v1.0";
 
@@ -67,20 +69,6 @@ function safeProviderCode(body:unknown):string|null{
   ].includes(code)?code:null;
 }
 
-function safeRejectionReason(body:unknown):string{
-  if(!body||typeof body!=="object"||!("error" in body))return "unspecified";
-  const error=body.error;
-  if(!error||typeof error!=="object"||!("code" in error)
-    ||error.code!=="InvalidAuthenticationToken"||!("message" in error)
-    ||typeof error.message!=="string")return "unspecified";
-  // Classify known messages without retaining or logging any provider text.
-  const message=error.message.toLowerCase();
-  if(message.includes("invalid audience"))return "invalid_audience";
-  if(message.includes("token is expired"))return "token_expired";
-  if(message.includes("compacttoken parsing failed"))return "malformed_token";
-  return "unspecified";
-}
-
 function mapHttpError(status:number,providerCode:string|null):CalendarSyncError{
   if(status===401){
     return new CalendarSyncError(
@@ -140,20 +128,15 @@ export class MicrosoftCalendarClient{
     if(options.allowNoContent&&(response.status===204||response.status===404))return null;
     if(!response.ok){
       let body:unknown=null;
-      let responseFormat:"json"|"non_json"="non_json";
-      try{body=await response.json();responseFormat="json";}catch{}
+      try{body=await response.json();}catch{}
       const providerCode=safeProviderCode(body);
+      const error=mapHttpError(response.status,providerCode);
       if(response.status===401||response.status===403){
-        // Fixed, non-sensitive request category and provider code only.
-        console.warn("Kairos Microsoft Graph calendar request denied",{
-          status:response.status,
-          operation:typeof init.method==="string"?init.method:"GET",
-          providerCode,
-          reason:safeRejectionReason(body),
-          responseFormat,
+        if(!getOperationContext())emitOperationEvent(createOperationContext("calendar.sync"),{
+          code:error.code,result:"error",provider:"microsoft",status:response.status,
         });
       }
-      throw mapHttpError(response.status,providerCode);
+      throw error;
     }
     if(response.status===204)return null;
     try{return await response.json();}catch{

@@ -1,3 +1,4 @@
+import {installProviderRuntime} from "../helpers/provider-runtime";
 import {describe,expect,it,vi} from "vitest";
 import type {CalendarDestinationAdapter} from "@/lib/calendar/adapter";
 import {
@@ -83,7 +84,7 @@ function adapterFactory(){
 
 describe("hosted calendar tenant boundary",()=>{
   it("treats Alice's exact destination id as missing from Bob's scope",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUsers(sqlite);
     const aliceConnections=new D1CalendarConnectionRepository(db,{userId:ALICE.id});
     const alice=await aliceConnections.create({provider:"google",label:"Alice Google"});
@@ -108,7 +109,7 @@ describe("hosted calendar tenant boundary",()=>{
   });
 
   it("sync-all reconciles only the caller's enabled destinations and assignments",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUsers(sqlite);
     await seedAssignment(db,ALICE.id,"alice");
     const bobAssignment=await seedAssignment(db,BOB.id,"bob");
@@ -136,7 +137,7 @@ describe("hosted calendar tenant boundary",()=>{
   });
 
   it("post-source reconciliation stays inside the source user's tenant",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUsers(sqlite);
     await seedAssignment(db,ALICE.id,"alice");
     const bobAssignment=await seedAssignment(db,BOB.id,"bob");
@@ -162,7 +163,7 @@ describe("hosted calendar tenant boundary",()=>{
   });
 
   it("keeps calendar settings independent per user during hosted reconciliation",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUsers(sqlite);
     const aliceAssignment=await seedAssignment(db,ALICE.id,"alice");
     const bobAssignment=await seedAssignment(db,BOB.id,"bob");

@@ -1,19 +1,9 @@
-import {z} from "zod";
-import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
-import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
-import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
-import {SourceCredentialRepository} from "@/lib/db/repositories/source-credentials";
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
-import {validateCanvasFeedUrl,CanvasFeedUrlError} from "@/lib/sources/canvas-ical/validate-url";
-import {CanvasIcalSource} from "@/lib/sources/canvas-ical/source";
+import {CanvasFeedUrlError} from "@/lib/sources/canvas-ical/validate-url";
+import {canvasConnectSchema,connectCanvas} from "@/lib/sources/canvas-ical/connection-service";
 import {CanvasSourceError} from "@/lib/sources/canvas-ical/errors";
-import {syncCanvasConnection} from "@/lib/sync/sync-source";
 import {SyncServiceError} from "@/lib/sync/types";
-
-const schema=z.object({
-  feedUrl:z.string().min(1),
-  label:z.string().trim().min(1).max(80).optional(),
-});
 
 export async function POST(request:Request){
   let body:unknown;
@@ -24,7 +14,7 @@ export async function POST(request:Request){
       {status:400},
     );
   }
-  const parsed=schema.safeParse(body);
+  const parsed=canvasConnectSchema.safeParse(body);
   if(!parsed.success){
     return Response.json(
       {code:"INVALID_REQUEST",message:"Enter a Canvas calendar feed URL."},
@@ -33,55 +23,20 @@ export async function POST(request:Request){
   }
 
   try{
-    const url=validateCanvasFeedUrl(parsed.data.feedUrl,{
-      allowLoopbackHttp:process.env.E2E_FIXTURES==="1",
-    });
     const resolved=await resolveSourceApiRuntime();
     if(!resolved.ok)return resolved.response;
-    const runtime=resolved.runtime;
-
-    const probe=await new CanvasIcalSource(url).testConnection();
-    if(!probe.ok){
-      return Response.json(
-        {code:probe.code,message:probe.message},
-        {status:probe.code==="UNAUTHORIZED_OR_EXPIRED_FEED"?401:422},
-      );
-    }
-
-    if(runtime.kind==="legacy"){
-      const connection=new SourceConnectionRepository(runtime.db)
-        .upsertCanvas(parsed.data.label??"Canvas");
-      new SourceCredentialRepository(runtime.db)
-        .setCanvasFeedUrl(connection.id,url.toString());
-      const sync=await syncCanvasConnection(connection.id,{
-        db:runtime.db,
-        sourceFactory:stored=>new CanvasIcalSource(stored),
-      });
-      const publicConnection=new SourceConnectionRepository(runtime.db)
-        .getByKind("canvas")!;
-      return Response.json({connection:publicConnection,sync});
-    }
-
-    const connections=new D1SourceConnectionRepository(runtime.db,runtime.scope);
-    const connection=await connections.upsertCanvas(parsed.data.label??"Canvas");
-    await new D1SourceCredentialRepository(
-      runtime.db,runtime.scope,runtime.keyring,
-    ).setCanvasFeedUrl(connection.id,url.toString());
-    const sync=await syncCanvasConnection(connection.id,{
-      db:runtime.db,
-      scope:runtime.scope,
-      keyring:runtime.keyring,
-      sourceFactory:stored=>new CanvasIcalSource(stored),
-    });
-    return Response.json({
-      connection:await connections.getByKind("canvas"),
-      sync,
-    });
+    return Response.json(await connectCanvas(resolved.runtime,parsed.data));
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof CanvasFeedUrlError){
       return Response.json({code:error.code,message:error.message},{status:400});
     }
-    if(error instanceof SyncServiceError||error instanceof CanvasSourceError){
+    if(error instanceof CanvasSourceError){
+      return Response.json({code:error.code,message:error.message},{
+        status:error.code==="UNAUTHORIZED_OR_EXPIRED_FEED"?401:422,
+      });
+    }
+    if(error instanceof SyncServiceError){
       return Response.json({code:error.code,message:error.message},{status:502});
     }
     return Response.json(

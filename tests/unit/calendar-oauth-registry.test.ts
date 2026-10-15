@@ -1,5 +1,6 @@
 import {createHash} from "node:crypto";
-import {beforeEach,describe,expect,it,vi} from "vitest";
+import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
+import {installProviderRuntime} from '../helpers/provider-runtime';
 import {
   consumeOAuthRequest,
   registerOAuthRequest,
@@ -16,6 +17,7 @@ function challenge(verifier:string){
 }
 
 beforeEach(()=>resetOAuthRequestRegistryForTests());
+afterEach(()=>vi.restoreAllMocks());
 
 describe("calendar oauth request registry",()=>{
   it("uses S256 PKCE and keeps the verifier server-side",()=>{
@@ -103,6 +105,7 @@ function seedHostedUsers(sqlite:ReturnType<typeof openD1TestDatabase>["sqlite"])
 describe("hosted calendar oauth request registry",()=>{
   it("persists only a state hash and encrypted PKCE verifier across repository instances",async()=>{
     const {db,sqlite,close}=openD1TestDatabase();
+    installProviderRuntime(db);
     seedHostedUsers(sqlite);
     const created=await new D1OAuthRequestRepository(db,{userId:ALICE.id},hostedKeyring)
       .register({
@@ -130,6 +133,7 @@ describe("hosted calendar oauth request registry",()=>{
 
   it("is user-bound, provider-bound, expiring, and atomically one-time",async()=>{
     const {db,sqlite,close}=openD1TestDatabase();
+    installProviderRuntime(db);
     seedHostedUsers(sqlite);
     const alice=new D1OAuthRequestRepository(db,{userId:ALICE.id},hostedKeyring);
     const bob=new D1OAuthRequestRepository(db,{userId:BOB.id},hostedKeyring);
@@ -165,6 +169,7 @@ describe("hosted calendar oauth request registry",()=>{
     "javascript:alert(1)",
   ])("rejects unsafe return target %s",async(returnTo)=>{
     const {db,sqlite,close}=openD1TestDatabase();
+    installProviderRuntime(db);
     seedHostedUsers(sqlite);
     const repo=new D1OAuthRequestRepository(db,{userId:ALICE.id},hostedKeyring);
     await expect(repo.register({

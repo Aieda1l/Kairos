@@ -1,0 +1,41 @@
+name: Kairos Production Maintenance
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply bounded expired-state cleanup (default is dry run)
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-production-maintenance
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    # Enable only after the reviewed M7 schema/runtime is deployed and tested.
+    if: ${{ github.ref == 'refs/heads/main' && vars.KAIROS_MAINTENANCE_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Clean bounded expired admission metadata
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          MAINTENANCE_APPLY: ${{ github.event_name == 'schedule' || inputs.apply }}
+        run: node scripts/maintain-abuse-state.mjs --batch-size=100 $([ "$MAINTENANCE_APPLY" = "true" ] && echo --apply || echo --dry-run)

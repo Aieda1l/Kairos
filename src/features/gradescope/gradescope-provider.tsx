@@ -1,4 +1,7 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
+import type {SyncAllOptions} from '@/lib/sync-all/types';
+import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
   createContext,
@@ -103,6 +106,7 @@ const syncCompleteSchema=z.object({
 
 type Phase="idle"|"discovering"|"syncing"|"success"|"partial"|"error";
 
+type GradescopeRecoveryOperation='discovery'|'selection'|'sync';
 type GradescopeContextValue=SubmissionStatusSyncState<GradescopeSyncErrorCode>&{
   connection:SourceConnection|null;
   courses:SourceCourse[];
@@ -111,9 +115,12 @@ type GradescopeContextValue=SubmissionStatusSyncState<GradescopeSyncErrorCode>&{
   extensionVersion:string|null;
   gradescopeTabDetected:boolean|null;
   message:string;
+  recovery:RecoveryNotice|null;
+  recoveryOperation:GradescopeRecoveryOperation|null;
+  extensionChecked:boolean;
   discoverCourses:()=>Promise<void>;
   saveEnabledCourses:(ids:string[])=>Promise<void>;
-  syncNow:(options?:{deferCalendarSync?:boolean})=>Promise<void>;
+  syncNow:(options?:SyncAllOptions)=>Promise<void>;
 };
 
 const Context=createContext<GradescopeContextValue|null>(null);
@@ -131,13 +138,11 @@ async function readJson(response:Response):Promise<unknown>{
 async function expectJson(response:Response,fallback:string):Promise<unknown>{
   const body=await readJson(response);
   if(response.ok)return body;
-  const message=body&&typeof body==="object"&&"message" in body&&typeof body.message==="string"
-    ?body.message
-    :fallback;
-  throw new Error(message);
+  throw new RecoveryRequestError(recoveryFromResponse(body,response),fallback);
 }
 
 function messageForSyncError(code:GradescopeSyncErrorCode):string{
+  const safe=getRecoveryNotice(code);if(safe)return safe.message;
   switch(code){
     case "EXTENSION_UNAVAILABLE":return "Firefox extension not detected";
     case "EXTENSION_TIMEOUT":return "Firefox extension timed out.";
@@ -169,10 +174,6 @@ function formatDiscoveryDiagnostics(diagnostics:GradescopeDiscoveryDiagnosticsV1
   ].join(" ");
 }
 
-function errorMessage(error:unknown):string{
-  if(error instanceof Error)return error.message;
-  return "Gradescope request failed.";
-}
 
 export function GradescopeProvider({
   connection:initialConnection,
@@ -191,20 +192,35 @@ export function GradescopeProvider({
   const [syncState,setSyncState]=useState(initialSyncState);
   const [phase,setPhase]=useState<Phase>("idle");
   const [message,setMessage]=useState("");
+  const [recovery,setRecovery]=useState<RecoveryNotice|null>(null);
+  const [extensionChecked,setExtensionChecked]=useState(false);
+  const blockedUntil=useRef(0);
+  const [recoveryOperation,setRecoveryOperation]=useState<GradescopeRecoveryOperation|null>(null);
   const [extensionDetected,setExtensionDetected]=useState(false);
   const [extensionVersion,setExtensionVersion]=useState<string|null>(null);
   const [gradescopeTabDetected,setGradescopeTabDetected]=useState<boolean|null>(null);
   const autoStartedRef=useRef(false);
   const syncInFlightRef=useRef(false);
 
+  const handleFailure=useCallback((error:unknown,operation:GradescopeRecoveryOperation)=>{
+    setPhase('error');setRecoveryOperation(operation);
+    const notice=error instanceof RecoveryRequestError?error.notice:error instanceof GradescopeBridgeError?getRecoveryNotice(error.code):getRecoveryNotice('SERVICE_UNAVAILABLE');
+    setRecovery(notice);
+    if(notice?.retryAfterSeconds)blockedUntil.current=Date.now()+notice.retryAfterSeconds*1000;
+    if(notice?.key==='SYNC_RECOVERY_REQUIRED')blockedUntil.current=Infinity;
+    setMessage(notice?.message??'Gradescope request failed. Previously saved data was kept.');
+  },[]);
+
   const getExtensionInfo=useCallback(async()=>{
     try{
       const info=await pingKairosExtension();
+      setExtensionChecked(true);
       setExtensionDetected(true);
       setExtensionVersion(info.extensionVersion);
       setGradescopeTabDetected(info.gradescopeTabDetected);
       return info;
     }catch(error){
+      setExtensionChecked(true);
       setExtensionDetected(false);
       setExtensionVersion(null);
       setGradescopeTabDetected(null);
@@ -213,6 +229,8 @@ export function GradescopeProvider({
   },[]);
 
   const discoverCourses=useCallback(async()=>{
+    if(Date.now()<blockedUntil.current)return;
+    setRecovery(null);setRecoveryOperation(null);
     setPhase("discovering");
     setMessage("");
     try{
@@ -246,12 +264,13 @@ export function GradescopeProvider({
       );
       router.refresh();
     }catch(error){
-      setPhase("error");
-      setMessage(errorMessage(error));
+      handleFailure(error,"discovery");
     }
-  },[getExtensionInfo,router]);
+  },[getExtensionInfo,router,handleFailure]);
 
   const saveEnabledCourses=useCallback(async(ids:string[])=>{
+    if(Date.now()<blockedUntil.current)return;
+    setRecovery(null);setRecoveryOperation(null);
     setMessage("");
     try{
       const completed=selectionResponseSchema.parse(await expectJson(
@@ -267,24 +286,24 @@ export function GradescopeProvider({
       setPhase("success");
       router.refresh();
     }catch(error){
-      setPhase("error");
-      setMessage(errorMessage(error));
+      handleFailure(error,"selection");
     }
-  },[router]);
+  },[router,handleFailure]);
 
-  const syncNow=useCallback(async(options?:{deferCalendarSync?:boolean})=>{
-    if(syncInFlightRef.current)return;
+  const syncNow=useCallback(async(options?:SyncAllOptions)=>{
+    if(syncInFlightRef.current||Date.now()<blockedUntil.current||connection?.lastErrorCode==="SYNC_RECOVERY_REQUIRED")return;
+    setRecovery(null);setRecoveryOperation(null);
     syncInFlightRef.current=true;
     setPhase("syncing");
     setMessage("");
     try{
       const started=syncStartSchema.parse(await expectJson(
-        await fetch("/api/sources/gradescope/sync/start",{method:"POST"}),
+        await fetch("/api/sources/gradescope/sync/start",{method:"POST",...syncAllRequestInit({syncAllRunId:options?.syncAllRunId})}),
         "Gradescope sync could not start.",
       ));
       const batches:GradescopeSyncResultV1[]=[];
       let batchErrorCode:GradescopeSyncErrorCode|null=null;
-      let bridgeMessage="";
+
       try{
         const info=await getExtensionInfo();
         if(!info.gradescopeTabDetected){
@@ -300,12 +319,12 @@ export function GradescopeProvider({
       }catch(error){
         if(error instanceof GradescopeBridgeError){
           batchErrorCode=error.code;
-          bridgeMessage=error.message;
+
           if(error.code==="GRADESCOPE_TAB_UNAVAILABLE")setGradescopeTabDetected(false);
           if(error.code==="EXTENSION_UNAVAILABLE")setExtensionDetected(false);
         }else{
           batchErrorCode="INVALID_RESULT";
-          bridgeMessage=errorMessage(error);
+
         }
       }
 
@@ -328,12 +347,14 @@ export function GradescopeProvider({
         failedCount:completed.failedCourseCount,
       };
       setSyncState(nextState);
+      setRecovery(getRecoveryNotice(completed.lastErrorCode,{key:"gradescope"}));
+      setRecoveryOperation(completed.lastErrorCode?"sync":null);
       if(completed.lastErrorCode==="PARTIAL_SYNC"){
         setPhase("partial");
         setMessage(messageForSyncError(completed.lastErrorCode));
       }else if(completed.lastErrorCode){
         setPhase("error");
-        setMessage(bridgeMessage||messageForSyncError(completed.lastErrorCode));
+        setMessage(messageForSyncError(completed.lastErrorCode));
       }else{
         setPhase("success");
       }
@@ -341,12 +362,11 @@ export function GradescopeProvider({
         router.refresh();
       }
     }catch(error){
-      setPhase("error");
-      setMessage(errorMessage(error));
+      handleFailure(error,"sync");
     }finally{
       syncInFlightRef.current=false;
     }
-  },[getExtensionInfo,router,syncState.lastSuccessfulAt]);
+  },[getExtensionInfo,router,syncState.lastSuccessfulAt,connection?.lastErrorCode,handleFailure]);
 
   useEffect(()=>{
     const timer=window.setTimeout(()=>{
@@ -378,7 +398,7 @@ export function GradescopeProvider({
     extensionDetected,
     extensionVersion,
     gradescopeTabDetected,
-    message,
+    message,recovery,recoveryOperation,extensionChecked,
     discoverCourses,
     saveEnabledCourses,
     syncNow,

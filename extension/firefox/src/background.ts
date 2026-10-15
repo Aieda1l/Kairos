@@ -7,7 +7,8 @@ async function firstTab(url:string):Promise<{id:number}|null>{
 }
 
 const adapter:BrowserBrokerAdapter={
-  extensionVersion:()=>browser.runtime.getManifest().version,
+  // Keep the protocol-v1 field without disclosing the installed version to a webpage.
+  extensionVersion:()=>"not-shared",
   findCanvasTab:()=>firstTab("https://canvas.uw.edu/*"),
   sendToCanvasTab:(tabId,request)=>browser.tabs.sendMessage(tabId,request),
   findGradescopeTab:()=>firstTab("https://www.gradescope.com/*"),

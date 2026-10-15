@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {z} from "zod";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
@@ -69,6 +70,7 @@ export async function PUT(request:Request){
       );
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdDiscoveryServiceError){
       return Response.json(
         {code:error.code,message:error.message},

@@ -30,8 +30,25 @@ const productionObservability=production.observability??wrangler.observability;
 if(productionObservability?.redact_query_string!==true){
   errors.push("Production must redact OAuth query strings from platform logs and traces.");
 }
+if(productionObservability?.enabled!==false
+  ||productionObservability?.logs?.enabled!==false
+  ||productionObservability?.logs?.persist!==false
+  ||productionObservability?.logs?.invocation_logs!==false
+  ||productionObservability?.traces?.enabled!==false
+  ||productionObservability?.traces?.persist!==false){
+  errors.push("Production observability, log persistence, invocation metadata, and traces must remain explicitly disabled until the preview privacy gate is reviewed.");
+}
 if(String(productionVars.E2E_FIXTURES??"")==="1"){
   errors.push("Production Wrangler configuration enables E2E_FIXTURES.");
+}
+if(String(productionVars.KAIROS_LOCAL_AUTH??'').trim()||productionVars.KAIROS_ABUSE_TRUSTED_INGRESS==='loopback'){
+  errors.push('Production must not select local authentication or loopback ingress.');
+}
+for(const name of ['KAIROS_TURNSTILE_SITE_KEY','KAIROS_TURNSTILE_SECRET_KEY']){
+  const value=String(productionVars[name]??'').trim();
+  if(/^[123]x0+(?:AA|AB|BB|FF)$/.test(value)||['synthetic-site','synthetic-secret'].includes(value)){
+    errors.push(`Production must not use a known Turnstile test value for ${name}.`);
+  }
 }
 
 for(const file of collectFiles(path.join(process.cwd(),"src"))){
@@ -60,6 +77,7 @@ const requiredCiCommands=[
   "npm run lint",
   "npm run typecheck",
   "npm run db:verify",
+  "npm run verify:workerd:abuse",
   "npm run build:extension",
   "npm run test:e2e",
   "npm run build",
@@ -83,6 +101,8 @@ for(const command of requiredCiCommands){
 if(pkg.scripts?.["verify:hosted"]!=="node scripts/verify-production-safety.mjs"){
   errors.push("package.json is missing the verify:hosted safety script.");
 }
+if(pkg.scripts?.['verify:workerd:abuse']!=='node scripts/verify-workerd-abuse.mjs')errors.push('Native admission/ownership verification script is missing.');
+if(!ci.includes('feat/milestone-7-public-beta-readiness'))errors.push('Feature CI must cover the Milestone 7 branch.');
 
 const deployPath=path.join(process.cwd(),".github/workflows/deploy-production.yml");
 if(!fs.existsSync(deployPath)){
@@ -103,13 +123,35 @@ if(!fs.existsSync(deployPath)){
     "d1 migrations apply",
     "--remote",
     "npm run build:vinext",
-    "wrangler deploy",
+    "wrangler versions upload",
+    "wrangler versions deploy",
+    "scripts/verify-release-ci.mjs",
+    "scripts/check-staged-release.mjs",
+    "needs: preflight",
+    "github.ref == 'refs/heads/main'",
+    "KAIROS_RELEASE_ID",
+    "scripts/check-production-health.mjs",
   ]){
     if(!deploy.includes(required))errors.push(`Production deployment workflow is missing: ${required}`);
   }
+  const build=deploy.indexOf('npm run build:vinext'),upload=deploy.indexOf('wrangler versions upload'),stage=deploy.indexOf('node scripts/check-staged-release.mjs');
+  const migration=deploy.indexOf('npx wrangler d1 migrations apply'),promotion=deploy.indexOf('wrangler versions deploy');
+  if(!(build>=0&&build<upload&&upload<stage&&stage<migration&&migration<promotion))errors.push('Production release must build, upload, check staged health, migrate, then promote the exact version.');
   if(/E2E_FIXTURES\s*:\s*["']?1["']?/m.test(deploy)){
     errors.push("Production deployment workflow enables E2E fixtures.");
   }
+  if(/KAIROS_(?:LOCAL_AUTH|ABUSE_TRUSTED_INGRESS)\s*:\s*["']?loopback/m.test(deploy))errors.push('Production deployment workflow selects local auth/ingress.');
+}
+
+const healthWorkflowPath=path.join(process.cwd(),'.github/workflows/production-health.yml');
+if(!fs.existsSync(healthWorkflowPath)){
+  errors.push('Production health workflow is missing.');
+}else{
+  const health=fs.readFileSync(healthWorkflowPath,'utf8');
+  for(const required of ['*/15 * * * *','workflow_dispatch:','contents: read','concurrency:','cancel-in-progress: false','timeout-minutes: 2','scripts/check-production-health.mjs']){
+    if(!health.includes(required))errors.push(`Production health workflow is missing: ${required}`);
+  }
+  if(/secrets\.|CLOUDFLARE_API_TOKEN|(?:contents|actions|id-token):\s*write/.test(health))errors.push('Public health workflow must not require secrets or write permissions.');
 }
 
 const sensitiveName=/(SECRET|TOKEN|PASSWORD|CREDENTIAL_KEY|CLIENT_SECRET)/i;

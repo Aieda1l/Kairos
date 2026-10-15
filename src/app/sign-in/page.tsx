@@ -1,17 +1,10 @@
 import Link from "next/link";
-import {Button} from "@/components/ui/button";
 import {safeReturnTo} from "@/lib/auth/return-to";
-import {signIn} from "../../../auth";
+import {identitySignInFailureMessage} from '@/lib/recovery/presentation';
+import {AuthInitiationForm} from "@/features/auth/auth-initiation-form";
 
 type SignInPageProps={
   searchParams:Promise<{returnTo?:string|string[];error?:string|string[]}>;
-};
-
-const SIGN_IN_ERRORS:Record<string,string>={
-  OAuthCallbackError:"The identity provider could not finish signing you in. Try again. If this persists, the provider's app credentials or callback configuration may need attention.",
-  OAuthAccountNotLinked:"This account may already be associated with a different sign-in provider. Use your original sign-in method.",
-  AccessDenied:"Sign-in was denied. Try again or choose another account.",
-  Configuration:"Sign-in is temporarily unavailable. Please try again later.",
 };
 
 function first(value:string|string[]|undefined):string|null{
@@ -23,21 +16,9 @@ export default async function SignInPage({searchParams}:SignInPageProps){
   const params=await searchParams;
   const returnTo=safeReturnTo(first(params.returnTo));
   const errorCode=first(params.error);
-  const errorMessage=errorCode
-    ?Object.hasOwn(SIGN_IN_ERRORS,errorCode)
-      ?SIGN_IN_ERRORS[errorCode]
-      :"Sign-in could not be completed. Please try again."
-    :null;
-
-  async function signInWithGoogle(){
-    "use server";
-    await signIn("google",{redirectTo:returnTo});
-  }
-
-  async function signInWithMicrosoft(){
-    "use server";
-    await signIn("microsoft-entra-id",{redirectTo:returnTo});
-  }
+  const errorMessage=identitySignInFailureMessage(errorCode);
+  // Public site key only. Server verification never accepts widget success as proof.
+  const siteKey=process.env.KAIROS_TURNSTILE_SITE_KEY??"";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-16">
@@ -50,8 +31,8 @@ export default async function SignInPage({searchParams}:SignInPageProps){
         </p>
       )}
       <div className="mt-8 space-y-3">
-        <form action={signInWithGoogle}><Button className="w-full" type="submit">Continue with Google</Button></form>
-        <form action={signInWithMicrosoft}><Button className="w-full" variant="secondary" type="submit">Continue with Microsoft</Button></form>
+        <AuthInitiationForm provider="google" siteKey={siteKey} returnTo={returnTo}/>
+        <AuthInitiationForm provider="microsoft-entra-id" siteKey={siteKey} returnTo={returnTo}/>
       </div>
       <p className="mt-6 text-sm leading-6 text-[var(--muted)]">Calendar permissions are connected separately after sign-in.</p>
     </main>

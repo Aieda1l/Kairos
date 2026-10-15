@@ -1,3 +1,5 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import crypto from "node:crypto";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -92,6 +94,12 @@ export function startCanvasSubmissionStatusSync(
     registerSubmissionSyncRequest(requestId,connection.id,assignments,startedAt);
     return {requestId,assignments,maxBatchSize:100};
   }
+
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"canvas","manual-sync"))return (async()=>{
+    const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("canvas");
+    if(!connection)throw new SubmissionStatusSyncServiceError("CANVAS_NOT_CONFIGURED","Connect Canvas before syncing submission status.");
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"canvas",operation:"manual-sync",resourceId:connection.id},()=>startCanvasSubmissionStatusSync(db as D1DatabaseLike,arg2,arg3));
+  })();
 
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
@@ -249,6 +257,7 @@ async function completeCanvasSubmissionStatusSyncHosted(
   input:SubmissionSyncCompleteInput,
   now:Date,
 ):Promise<SubmissionSyncCompleteResponse>{
+  if(!ownsOperation(db,scope,"source:canvas"))return withBridgeCompletion(db,scope,input.requestId,"canvas_submission",now,()=>completeCanvasSubmissionStatusSyncHosted(db,scope,input,now));
   const registered=await new D1SyncRequestRepository(db,scope).consume<{
     connectionId:string;
     assignments:CanvasAssignmentLocator[];
@@ -260,6 +269,7 @@ async function completeCanvasSubmissionStatusSyncHosted(
     );
   }
 
+  if(input.batchErrorCode==="EXTENSION_TIMEOUT"||input.results.some(result=>result.errorCode==="EXTENSION_TIMEOUT"))uncertainOwnedWork();
   const {connectionId,assignments}=registered.payload;
   const statusRepo=new D1SubmissionStatusRepository(db,scope);
   const requestedByLocalId=new Map(assignments.map(item=>[item.assignmentLocalId,item]));

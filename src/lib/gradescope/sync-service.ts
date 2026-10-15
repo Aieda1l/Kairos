@@ -1,3 +1,5 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import crypto from "node:crypto";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -128,6 +130,12 @@ export function startGradescopeSync(
     });
     return {protocolVersion:1,requestId,courseIds,maxCourseBatchSize:20};
   }
+
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"gradescope","manual-sync"))return (async()=>{
+    const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("gradescope");
+    if(!connection)throw new GradescopeSyncServiceError("GRADESCOPE_NOT_CONFIGURED","Discover Gradescope courses before syncing.");
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"gradescope",operation:"manual-sync",resourceId:connection.id},()=>startGradescopeSync(db as D1DatabaseLike,arg2,arg3));
+  })();
 
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
@@ -311,6 +319,7 @@ async function completeGradescopeSyncHosted(
   input:GradescopeSyncCompleteInput,
   now:Date,
 ):Promise<GradescopeSyncCompleteResponse>{
+  if(!ownsOperation(db,scope,"source:gradescope"))return withBridgeCompletion(db,scope,input.requestId,"gradescope_sync",now,()=>completeGradescopeSyncHosted(db,scope,input,now));
   const request=await new D1SyncRequestRepository(db,scope)
     .consume<HostedGradescopeRequest>(input.requestId,"gradescope_sync",now);
   if(!request){
@@ -319,6 +328,7 @@ async function completeGradescopeSyncHosted(
       "This Gradescope sync request is no longer active.",
     );
   }
+  if(input.batchErrorCode==="EXTENSION_TIMEOUT"||input.batches.some(batch=>batch.courses.some(course=>course.errorCode==="EXTENSION_TIMEOUT")))uncertainOwnedWork();
   const registered=request.payload;
   const connectionId=registered.connectionId;
 

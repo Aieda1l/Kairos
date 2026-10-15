@@ -1,7 +1,7 @@
 import {expect,test} from "@playwright/test";
 import {prepareFixtureUser} from "./helpers";
 
-test("rejects cross-origin settings mutations before changing authenticated state",async({context})=>{
+test("rejects cross-origin settings and Sync All mutations before changing authenticated state",async({context})=>{
   await prepareFixtureUser(context);
   const original=await (await context.request.get("/api/settings/calendar")).json();
   const forgeries:Array<Record<string,string>>=[
@@ -15,6 +15,7 @@ test("rejects cross-origin settings mutations before changing authenticated stat
       headers,data:{hideSubmitted:!original.hideSubmitted},
     });
     expect(result.status()).toBe(403);
+    expect((await context.request.post('/api/sync-all/start',{headers})).status()).toBe(403);
     expect(await (await context.request.get("/api/settings/calendar")).json()).toEqual(original);
   }
 });

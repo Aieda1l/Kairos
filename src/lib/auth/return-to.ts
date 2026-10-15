@@ -53,6 +53,17 @@ export function isSafeReturnTo(input:string):boolean{
   return normalizeReturnTo(input)!==null;
 }
 
+export function isCalendarReturnTo(input:string):input is '/sources'|'/onboarding'{
+  return (input==='/sources'||input==='/onboarding')&&normalizeReturnTo(input)===input;
+}
+export function calendarCallbackDestination(returnTo:string,redirectUri:string,provider:'google'|'microsoft',code:string,stage?:string):Response{
+  const destination=new URL(isCalendarReturnTo(returnTo)?returnTo:'/sources',redirectUri);
+  destination.searchParams.set('calendarProvider',provider);
+  destination.searchParams.set('calendarError',code);
+  if(stage)destination.searchParams.set('calendarStage',stage);
+  return new Response(null,{status:303,headers:{location:destination.toString(),'cache-control':'no-store'}});
+}
+
 export function safeReturnTo(
   input:string|null,
   fallback="/upcoming",

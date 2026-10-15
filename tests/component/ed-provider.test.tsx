@@ -10,6 +10,7 @@ const {refresh}=vi.hoisted(()=>({refresh:vi.fn()}));
 vi.mock("next/navigation",()=>({useRouter:()=>({refresh})}));
 
 import { EdProvider, useEd } from "@/features/ed/ed-provider";
+import {EdSourceCard} from '@/features/sources/ed-source-card';
 
 const connection:SourceConnection={
   id:"ed-connection",
@@ -54,6 +55,7 @@ function Consumer(){
     <button onClick={()=>void ed.refreshCourses()}>Refresh</button>
     <button onClick={()=>void ed.saveEnabledCourses(["123"])}>Save</button>
     <button onClick={()=>void ed.syncNow()}>Sync</button>
+    <button onClick={()=>void ed.syncNow({deferCalendarSync:true,syncAllRunId:'11111111-1111-4111-8111-111111111111'})}>Sync admitted</button>
   </div>;
 }
 
@@ -61,12 +63,49 @@ function json(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
 }
 
+it('forwards the admitted run only as an HTTP header for Ed sync',async()=>{
+  const requests=vi.fn(async()=>json({...emptyState,statusUpdatedCount:0,insertedCount:0,updatedCount:0}));
+  vi.stubGlobal('fetch',requests);
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Sync admitted'}));
+  await waitFor(()=>expect(requests).toHaveBeenCalledWith('/api/sources/ed/sync',{
+    method:'POST',headers:{'x-kairos-calendar-sync':'defer','x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111'},
+  }));
+});
+
+it.each([
+  [false,'Test connection','/api/sources/ed/test'],[true,'Test connection','/api/sources/ed/test'],
+  [false,'Connect Ed','/api/sources/ed/connect'],[true,'Update token','/api/sources/ed/connect'],
+  [true,'Refresh courses','/api/sources/ed/refresh'],[true,'Save selection','/api/sources/ed/courses'],
+  [true,'Sync Ed','/api/sources/ed/sync'],
+] as const)('card Retry retains the Ed operation and choices (%s): %s',async(accepted,buttonName,endpoint)=>{
+  const user=userEvent.setup();const requests:Array<{url:string;init?:RequestInit}>=[];
+  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{requests.push({url:String(input),init});return json({code:'SERVICE_UNAVAILABLE'},503);}));
+  render(<EdProvider connection={accepted?connection:null} initialCourses={accepted?[course]:[]} initialSyncState={emptyState}><EdSourceCard/></EdProvider>);
+  await user.type(screen.getByLabelText('Ed API token'),'fresh-memory');
+  if(accepted)await user.click(screen.getByRole('checkbox',{name:/CSE 331/}));
+  await user.click(screen.getByRole('button',{name:buttonName}));
+  await user.click(screen.getByRole('button',{name:'Retry'}));
+  expect(requests.map(request=>request.url)).toEqual([endpoint,endpoint]);
+  expect(requests[1]?.init).toEqual(requests[0]?.init);
+  if(accepted)expect(screen.getByRole('checkbox',{name:/CSE 331/})).toBeChecked();
+  expect(screen.getByLabelText('Ed API token')).toHaveValue('fresh-memory');expect(document.documentElement.outerHTML).not.toContain('fresh-memory');
+});
+
 beforeEach(()=>{
   refresh.mockReset();
   vi.unstubAllGlobals();
 });
 
 describe("EdProvider",()=>{
+  it("presents a bounded admission retry while retaining accepted courses",async()=>{
+    vi.stubGlobal("fetch",async()=>json({code:"RATE_LIMITED",message:"synthetic-private-detail",retryAfterSeconds:99999},429));
+    render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Test"}));
+    await waitFor(()=>expect(screen.getByTestId("message")).toHaveTextContent("Try again in 3600 seconds."));
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-detail");
+    expect(screen.getByTestId("courses")).toHaveTextContent("123:false");
+  });
   it("sends the token only to test/connect and keeps later operations credential-free",async()=>{
     const user=userEvent.setup();
     const calls:Array<{url:string;body:string|null}>=[];

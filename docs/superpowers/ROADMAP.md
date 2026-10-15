@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-07
+**Updated:** 2026-10-10
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -107,7 +107,7 @@ Primary docs:
 - `docs/superpowers/specs/2026-10-05-calendar-sync-design.md`
 - `docs/superpowers/plans/2026-10-05-calendar-sync-milestone-5.md`
 
-## Milestone 6 — Multi-user hosted foundation — Automated implementation complete; hosted acceptance pending
+## Milestone 6 — Multi-user hosted foundation — Complete
 
 Implemented across 6A–6C:
 - Cloudflare Workers/vinext, D1, Auth.js, and tenant schema foundation;
@@ -125,13 +125,14 @@ Implemented across 6A–6C:
 - manual-only production deployment workflow plus Workers/D1 build, migration, tenancy, credential, and production-safety gates;
 - deterministic two-user hosted E2E coverage using real Auth.js database sessions, including cross-user mutation rejection, sign-out protection, and user-scoped extension submission results.
 
-Pending external hosted acceptance:
-- create/configure the production Cloudflare/D1/DNS and provider resources without committing credentials;
-- deploy the verified revision to `https://mykairos.me`;
-- complete two-account production acceptance for Google/Microsoft identity sign-in, tenant isolation, Google/Microsoft/iCloud calendars, the Firefox bridge, account deletion, credential non-exposure, and rollback;
-- record only non-secret acceptance evidence in `docs/deployment/acceptance-milestone-6.md`.
+Completed hosted acceptance:
+- production deployment and migrations at `https://mykairos.me`;
+- user-confirmed identity, logout, two-user isolation, sources/Firefox extension, calendar synchronization, account deletion, and edge-case acceptance;
+- repository privacy/security review, identity-token minimization, public-session allowlisting, origin guards, credential non-exposure, and rollback readiness;
+- 509 automated tests and 14 Chromium/Firefox browser cases, with build/runtime verification;
+- sign-off commit `6a4f9089319a01818853183298ee6f16827c22ab`, annotated tag `milestone-6`, runtime commit `f068e24bd45b46dee4c5a5a8d219115efaf769ef`.
 
-Milestone 6 must not be marked complete and Milestone 7 implementation must not begin until the hosted acceptance checklist passes.
+Acceptance attribution, production identifiers, and documented limits are in `docs/deployment/acceptance-milestone-6.md` and `docs/deployment/security-review-2026-10-10.md`. Milestone 6's rollback readiness review does not satisfy Milestone 7's required live rollback drill. Its release commits/tag are published, and PR #14 integrated them into protected `main` with history preserved as `4eb597e` on October 15. M7 integration and resulting-main CI remain separate.
 
 Primary design:
 - `docs/superpowers/specs/2026-10-06-multi-user-hosted-foundation-design.md`
@@ -144,9 +145,9 @@ Implementation plans:
 Hosted acceptance:
 - `docs/deployment/acceptance-milestone-6.md`
 
-## Milestone 7 — Public beta readiness — Approved, implementation not started
+## Milestone 7 — Public beta readiness — Engineering complete; release acceptance open
 
-Planned:
+Scope:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
 - UW-first product positioning and continued `canvas.uw.edu` browser integration rather than arbitrary Canvas institutions;
 - first-run onboarding with skippable source/calendar setup and targeted returning-user recovery;
@@ -161,6 +162,20 @@ Planned:
 
 Primary design:
 - `docs/superpowers/specs/2026-10-06-public-beta-readiness-design.md`
+
+Implementation plan:
+- `docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md` links the onboarding/recovery, admission/bounded-work, and distribution/operations slices.
+- M6 is merged with history preserved; M7 PR #15 targets protected `main`, with final integration and exact-main CI recorded there.
+- Published-source 72a5b2a CI passes 1,475 tests, 54 browser cases, 30 simulated deployment cases and the build/native/type/lint/safety checks. The frozen-base audit's three former D1 policy blocks are now independently closed with owner facts and a deletion-safe recovery policy; all 151 units are terminal and validators pass. Later deltas remain separately reviewed; production readiness is INCOMPLETE until live release acceptance closes.
+- Google branding is operator-confirmed approved. Signed Firefox 0.4.0, ordinary installation/native consent/source reads and the public description/privacy-link/homepage update are verified as attributed. A real version upgrade is a next-release follow-up, not an added signed-installability criterion.
+- A compatible recovery candidate is built/native-verified and representative cleanup costs are measured. Exact hosted/two-account/provider acceptance, actual operational/privacy/token/capacity evidence and live rollback remain release gates. Support/security delivery is operator-confirmed; new workflow activation remains separate.
+- No production upload, remote migration, traffic change, export or restore was performed. Explicit production approval is still required. See `docs/deployment/closeout-milestone-7.md` and the readiness/security/acceptance records.
+
+## Local guest mode — Planned after Milestone 7, not yet numbered
+
+User selected this follow-up on October 14, 2026. People should be able to use Kairos without creating or signing into a Kairos account, with assignments and preferences stored on their device. This changes storage and integration boundaries and needs an architectural design before implementation; it is outside Milestone 7's launch acceptance.
+
+The proposed starting scope is a browser guest experience with local persistence, import/export and backup controls, clear behavior when browser data is cleared, and an optional later move to an account. Live source connections, calendar authorization, credential storage, offline support, and the Firefox bridge must be assessed during that design. A Kairos account and a provider account are separate concerns; guest mode must not imply access to provider data without its required authorization. The exact feature set and migration behavior remain to be agreed.
 
 ## Later extension follow-ups — Planned, not yet numbered
 

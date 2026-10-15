@@ -12,8 +12,9 @@ describe("hosted sign-in diagnostics",()=>{
         cause:{error_description:"secret and private token"},
       });
       authDiagnostics.error(error);
-      expect(warning).toHaveBeenCalledWith("Kairos sign-in failed",{
-        category:"OAuthCallbackError",providerCode:"invalid_client",
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",action:"auth.callback",code:"AUTH_FAILED",result:"error",
       });
       const log=JSON.stringify(warning.mock.calls);
       expect(log).not.toContain("fake-sensitive-user");
@@ -40,12 +41,10 @@ describe("hosted sign-in diagnostics",()=>{
         providerId:"unknown-private-id",error:"surprise-sensitive-payload",
       });
       expect(warning).toHaveBeenCalledTimes(2);
-      expect(warning).toHaveBeenNthCalledWith(1,"Kairos sign-in authorization rejected",{
-        provider:"microsoft-entra-id",providerCode:"access_denied",
+      expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+        event:"kairos.operation",provider:"microsoft",code:"AUTH_REJECTED",result:"rejected",
       });
-      expect(warning).toHaveBeenNthCalledWith(2,"Kairos sign-in authorization rejected",{
-        provider:"other",providerCode:"other",
-      });
+      expect(JSON.parse(warning.mock.calls[1][0] as string)).not.toHaveProperty("provider");
       const log=JSON.stringify(warning.mock.calls);
       for(const sensitive of ["private-token","private-email","private-code","password","unknown-private-id"]){
         expect(log).not.toContain(sensitive);

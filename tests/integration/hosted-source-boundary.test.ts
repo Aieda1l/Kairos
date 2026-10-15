@@ -1,3 +1,4 @@
+import {installProviderRuntime} from "../helpers/provider-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { ALICE, BOB, sessionFor } from "../helpers/test-users";
 import { openD1TestDatabase } from "../helpers/d1-test-db";
@@ -35,7 +36,7 @@ async function seedUsers(sqlite:ReturnType<typeof openD1TestDatabase>["sqlite"])
 
 describe("hosted source tenant boundary",()=>{
   it("derives scope from the session and rejects unauthenticated/client-selected identity",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
 
     await expect(resolveSourceRuntimeContext({
@@ -54,7 +55,7 @@ describe("hosted source tenant boundary",()=>{
   });
 
   it("does not let Bob sync Alice's Canvas connection even with its exact id",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const aliceScope={userId:ALICE.id};
     const bobScope={userId:BOB.id};
@@ -78,7 +79,7 @@ describe("hosted source tenant boundary",()=>{
   });
 
   it("keeps Alice's encrypted Ed token when a replacement token fails validation",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const scope={userId:ALICE.id};
     const validFetch=vi.fn(async()=>new Response(JSON.stringify({
@@ -107,7 +108,7 @@ describe("hosted source tenant boundary",()=>{
   });
 
   it("syncs Ed only inside the authenticated tenant",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const alice={userId:ALICE.id};
     const bob={userId:BOB.id};
@@ -162,7 +163,7 @@ describe("hosted source tenant boundary",()=>{
   });
 
   it("binds Gradescope discovery request completion to the authenticated user",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const started=await startGradescopeDiscovery(
       db,{userId:ALICE.id},new Date("2026-10-06T05:00:00.000Z"),
@@ -176,7 +177,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeGradescopeDiscovery(
       db,{userId:BOB.id},payload,new Date("2026-10-06T05:01:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeGradescopeDiscovery(
       db,{userId:ALICE.id},payload,new Date("2026-10-06T05:01:00.000Z"),
@@ -184,7 +185,7 @@ describe("hosted source tenant boundary",()=>{
     close();
   });
   it("binds Gradescope assignment sync requests to the authenticated user",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const alice={userId:ALICE.id};
     const connection=await new D1SourceConnectionRepository(db,alice)
@@ -220,7 +221,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeGradescopeSync(
       db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeGradescopeSync(
       db,alice,input,new Date("2026-10-06T05:02:00.000Z"),
@@ -229,7 +230,7 @@ describe("hosted source tenant boundary",()=>{
   });
 
   it("binds Canvas submission-status requests to the authenticated user",async()=>{
-    const {db,sqlite,close}=openD1TestDatabase();
+    const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     await seedUsers(sqlite);
     const alice={userId:ALICE.id};
     const connection=await new D1SourceConnectionRepository(db,alice)
@@ -269,7 +270,7 @@ describe("hosted source tenant boundary",()=>{
 
     await expect(completeCanvasSubmissionStatusSync(
       db,{userId:BOB.id},input,new Date("2026-10-06T05:02:00.000Z"),
-    )).rejects.toMatchObject({code:"SYNC_REQUEST_NOT_FOUND"});
+    )).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});
 
     await expect(completeCanvasSubmissionStatusSync(
       db,alice,input,new Date("2026-10-06T05:02:00.000Z"),

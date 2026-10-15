@@ -1,3 +1,3 @@
-import { handlers } from "../../../../../auth";
+import { guardedHandlers } from "../../../../../auth";
 
-export const {GET,POST}=handlers;
+export const {GET,POST}=guardedHandlers;

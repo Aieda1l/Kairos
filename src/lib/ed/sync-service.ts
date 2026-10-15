@@ -1,3 +1,5 @@
+import {withProviderService} from "@/lib/abuse/provider-operation";
+import {ownedFetch,ownedWorkStopped} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -63,7 +65,7 @@ async function syncHostedEdConnection(
   keyring:CredentialKeyring,
   options:SyncOptions={},
 ):Promise<EdSyncResult>{
-  const fetchImpl=options.fetchImpl??fetch;
+  const fetchImpl=ownedFetch(options.fetchImpl??fetch);
   const now=options.now??new Date();
   const completedAt=now.toISOString();
   const connectionRepo=new D1SourceConnectionRepository(db,scope);
@@ -93,6 +95,7 @@ async function syncHostedEdConnection(
   const successful:Array<{courseId:string;assignments:Awaited<ReturnType<EdSource["sync"]>>}>=[];
   const failures:EdErrorCode[]=[];
   for(const course of courses){
+    if(ownedWorkStopped())break;
     try{
       const assignments=await new EdSource(token,course,fetchImpl).sync();
       successful.push({courseId:course.externalCourseId,assignments});
@@ -291,12 +294,16 @@ export function syncEdConnection(
   arg4?:SyncOptions,
 ):Promise<EdSyncResult>{
   if(isUserScope(arg2)){
-    return syncHostedEdConnection(
-      db as D1DatabaseLike,
-      arg2,
-      arg3!,
-      arg4,
-    );
+    return (async()=>{
+      const connection=await new D1SourceConnectionRepository(db as D1DatabaseLike,arg2).getByKind("ed");
+      if(!connection)throw new EdSyncServiceError("ED_NOT_CONNECTED","Connect Ed before syncing.");
+      return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"manual-sync",resourceId:connection.id},()=>syncHostedEdConnection(
+        db as D1DatabaseLike,
+        arg2,
+        arg3!,
+        arg4,
+      ));
+    })();
   }
   return syncLegacyEdConnection(db as LegacyDatabase,arg2);
 }

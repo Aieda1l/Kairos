@@ -2,17 +2,59 @@ name: Deploy Kairos Production
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_active_version:
+        description: Approved current production Worker version UUID (100% traffic)
+        type: string
+        required: true
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: kairos-production-deploy
+  cancel-in-progress: false
 
 jobs:
+  preflight:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require successful feature CI for this exact main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-release-ci.mjs
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify:hosted
+      - name: Build exact release before production mutation
+        run: npm run build:vinext
+      - name: Preserve the verified compiled module graph
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-worker-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
   deploy:
+    needs: preflight
+    if: ${{ github.ref == 'refs/heads/main' && needs.preflight.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -20,6 +62,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run verify:hosted
+      - uses: actions/download-artifact@v4
+        with:
+          name: kairos-worker-${{ github.sha }}
+          path: dist
       - name: Prepare temporary production Wrangler config
         shell: bash
         env:
@@ -42,17 +88,57 @@ jobs:
           }];
           config.env.production.workers_dev=true;
           config.env.production.preview_urls=true;
+          const release=process.env.GITHUB_SHA??"";
+          if(!/^[0-9a-f]{40}$/i.test(release))throw new Error("Release revision is missing or invalid.");
+          config.env.production.vars={...config.env.production.vars,KAIROS_RELEASE_ID:release};
           fs.writeFileSync(".wrangler.production.jsonc",JSON.stringify(config,null,2));
           NODE
-      - name: Apply production D1 migrations
+      - name: Verify approved production baseline before uploading
+        id: baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          KAIROS_EXPECTED_ACTIVE_VERSION: ${{ inputs.expected_active_version }}
+        run: node scripts/verify-release-state.mjs baseline
+      - name: Upload a version without changing production traffic
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/kairos-version-upload.jsonl
+        run: npx wrangler versions upload --name kairos-production --env production --config .wrangler.production.jsonc --keep-vars --preview-alias "m7-${GITHUB_SHA:0:12}" --tag "$GITHUB_SHA"
+      - name: Verify uploaded version storage health before promotion
+        id: stage
+        env:
+          KAIROS_UPLOAD_OUTPUT: ${{ runner.temp }}/kairos-version-upload.jsonl
+          KAIROS_WORKERS_SUBDOMAIN: ${{ steps.baseline.outputs.workers_subdomain }}
+        run: KAIROS_PREVIEW_ALIAS="m7-${GITHUB_SHA:0:12}" node scripts/check-staged-release.mjs
+      - name: Verify exact staged configuration and unchanged migration baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          KAIROS_EXPECTED_ACTIVE_VERSION: ${{ inputs.expected_active_version }}
+          KAIROS_VERSION_ID: ${{ steps.stage.outputs.version_id }}
+        run: node scripts/verify-release-state.mjs staged
+      - name: Apply production D1 migrations after build and staged health
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply kairos-production --remote --env production --config .wrangler.production.jsonc
-      - name: Build vinext Workers target
-        run: npm run build:vinext
-      - name: Deploy production Worker
+      - name: Verify the complete approved migration result before promotion
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env production --config .wrangler.production.jsonc --keep-vars
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          KAIROS_EXPECTED_ACTIVE_VERSION: ${{ inputs.expected_active_version }}
+          KAIROS_VERSION_ID: ${{ steps.stage.outputs.version_id }}
+        run: node scripts/verify-release-state.mjs migrated
+      - name: Promote the exact checked version
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          KAIROS_VERSION_ID: ${{ steps.stage.outputs.version_id }}
+        run: npx wrangler versions deploy "$KAIROS_VERSION_ID@100" --yes --env production --config .wrangler.production.jsonc
+      - name: Verify production storage health
+        run: node scripts/check-production-health.mjs

@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {createCalendarAdapterFactory} from "@/lib/calendar/provider-factory";
 import {reconcileCalendarConnection} from "@/lib/calendar/reconcile";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
@@ -9,6 +10,7 @@ export async function POST(
   {params}:{params:Promise<{id:string}>},
 ){
   const {id}=await params;
+  try{
   const resolved=await resolveCalendarApiRuntime();
   if(!resolved.ok)return resolved.response;
   const runtime=resolved.runtime;
@@ -38,4 +40,5 @@ export async function POST(
       ),
     },
   ));
+  }catch(error){const ownership=abuseErrorResponse(error);if(ownership)return ownership;throw error;}
 }

@@ -1,3 +1,5 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withOwnedOperation,withBridgeCompletion,uncertainOwnedWork} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
@@ -77,6 +79,8 @@ export function startGradescopeDiscovery(
     return {requestId,protocolVersion:1};
   }
 
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"gradescope","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"gradescope",operation:"credential"},()=>startGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3));
+
   return (async()=>{
     const requestId=crypto.randomUUID();
     const now=arg3??new Date();
@@ -144,6 +148,8 @@ export function completeGradescopeDiscovery(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withBridgeCompletion(db as D1DatabaseLike,arg2,(arg3 as GradescopeDiscoverResultV1).requestId,"gradescope_discovery",arg4??new Date(),()=>completeGradescopeDiscovery(db as D1DatabaseLike,arg2,arg3 as GradescopeDiscoverResultV1,arg4));
+
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
     const scope=arg2;
@@ -158,6 +164,7 @@ export function completeGradescopeDiscovery(
       );
     }
     if(input.errorCode){
+      if(input.errorCode==="EXTENSION_TIMEOUT")uncertainOwnedWork();
       throw new GradescopeDiscoveryServiceError(
         "GRADESCOPE_DISCOVERY_FAILED",
         discoveryFailureMessage(input.errorCode),
@@ -165,20 +172,19 @@ export function completeGradescopeDiscovery(
       );
     }
     const connectionRepo=new D1SourceConnectionRepository(hostedDb,scope);
-    const connection=await connectionRepo.upsertGradescope("Gradescope");
+    const existing=await connectionRepo.getByKind("gradescope");
+    const id=existing?.id??crypto.randomUUID();
     const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-    await courseRepo.upsertDiscovered(
-      connection.id,
-      input.courses.map(course=>({
-        externalCourseId:course.courseId,
-        shortName:course.shortName,
-        fullName:course.fullName,
-        term:course.term,
-        year:course.year,
-      })),
-      now.toISOString(),
-    );
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const seenAt=now.toISOString();
+    const results=await hostedDb.batch([
+      connectionRepo.prepareUpsert(id,"gradescope","Gradescope",seenAt),
+      courseRepo.prepareDiscovered(id,input.courses.map(course=>({
+        externalCourseId:course.courseId,shortName:course.shortName,fullName:course.fullName,
+        term:course.term,year:course.year,
+      })),seenAt),
+      courseRepo.prepareList(id),connectionRepo.prepareGetByKind("gradescope"),
+    ]);
+    return {connection:connectionRepo.connectionFromResult(results[3]!),courses:courseRepo.coursesFromResult(results[2]!)};
   })();
 }
 
@@ -218,6 +224,7 @@ export function replaceEnabledGradescopeCourses(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!ownsOperation(db as D1DatabaseLike,arg2,"source:gradescope"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:gradescope",()=>replaceEnabledGradescopeCourses(db as D1DatabaseLike,arg2,arg3??[]));
   return (async()=>{
     const hostedDb=db as D1DatabaseLike;
     const connection=await new D1SourceConnectionRepository(hostedDb,arg2).getByKind("gradescope");
@@ -237,7 +244,9 @@ export function replaceEnabledGradescopeCourses(
         "Select only courses discovered from your Gradescope account.",
       );
     }
-    await courseRepo.setEnabled(connection.id,enabledCourseIds);
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const results=await hostedDb.batch([
+      courseRepo.prepareEnabled(connection.id,enabledCourseIds),courseRepo.prepareList(connection.id),
+    ]);
+    return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
   })();
 }

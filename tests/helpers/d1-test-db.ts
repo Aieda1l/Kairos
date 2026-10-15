@@ -31,7 +31,15 @@ class TestD1Statement implements D1PreparedStatementLike{
   }
 
   async run<T=Record<string,unknown>>():Promise<D1ResultLike<T>>{
-    const result=this.sqlite.prepare(this.sql).run(...this.params);
+    return this.execute() as D1ResultLike<T>;
+  }
+
+  execute():D1ResultLike{
+    const statement=this.sqlite.prepare(this.sql);
+    if(statement.reader){
+      return {success:true,results:statement.all(...this.params) as Record<string,unknown>[],meta:{changes:0}};
+    }
+    const result=statement.run(...this.params);
     return {
       success:true,
       results:[],
@@ -48,9 +56,10 @@ class TestD1Database implements D1DatabaseLike{
   }
 
   async batch(statements:D1PreparedStatementLike[]):Promise<D1ResultLike[]>{
-    const out:D1ResultLike[]=[];
-    for(const statement of statements) out.push(await statement.run());
-    return out;
+    return this.sqlite.transaction(()=>statements.map(statement=>{
+      if(!(statement instanceof TestD1Statement))throw new Error("Expected a test D1 statement.");
+      return statement.execute();
+    }))();
   }
 
   async exec(sql:string):Promise<void>{
@@ -58,11 +67,17 @@ class TestD1Database implements D1DatabaseLike{
   }
 }
 
-export function openD1TestDatabase(){
-  const sqlite=new Database(":memory:");
+export function openD1TestDatabase(options:{
+  beforeMigration?:(name:string,sqlite:Database.Database)=>void;
+  filename?:string;
+  migrate?:boolean;
+}={}){
+  const sqlite=new Database(options.filename??":memory:");
   sqlite.pragma("foreign_keys = ON");
-  for(const migration of ["migrations/0001_auth.sql","migrations/0002_kairos_tenant_schema.sql"]){
-    sqlite.exec(fs.readFileSync(path.join(process.cwd(),migration),"utf8"));
+  const directory=path.join(process.cwd(),"migrations");
+  for(const migration of options.migrate===false?[]:fs.readdirSync(directory).filter(name=>/^\d+.*\.sql$/.test(name)).sort()){
+    options.beforeMigration?.(migration,sqlite);
+    sqlite.exec(fs.readFileSync(path.join(directory,migration),"utf8"));
   }
   return {
     db:new TestD1Database(sqlite) as D1DatabaseLike,

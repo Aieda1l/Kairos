@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {removeManagedCalendarEvents} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
@@ -18,6 +19,7 @@ export async function POST(
       );
     return Response.json(result);
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof CalendarSyncError){
       const status=error.code==="CALENDAR_CONFIG_MISSING"
         ?404

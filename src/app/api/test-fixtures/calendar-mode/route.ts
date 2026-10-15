@@ -1,4 +1,5 @@
 import {z} from "zod";
+import {getE2EFixtureRuntime} from '@/lib/testing/e2e-runtime';
 import {
   deleteE2ECalendarFixtureEvent,
   setE2ECalendarFixtureMode,
@@ -10,7 +11,7 @@ const schema=z.union([
 ]);
 
 export async function POST(request:Request){
-  if(process.env.E2E_FIXTURES!=="1"){
+  if(!await getE2EFixtureRuntime(request)){
     return new Response("Not found",{status:404});
   }
   let body:unknown;

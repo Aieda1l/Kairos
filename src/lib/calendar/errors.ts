@@ -16,6 +16,7 @@ export class CalendarSyncError extends Error{
   constructor(
     public readonly code:CalendarSyncErrorCode,
     message:string,
+    public readonly retryAfterSeconds?:number,
   ){
     super(message);
     this.name="CalendarSyncError";

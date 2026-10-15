@@ -1,8 +1,9 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {Assignment} from "@/lib/assignments/types";
 import type {NormalizedAssignment} from "@/lib/assignments/normalize";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 import type {SourceKind} from "@/lib/sources/types";
 import type {SubmissionState} from "@/lib/submission-status/types";
 
@@ -70,6 +71,42 @@ export class D1AssignmentRepository{
     private readonly scope:UserScope,
   ){}
 
+  prepareCountNew(sourceConnectionId:string,assignments:NormalizedAssignment[]):D1PreparedStatementLike{
+    return prepareOwned(this.db,this.scope,`
+      SELECT count(DISTINCT value) AS inserted FROM json_each(?) candidate
+      WHERE NOT EXISTS (
+        SELECT 1 FROM assignments
+        WHERE user_id=? AND source_connection_id=? AND external_id=candidate.value
+      )
+    `).bind(JSON.stringify(assignments.map(row=>row.externalId)),this.scope.userId,sourceConnectionId);
+  }
+
+  prepareUpsertMany(sourceConnectionId:string,assignments:NormalizedAssignment[],seenAt:string):D1PreparedStatementLike{
+    const rows=assignments.map(assignment=>({...assignment,id:crypto.randomUUID()}));
+    return prepareOwned(this.db,this.scope,`
+      INSERT INTO assignments(
+        user_id,id,source_connection_id,source_kind,external_id,course_id,course_name,title,
+        release_at,due_at,late_due_at,status,source_status_text,grade_score,grade_max,grade_display,
+        source_url,source_updated_at,first_seen_at,last_seen_at,created_at,updated_at
+      )
+      SELECT ?,json_extract(value,'$.id'),?,json_extract(value,'$.source'),
+        json_extract(value,'$.externalId'),json_extract(value,'$.courseId'),
+        json_extract(value,'$.courseName'),json_extract(value,'$.title'),
+        json_extract(value,'$.releaseAt'),json_extract(value,'$.dueAt'),json_extract(value,'$.lateDueAt'),
+        json_extract(value,'$.status'),json_extract(value,'$.sourceStatusText'),
+        json_extract(value,'$.gradeScore'),json_extract(value,'$.gradeMax'),json_extract(value,'$.gradeDisplay'),
+        json_extract(value,'$.sourceUrl'),json_extract(value,'$.sourceUpdatedAt'),?,?,?,?
+      FROM json_each(?) WHERE 1
+      ON CONFLICT(user_id,source_connection_id,external_id) DO UPDATE SET
+        source_kind=excluded.source_kind,course_id=excluded.course_id,course_name=excluded.course_name,
+        title=excluded.title,release_at=excluded.release_at,due_at=excluded.due_at,late_due_at=excluded.late_due_at,
+        status=excluded.status,source_status_text=excluded.source_status_text,
+        grade_score=excluded.grade_score,grade_max=excluded.grade_max,grade_display=excluded.grade_display,
+        source_url=excluded.source_url,source_updated_at=excluded.source_updated_at,
+        last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
+    `,{kind:"source",id:sourceConnectionId,keys:assignments.map(row=>`source:${row.source}` as const)}).bind(this.scope.userId,sourceConnectionId,seenAt,seenAt,seenAt,seenAt,JSON.stringify(rows));
+  }
+
   async upsertMany(
     sourceConnectionId:string,
     assignments:NormalizedAssignment[],
@@ -79,20 +116,20 @@ export class D1AssignmentRepository{
     let updated=0;
 
     for(const assignment of assignments){
-      const existing=await this.db.prepare(`
+      const existing=await prepareOwned(this.db,this.scope,`
         SELECT id FROM assignments
         WHERE user_id=? AND source_connection_id=? AND external_id=?
       `).bind(this.scope.userId,sourceConnectionId,assignment.externalId)
         .first<{id:string}>();
 
       if(existing){
-        await this.db.prepare(`
+        await prepareOwned(this.db,this.scope,`
           UPDATE assignments SET
             source_kind=?,course_id=?,course_name=?,title=?,release_at=?,due_at=?,late_due_at=?,
             status=?,source_status_text=?,grade_score=?,grade_max=?,grade_display=?,source_url=?,
             source_updated_at=?,last_seen_at=?,updated_at=?
           WHERE user_id=? AND source_connection_id=? AND external_id=?
-        `).bind(
+        `,{kind:"source",id:sourceConnectionId,keys:[`source:${assignment.source}`]}).bind(
           assignment.source,assignment.courseId,assignment.courseName,assignment.title,
           assignment.releaseAt,assignment.dueAt,assignment.lateDueAt,assignment.status,
           assignment.sourceStatusText,assignment.gradeScore,assignment.gradeMax,assignment.gradeDisplay,
@@ -101,13 +138,13 @@ export class D1AssignmentRepository{
         ).run();
         updated++;
       }else{
-        await this.db.prepare(`
+        await prepareOwned(this.db,this.scope,`
           INSERT INTO assignments(
             user_id,id,source_connection_id,source_kind,external_id,course_id,course_name,title,
             release_at,due_at,late_due_at,status,source_status_text,grade_score,grade_max,grade_display,
             source_url,source_updated_at,first_seen_at,last_seen_at,created_at,updated_at
           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        `).bind(
+        `,{kind:"source",id:sourceConnectionId,keys:[`source:${assignment.source}`]}).bind(
           this.scope.userId,crypto.randomUUID(),sourceConnectionId,assignment.source,assignment.externalId,
           assignment.courseId,assignment.courseName,assignment.title,assignment.releaseAt,assignment.dueAt,
           assignment.lateDueAt,assignment.status,assignment.sourceStatusText,assignment.gradeScore,
@@ -139,7 +176,7 @@ export class D1AssignmentRepository{
       params.push(q,q);
     }
 
-    const result=await this.db.prepare(`
+    const result=await prepareOwned(this.db,this.scope,`
       SELECT
         a.id,a.source_kind,a.external_id,a.course_id,a.course_name,a.title,
         a.release_at,a.due_at,a.late_due_at,a.status,a.source_status_text,

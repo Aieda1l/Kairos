@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {prepareFixtureUser,waitForAppHydration} from "./helpers";
+import {enableFixtureSubmissionStatus,prepareFixtureUser,waitForAppHydration} from "./helpers";
 
 type BridgeCapture = {
   messages: string[];
@@ -9,6 +9,7 @@ type BridgeCapture = {
 
 test("syncs Canvas submission status through the Firefox page bridge without exposing credentials",async({page,context})=>{
   await prepareFixtureUser(context);
+  await enableFixtureSubmissionStatus(context);
   const apiBodies:string[]=[];
   let startRequests=0;
 
@@ -100,7 +101,7 @@ test("syncs Canvas submission status through the Firefox page bridge without exp
   await page.goto("/sources");
   await waitForAppHydration(page);
   const canvasCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Canvas",exact:true})});
-  const feedUrl=`http://127.0.0.1:3000/api/test-fixtures/canvas-feed?token=${secret}`;
+  const feedUrl=`https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics?token=${secret}`;
   await canvasCard.getByLabel("Canvas calendar feed URL").fill(feedUrl);
   await canvasCard.getByRole("button",{name:"Test connection"}).click();
   await expect(page.getByText(/1 assignments found/)).toBeVisible();

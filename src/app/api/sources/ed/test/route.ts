@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import { z } from "zod";
 import { testEdConnection } from "@/lib/ed/discovery-service";
 import { EdSourceError } from "@/lib/sources/ed/errors";
@@ -18,8 +19,9 @@ export async function POST(request:Request){
     return Response.json({ok:false,code:"INVALID_REQUEST",message:"Enter an Ed API token."},{status:400});
   }
   try{
-    return Response.json(await testEdConnection(parsed.data.token,getEdRouteFetch()));
+    return Response.json(await (resolved.runtime.kind==="legacy"?testEdConnection(parsed.data.token,getEdRouteFetch()):testEdConnection(resolved.runtime.db,resolved.runtime.scope,parsed.data.token,getEdRouteFetch())));
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof EdSourceError){
       return Response.json({ok:false,code:error.code,message:error.message},{status:error.code==="ED_AUTH_INVALID"?401:502});
     }

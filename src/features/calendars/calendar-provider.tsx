@@ -1,4 +1,6 @@
 "use client";
+import {syncAllRequestInit} from '@/lib/sync-all/client';
+import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
   createContext,
@@ -22,19 +24,32 @@ const OAUTH_ERROR_MESSAGES:Record<string,string>={
   CALENDAR_RATE_LIMITED:"Microsoft is temporarily limiting requests. Try again later.",
   CALENDAR_UPSTREAM_ERROR:"Microsoft Calendar could not be connected. Check the Entra configuration and try again.",
 };
+const GOOGLE_OAUTH_ERROR_MESSAGES:Record<string,string>={
+  CALENDAR_CONFIG_MISSING:'Google Calendar is temporarily unavailable. Try again later.',
+  CALENDAR_AUTH_EXPIRED:'Google Calendar rejected the authorization. Start a new connection.',
+  CALENDAR_PERMISSION_DENIED:'Google Calendar did not allow calendar access. Check permissions and connect again.',
+  CALENDAR_AUTH_REQUIRED:'Google Calendar authorization was not completed.',
+  CALENDAR_NETWORK_ERROR:'Kairos could not reach Google during calendar authorization. Try again.',
+  CALENDAR_RATE_LIMITED:'Google is temporarily limiting requests. Try again later.',
+  CALENDAR_UPSTREAM_ERROR:'Google Calendar could not be connected. Try again later.',
+};
 
 type CalendarPhase="idle"|"testing"|"connecting"|"syncing"|"success"|"error";
-type CalendarState={phase:CalendarPhase;message:string};
+type CalendarRecoveryOperation='authorize'|'test-icloud'|'connect-icloud'|'sync'|'sync-all'|'remove-events'|'disconnect';
+type CalendarState={phase:CalendarPhase;message:string;recovery?:RecoveryNotice|null;operation?:CalendarRecoveryOperation};
 type CalendarSyncContextValue={
   connections:CalendarConnection[];
   phaseFor(id:string):CalendarPhase;
   messageFor(id:string):string;
-  startGoogle(connectionId?:string):Promise<void>;
-  startMicrosoft(connectionId?:string):Promise<void>;
+  recoveryFor(id:string):RecoveryNotice|null;
+  recoveryOperationFor(id:string):CalendarRecoveryOperation|null;
+  startGoogle(connectionId?:string,returnTo?:'/onboarding'):Promise<void>;
+  startMicrosoft(connectionId?:string,returnTo?:'/onboarding'):Promise<void>;
+  refreshAccepted():Promise<void>;
   testIcloud(username:string,secret:string):Promise<boolean>;
   connectIcloud(username:string,secret:string):Promise<boolean>;
   syncConnection(id:string):Promise<void>;
-  syncAll():Promise<void>;
+  syncAll(runId?:string):Promise<void>;
   removeEvents(id:string):Promise<void>;
   disconnect(id:string):Promise<void>;
 };
@@ -52,11 +67,6 @@ async function readJson(response:Response):Promise<Record<string,unknown>>{
   }
 }
 
-function bodyMessage(body:Record<string,unknown>,fallback:string){
-  return typeof body.message==="string"&&body.message.trim()
-    ?body.message
-    :fallback;
-}
 
 function isConnectionStale(connection:CalendarConnection,now=Date.now()):boolean{
   if(!connection.enabled)return false;
@@ -100,6 +110,7 @@ export function CalendarSyncProvider({
   const [connections,setConnections]=useState(initialConnections);
   const [states,setStates]=useState<Record<string,CalendarState>>({});
   const connectionsRef=useRef(connections);
+  const blockedUntil=useRef<Record<string,number>>({});
   const syncAllPromiseRef=useRef<Promise<void>|null>(null);
 
   useEffect(()=>{
@@ -107,21 +118,25 @@ export function CalendarSyncProvider({
   },[connections]);
 
   const setLocal=useCallback((id:string,state:CalendarState)=>{
+    if(state.recovery?.retryAfterSeconds)blockedUntil.current[id]=Date.now()+state.recovery.retryAfterSeconds*1000;
+    if(state.recovery?.href==="/support"&&state.recovery.key.endsWith("SYNC_RECOVERY_REQUIRED"))blockedUntil.current[id]=Infinity;
     setStates(current=>({...current,[id]:state}));
   },[]);
 
   useEffect(()=>{
     const url=new URL(window.location.href);
-    if(url.searchParams.get("calendarProvider")!=="microsoft")return;
+    const provider=url.searchParams.get('calendarProvider');
+    if(provider!=='google'&&provider!=='microsoft')return;
     const code=url.searchParams.get("calendarError");
     if(!code)return;
-    const message=code==="CALENDAR_AUTH_EXPIRED"&&url.searchParams.get("calendarStage")==="calendar_setup"
+    const messages=provider==='google'?GOOGLE_OAUTH_ERROR_MESSAGES:OAUTH_ERROR_MESSAGES;
+    const message=provider==='microsoft'&&code==="CALENDAR_AUTH_EXPIRED"&&url.searchParams.get("calendarStage")==="calendar_setup"
       ?"Microsoft signed in successfully, but Outlook rejected calendar access. Try a fresh connection and confirm this Microsoft account can open Outlook Calendar."
-      :Object.hasOwn(OAUTH_ERROR_MESSAGES,code)
-      ?OAUTH_ERROR_MESSAGES[code]
-      :"Microsoft Calendar could not be connected. Try again.";
-    const connection=connectionsRef.current.find(item=>item.provider==="microsoft");
-    setLocal(connection?.id??"microsoft",{phase:"error",message});
+      :Object.hasOwn(messages,code)
+      ?messages[code]
+      :provider==='google'?'Google Calendar could not be connected. Try again.':'Microsoft Calendar could not be connected. Try again.';
+    const connection=connectionsRef.current.find(item=>item.provider===provider);
+    setLocal(connection?.id??provider,{phase:"error",message});
     url.searchParams.delete("calendarProvider");
     url.searchParams.delete("calendarError");
     url.searchParams.delete("calendarStage");
@@ -130,6 +145,18 @@ export function CalendarSyncProvider({
 
   const phaseFor=(id:string):CalendarPhase=>states[id]?.phase??"idle";
   const messageFor=(id:string):string=>states[id]?.message??"";
+  const recoveryFor=(id:string):RecoveryNotice|null=>states[id]?.recovery??getRecoveryNotice(connections.find(item=>item.id===id)?.lastErrorCode,{key:id});
+  const recoveryOperationFor=(id:string):CalendarRecoveryOperation|null=>states[id]?.operation??null;
+  function canAttempt(id:string){
+    const connection=connectionsRef.current.find(item=>item.id===id);
+    return connection?.lastErrorCode!=="SYNC_RECOVERY_REQUIRED"&&Date.now()>=(blockedUntil.current[id]??0);
+  }
+  function requestFailure(body:Record<string,unknown>,response:Response,key:string,fallback:string):never{
+    const recovery=recoveryFromResponse(body,response,key);
+    if(recovery?.retryAfterSeconds)blockedUntil.current[key]=Date.now()+recovery.retryAfterSeconds*1000;
+    if(body.code==="SYNC_RECOVERY_REQUIRED"||body.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[key]=Infinity;
+    throw new RecoveryRequestError(recovery,fallback);
+  }
 
   const applySyncResult=useCallback((row:Record<string,unknown>):void=>{
     if(typeof row.connectionId!=="string")return;
@@ -154,18 +181,26 @@ export function CalendarSyncProvider({
     setConnections(nextConnections);
   },[]);
 
-  async function startOAuth(provider:"google"|"microsoft",connectionId?:string){
+  async function refreshAccepted(){
+    const response=await fetch('/api/calendars',{cache:'no-store'});
+    const body=await readJson(response);
+    if(!response.ok||!Array.isArray(body.connections))throw new Error('Calendar connections could not be loaded.');
+    const accepted=body.connections as CalendarConnection[];
+    connectionsRef.current=accepted;setConnections(accepted);
+  }
+  async function startOAuth(provider:"google"|"microsoft",connectionId?:string,returnTo?:'/onboarding'){
     const key=connectionId??provider;
+    if(!canAttempt(key))return;
     setLocal(key,{phase:"connecting",message:""});
     try{
       const response=await fetch(`/api/calendars/${provider}/start`,{
         method:"POST",
         headers:{"content-type":"application/json"},
-        body:JSON.stringify(connectionId?{connectionId}:{}),
+        body:JSON.stringify({...(connectionId?{connectionId}:{}),...(returnTo?{returnTo}:{})}),
       });
       const body=await readJson(response);
       if(!response.ok){
-        throw new Error(bodyMessage(body,"Calendar authorization could not start."));
+        requestFailure(body,response,key,"Calendar authorization could not start.");
       }
       const authorizationUrl=typeof body.authorizationUrl==="string"?body.authorizationUrl:"";
       if(!/^https:\/\//.test(authorizationUrl)){
@@ -174,14 +209,18 @@ export function CalendarSyncProvider({
       window.location.assign(authorizationUrl);
     }catch(error){
       setLocal(key,{
+        operation:'authorize',
         phase:"error",
-        message:error instanceof Error?error.message:"Calendar authorization could not start.",
+        message:error instanceof RecoveryRequestError?error.message:"Calendar authorization could not start.",
+        recovery:error instanceof RecoveryRequestError?error.notice:getRecoveryNotice("SERVICE_UNAVAILABLE"),
       });
     }
   }
 
   async function testIcloud(username:string,secret:string):Promise<boolean>{
-    setLocal("caldav",{phase:"testing",message:""});
+    const key=connections.find(item=>item.provider==='caldav')?.id??'caldav';
+    if(!canAttempt(key))return false;
+    setLocal(key,{phase:"testing",message:""});
     try{
       const response=await fetch("/api/calendars/caldav/test",{
         method:"POST",
@@ -190,14 +229,16 @@ export function CalendarSyncProvider({
       });
       const body=await readJson(response);
       if(!response.ok){
-        throw new Error(bodyMessage(body,"iCloud Calendar could not be tested."));
+        requestFailure(body,response,key,"iCloud Calendar could not be tested.");
       }
-      setLocal("caldav",{phase:"success",message:"iCloud Calendar credentials work."});
+      setLocal(key,{phase:"success",message:"iCloud Calendar credentials work."});
       return true;
     }catch(error){
-      setLocal("caldav",{
+      setLocal(key,{
+        operation:'test-icloud',
         phase:"error",
-        message:error instanceof Error?error.message:"iCloud Calendar could not be tested.",
+        message:error instanceof RecoveryRequestError?error.message:"iCloud Calendar could not be tested.",
+        recovery:error instanceof RecoveryRequestError?error.notice:getRecoveryNotice("SERVICE_UNAVAILABLE"),
       });
       return false;
     }
@@ -206,6 +247,7 @@ export function CalendarSyncProvider({
   async function connectIcloud(username:string,secret:string):Promise<boolean>{
     const existing=connections.find(item=>item.provider==="caldav");
     const key=existing?.id??"caldav";
+    if(!canAttempt(key))return false;
     setLocal(key,{phase:"connecting",message:""});
     try{
       const response=await fetch("/api/calendars/caldav/connect",{
@@ -219,7 +261,7 @@ export function CalendarSyncProvider({
       });
       const body=await readJson(response);
       if(!response.ok){
-        throw new Error(bodyMessage(body,"iCloud Calendar could not be connected."));
+        requestFailure(body,response,key,"iCloud Calendar could not be connected.");
       }
       const connection=body.connection as CalendarConnection|undefined;
       if(!connection?.id){
@@ -235,8 +277,10 @@ export function CalendarSyncProvider({
       return true;
     }catch(error){
       setLocal(key,{
+        operation:'connect-icloud',
         phase:"error",
-        message:error instanceof Error?error.message:"iCloud Calendar could not be connected.",
+        message:error instanceof RecoveryRequestError?error.message:"iCloud Calendar could not be connected.",
+        recovery:error instanceof RecoveryRequestError?error.notice:getRecoveryNotice("SERVICE_UNAVAILABLE"),
       });
       return false;
     }
@@ -244,38 +288,56 @@ export function CalendarSyncProvider({
 
   async function syncConnection(id:string){
     const connection=connections.find(item=>item.id===id);
-    if(!connection)return;
+    if(!connection||!canAttempt(id))return;
     setLocal(id,{phase:"syncing",message:""});
     try{
       const response=await fetch(`/api/calendars/${id}/sync`,{method:"POST"});
       const body=await readJson(response);
       applySyncResult(body);
       if(!response.ok||body.status==="error"){
-        setLocal(id,{phase:"error",message:`${connection.label} could not be synchronized.`});
+        const recovery=recoveryFromResponse(body,response,id);
+        if(body.code==="SYNC_RECOVERY_REQUIRED"||body.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[id]=Infinity;
+        setLocal(id,{operation:'sync',phase:"error",message:`${connection.label} could not be synchronized. ${recovery?.message??'Retry later; saved data is retained.'}`,recovery});
         return;
       }
       setLocal(id,{
+        ...(body.status==='partial'?{operation:'sync' as const}:{}),
         phase:body.status==="partial"?"error":"success",
         message:body.status==="partial"
           ?`${connection.label} synchronized with warnings.`
           :syncSuccessMessage(connection,body),
       });
     }catch{
-      setLocal(id,{phase:"error",message:`${connection.label} could not be synchronized.`});
+      setLocal(id,{operation:'sync',phase:"error",message:`${connection.label} could not be synchronized. Retry later; saved data is retained.`,recovery:getRecoveryNotice("SERVICE_UNAVAILABLE",{key:id})});
     }
   }
 
-  const syncAll=useCallback(async():Promise<void>=>{
-    if(syncAllPromiseRef.current){
-      return syncAllPromiseRef.current;
+  const syncAll=useCallback(async(runId?:string):Promise<void>=>{
+    while(syncAllPromiseRef.current){
+      const pending=syncAllPromiseRef.current;
+      if(runId===undefined)return pending;
+      // An admitted pass must reconcile the source writes preceding this run,
+      // so joining a batch that started earlier cannot satisfy its step.
+      await pending;
+      if(syncAllPromiseRef.current===pending)syncAllPromiseRef.current=null;
     }
 
     const run=(async()=>{
-      const current=connectionsRef.current;
+      const current=connectionsRef.current.filter(connection=>connection.enabled);
+      if(!current.some(connection=>canAttempt(connection.id)))return;
+      // sync-all cannot exclude a blocked destination; wait instead of bypassing backoff.
+      if(current.some(connection=>!canAttempt(connection.id)))return;
       try{
-        const response=await fetch("/api/calendars/sync-all",{method:"POST"});
+        const response=await fetch("/api/calendars/sync-all",{method:"POST",...syncAllRequestInit({syncAllRunId:runId})});
         const body=await readJson(response);
-        if(!response.ok)throw new Error("Calendar synchronization failed.");
+        if(!response.ok){
+          for(const connection of current){
+            const recovery=recoveryFromResponse(body,response,connection.id);
+            if(body.code==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
+            setLocal(connection.id,{operation:'sync-all',phase:"error",message:recovery?.message??"Calendar synchronization failed. Retry later.",recovery});
+          }
+          return;
+        }
 
         if(Array.isArray(body.results)){
           for(const result of body.results){
@@ -286,21 +348,27 @@ export function CalendarSyncProvider({
             if(!connection)continue;
             applySyncResult(row);
             const status=resultStatus(row.status);
+            const recovery=status==="success"?null:recoveryFromResponse(row,undefined,connection.id);
+            if(row.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
             setLocal(connection.id,{
+              ...(status!=='success'?{operation:'sync-all' as const}:{}),
+              recovery,
               phase:status==="success"?"success":"error",
               message:status==="success"
                 ?`${connection.label} synchronized.`
                 :status==="partial"
                   ?`${connection.label} synchronized with warnings.`
-                  :`${connection.label} could not be synchronized.`,
+                  :`${connection.label} could not be synchronized. ${recovery?.message??"Retry later; saved data is retained."}`,
             });
           }
         }
       }catch{
         for(const connection of current){
           setLocal(connection.id,{
+            operation:'sync-all',
             phase:"error",
-            message:`${connection.label} could not be synchronized.`,
+            message:`${connection.label} could not be synchronized. Retry later; saved data is retained.`,
+            recovery:getRecoveryNotice("SERVICE_UNAVAILABLE",{key:connection.id}),
           });
         }
       }
@@ -332,13 +400,13 @@ export function CalendarSyncProvider({
 
   async function removeEvents(id:string){
     const connection=connections.find(item=>item.id===id);
-    if(!connection)return;
+    if(!connection||!canAttempt(id))return;
     setLocal(id,{phase:"syncing",message:""});
     try{
       const response=await fetch(`/api/calendars/${id}/remove-events`,{method:"POST"});
       const body=await readJson(response);
       if(!response.ok){
-        throw new Error(bodyMessage(body,"Generated calendar events could not be removed."));
+        requestFailure(body,response,id,"Generated calendar events could not be removed.");
       }
       setLocal(id,{
         phase:"success",
@@ -346,10 +414,12 @@ export function CalendarSyncProvider({
       });
     }catch(error){
       setLocal(id,{
+        operation:'remove-events',
         phase:"error",
-        message:error instanceof Error
+        message:error instanceof RecoveryRequestError
           ?error.message
           :"Generated calendar events could not be removed.",
+        recovery:error instanceof RecoveryRequestError?error.notice:getRecoveryNotice("SERVICE_UNAVAILABLE"),
       });
     }
   }
@@ -362,7 +432,7 @@ export function CalendarSyncProvider({
       const response=await fetch(`/api/calendars/${id}/disconnect`,{method:"POST"});
       const body=await readJson(response);
       if(!response.ok){
-        throw new Error(bodyMessage(body,"Calendar could not be disconnected."));
+        requestFailure(body,response,id,"Calendar could not be disconnected.");
       }
       setConnections(current=>current.filter(item=>item.id!==id));
       setLocal(id,{
@@ -371,8 +441,10 @@ export function CalendarSyncProvider({
       });
     }catch(error){
       setLocal(id,{
+        operation:'disconnect',
         phase:"error",
-        message:error instanceof Error?error.message:"Calendar could not be disconnected.",
+        message:error instanceof RecoveryRequestError?error.message:"Calendar could not be disconnected.",
+        recovery:error instanceof RecoveryRequestError?error.notice:getRecoveryNotice("SERVICE_UNAVAILABLE"),
       });
     }
   }
@@ -381,8 +453,11 @@ export function CalendarSyncProvider({
     connections,
     phaseFor,
     messageFor,
-    startGoogle:id=>startOAuth("google",id),
-    startMicrosoft:id=>startOAuth("microsoft",id),
+    recoveryFor,
+    recoveryOperationFor,
+    startGoogle:(id,returnTo)=>startOAuth("google",id,returnTo),
+    startMicrosoft:(id,returnTo)=>startOAuth("microsoft",id,returnTo),
+    refreshAccepted,
     testIcloud,
     connectIcloud,
     syncConnection,

@@ -1,4 +1,7 @@
 import "server-only";
+import {isFrameworkControlFlow,isServiceUnavailable,serviceUnavailableResponse} from '@/lib/operations/service-errors';
+import {createOperationContext,getOperationContext,runWithOperationContext} from "@/lib/operations/context";
+import {emitOperationEvent} from "@/lib/operations/events";
 import {AuthenticationRequiredError} from "@/lib/auth/user-scope";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import {
@@ -29,16 +32,27 @@ export async function getSourceRouteRuntime():Promise<SourceRouteRuntime>{
 }
 
 export async function resolveSourceApiRuntime():Promise<SourceApiRuntimeResult>{
-  try{
-    return {ok:true,runtime:await getSourceRouteRuntime()};
-  }catch(error){
-    if(!isAuthenticationRequired(error))throw error;
-    return {
-      ok:false,
-      response:Response.json({
-        code:"AUTH_REQUIRED",
-        message:"Authentication required.",
-      },{status:401}),
-    };
-  }
+  const context=getOperationContext()??createOperationContext("source.sync");
+  return runWithOperationContext(context,async()=>{
+    try{
+      return {ok:true,runtime:await getSourceRouteRuntime()};
+    }catch(error){
+      if(isFrameworkControlFlow(error))throw error;
+      if(!isAuthenticationRequired(error)){
+        if(isServiceUnavailable(error)){
+          emitOperationEvent(context,{code:"SERVICE_UNAVAILABLE",result:"error",status:503});
+          return {ok:false,response:serviceUnavailableResponse()};
+        }
+        throw error;
+      }
+      emitOperationEvent(context,{code:"AUTH_REQUIRED",result:"rejected",status:401});
+      return {
+        ok:false,
+        response:Response.json({
+          code:"AUTH_REQUIRED",
+          message:"Authentication required.",
+        },{status:401}),
+      };
+    }
+  });
 }

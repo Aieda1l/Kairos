@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "status": "published",
+  "distribution": "listed",
+  "listingUrl": "https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/",
+  "publicationEvidence": {
+    "checkedDate": "2026-10-15",
+    "addonNumericId": 3093647,
+    "fileId": 5111578,
+    "signedXpiUrl": "https://addons.mozilla.org/firefox/downloads/file/5111578/kairos_bridge-0.4.0.xpi",
+    "signedXpiSha256": "7f28cbdacf44aba62466e34bb508d2a2026eaa4059e32a5511b94416b15abf64",
+    "executablePayloadsIdenticalToReviewedPacket": true,
+    "manifestSemanticChanges": false,
+    "ordinaryFirefoxInstallConsentAndReads": "operator-confirmed",
+    "actualVersionUpgrade": "not-verified",
+    "publishedDescriptionPresent": true,
+    "publishedPrivacyPolicyPresent": false,
+    "listingCheckedAt": "2026-10-15T18:13:13Z",
+    "privacyDisclosedInDescription": true,
+    "publishedHomepage": "https://mykairos.me",
+    "publishedSupportUrl": "https://mykairos.me",
+    "listingDisclosureReview": "verified; dedicated privacy-policy API field remains unset"
+  },
+  "addonId": "kairos-local@kairos",
+  "version": "0.4.0",
+  "license": "MIT",
+  "name": "Kairos Bridge",
+  "summary": "Read Canvas submission status and Gradescope coursework from your signed-in Firefox tabs into Kairos.",
+  "description": "Kairos is an independent coursework planner designed first for UW Seattle students, with open account signup. It is not an official University of Washington service. Kairos Bridge uses already signed-in Canvas and Gradescope tabs to read normalized coursework into Kairos. Canvas support is limited to canvas.uw.edu; Gradescope support is limited to www.gradescope.com. It reads source data and does not submit assignments or change grades. Firefox desktop 140 or later is required. During installation, Firefox requests access to the specified sites, tabs, and required website-content and browsing-activity transmission. Browsing activity is limited to two booleans reporting whether a Canvas UW tab and a Gradescope tab are open; no general history or visited URL list is sent. Coursework and these named-site presence flags are sent to the Kairos page at mykairos.me, or the explicitly permitted local development origins. The webpage receives a constant not-shared protocol compatibility marker instead of the installed extension version; the popup can display that version locally. The bridge does not export passwords, session cookies, authorization headers, account identifiers, names, emails, or raw authenticated pages. There is no optional telemetry.",
+  "homepageUrl": "https://mykairos.me",
+  "privacyPolicyUrl": "https://mykairos.me/privacy",
+  "platforms": [
+    "firefox-desktop"
+  ],
+  "minimumFirefoxVersion": "140.0",
+  "nativeConsentVersionFloors": {
+    "desktop": "140.0",
+    "android": "142.0"
+  },
+  "dataCollectionPermissions": {
+    "required": [
+      "websiteContent",
+      "browsingActivity"
+    ]
+  },
+  "permissions": [
+    "tabs"
+  ],
+  "hostPermissions": [
+    "https://canvas.uw.edu/*",
+    "https://www.gradescope.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://mykairos.me/*"
+  ],
+  "reviewerNotes": "Local publication/evidence record, not an AMO API request. Mozilla's public API confirms listed 0.4.0 with the stable ID and MIT license; the downloaded XPI matches its published hash. Executable payloads match the reviewed runtime ZIP, and manifest differences are formatting only. The original submitted unsigned runtime/source ZIPs remain immutable; record the signed XPI separately. Required browsingActivity covers named Canvas UW and Gradescope tab-presence flags. Source HTTP/DOM diagnostics are source-read control results, not optional telemetry. Protocol-v1 PONG uses not-shared; the popup shows the actual installed version. Desktop 140+ install, native consent and source reads are operator-confirmed. Android 142 is a manifest compatibility floor, not Android QA evidence. An actual version upgrade remains unverified. The public description now contains the prepared data disclosure and full HTTPS privacy-policy link; homepage and support URL both point to https://mykairos.me. The dedicated privacy-policy API field remains unset; the operator could not find that editor field. The project public-disclosure task is verified without requiring a particular Developer Hub layout. The longer description above remains prepared explanatory copy, not a claim of byte-identical public text. See AMO.md; all remote edits were performed by the operator."
+}

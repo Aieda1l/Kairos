@@ -1,5 +1,10 @@
 import { connection as waitForRequest } from "next/server";
 import {redirect} from "next/navigation";
+import {headers} from 'next/headers';
+import {D1OnboardingRepository} from '@/lib/db/d1/repositories/onboarding';
+import {D1SettingsRepository} from '@/lib/db/d1/repositories/settings';
+import {dashboardPaths,resolveDashboardEntry} from '@/lib/onboarding/entry';
+import {ReturningRecoveryPrompts} from "@/features/recovery/recovery-prompts";
 import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SubmissionStatusProvider } from "@/features/submission-status/submission-status-provider";
@@ -43,16 +48,24 @@ const emptyGradescopeSyncState: SubmissionStatusSyncState<GradescopeSyncErrorCod
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await waitForRequest();
+  const pathname=(await headers()).get('x-kairos-pathname');
+  // Every dashboard entry is matched by the proxy. Missing forwarding is a
+  // runtime failure, never an opportunity to accept an unguarded deep link.
+  if(!pathname||!dashboardPaths.has(pathname))throw new Error('Dashboard request path is unavailable.');
   let runtime:Awaited<ReturnType<typeof getSourceRuntimeContext>>;
   try{
     runtime=await getSourceRuntimeContext();
   }catch(error){
     if(error instanceof AuthenticationRequiredError){
-      redirect("/sign-in?returnTo=/upcoming");
+      redirect('/sign-in?returnTo='+encodeURIComponent(pathname));
     }
     throw error;
   }
   const {db,scope}=runtime;
+  const onboarding=await new D1OnboardingRepository(db,scope).ensureInitialized();
+  const destination=resolveDashboardEntry(onboarding,pathname);
+  if(destination)redirect(destination);
+  const submissionEnabled=await new D1SettingsRepository(db,scope).getCanvasSubmissionStatusEnabled();
 
   const connections=new D1SourceConnectionRepository(db,scope);
   const statuses=new D1SubmissionStatusRepository(db,scope);
@@ -112,9 +125,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
           >
             <SubmissionStatusProvider
               enabled={Boolean(canvasConnection && canvasConnection.enabled && hasEligibleCanvasAssignment)}
+              automaticEnabled={submissionEnabled}
               initialSyncState={canvasSyncState}
             >
-              <AppShell>{children}</AppShell>
+              <AppShell>
+                {onboarding.status!=='active'&&pathname!=='/onboarding'&&<div className="mb-5"><ReturningRecoveryPrompts
+                  onboarding={{status:onboarding.status,revision:onboarding.revision}}
+                  initialSources={[canvasConnection,edConnection,gradescopeConnection].flatMap(source=>source?[{kind:source.kind,enabled:source.enabled,lastSyncCompletedAt:source.lastSyncCompletedAt,lastErrorCode:source.lastErrorCode}]:[])}
+                /></div>}
+                {children}
+              </AppShell>
             </SubmissionStatusProvider>
           </GradescopeProvider>
         </EdProvider>

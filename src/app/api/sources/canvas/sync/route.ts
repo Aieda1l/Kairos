@@ -1,3 +1,5 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
+import {withSyncAllRequest} from '@/lib/abuse/sync-all';
 import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
@@ -24,6 +26,7 @@ export async function POST(request?:Request){
   }
 
   try{
+    return await withSyncAllRequest(runtime,request,'canvas-deadlines',async()=>{
     const result=runtime.kind==="legacy"
       ?await syncCanvasConnection(connection.id,{db:runtime.db})
       :await syncCanvasConnection(connection.id,{
@@ -44,7 +47,9 @@ export async function POST(request?:Request){
       );
     }
     return Response.json(result);
+    });
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     if(error instanceof SyncServiceError||error instanceof CanvasSourceError){
       return Response.json(
         {code:error.code,message:error.message},

@@ -1,19 +1,34 @@
-import { expect, it, vi } from "vitest";
+import {afterEach,expect,it,vi} from "vitest";
 import { CanvasIcalSource } from "@/lib/sources/canvas-ical/source";
 import { CanvasSourceError } from "@/lib/sources/canvas-ical/errors";
 const feed=`BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:event-assignment-1\nDTSTART:20261008T065900Z\nSUMMARY:HW [CSE 1]\nEND:VEVENT\nEND:VCALENDAR`;
-it("tests and syncs a feed",async()=>{const source=new CanvasIcalSource(new URL("https://example.edu/a.ics"),async()=>new Response(feed,{status:200})); expect(await source.testConnection()).toEqual({ok:true,itemCount:1}); expect(await source.sync()).toHaveLength(1);});
+afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it("tests and syncs a feed",async()=>{const source=new CanvasIcalSource(new URL("https://canvas.uw.edu/feeds/calendars/synthetic.ics"),async()=>new Response(feed,{status:200})); expect(await source.testConnection()).toEqual({ok:true,itemCount:1}); expect(await source.sync()).toHaveLength(1);});
 it("can test and sync Canvas feeds when the upstream requires an identified User-Agent",async()=>{
   const upstream:typeof fetch=async(_input,init)=>{
     const headers=new Headers(init?.headers);
     const identified=/^Kairos\//.test(headers.get("user-agent")??"");
     return new Response(identified?feed:"Forbidden",{status:identified?200:403});
   };
-  const source=new CanvasIcalSource(new URL("https://example.edu/a.ics"),upstream);
+  const source=new CanvasIcalSource(new URL("https://canvas.uw.edu/feeds/calendars/synthetic.ics"),upstream);
   expect(await source.testConnection()).toEqual({ok:true,itemCount:1});
   expect(await source.sync()).toHaveLength(1);
 });
-it("maps authorization failures",async()=>{const source=new CanvasIcalSource(new URL("https://example.edu/a.ics"),async()=>new Response("no",{status:403})); await expect(source.sync()).rejects.toMatchObject({code:"UNAUTHORIZED_OR_EXPIRED_FEED"} satisfies Partial<CanvasSourceError>);});
+it("maps authorization failures",async()=>{const source=new CanvasIcalSource(new URL("https://canvas.uw.edu/feeds/calendars/synthetic.ics"),async()=>new Response("no",{status:403})); await expect(source.sync()).rejects.toMatchObject({code:"UNAUTHORIZED_OR_EXPIRED_FEED"} satisfies Partial<CanvasSourceError>);});
+
+it("reports unsupported destinations without invoking the provider",async()=>{
+  const transport=vi.fn(async()=>new Response(feed));
+  const result=await new CanvasIcalSource(new URL("https://unsupported.example.invalid/feed.ics"),transport).testConnection();
+  expect(result).toMatchObject({ok:false,code:"INVALID_FEED_URL"});expect(transport).not.toHaveBeenCalled();
+});
+
+it("maps the canonical UW fixture locally without a production destination bypass",async()=>{
+  vi.stubEnv("E2E_FIXTURES","1");
+  const nativeFetch=vi.fn(async()=>{throw new Error("Unexpected external request");});vi.stubGlobal("fetch",nativeFetch);
+  const source=new CanvasIcalSource(new URL("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics?token=synthetic-token"));
+  expect(await source.sync()).toMatchObject([{externalId:"event-assignment-4242",title:"Fixture Homework"}]);
+  expect(nativeFetch).not.toHaveBeenCalled();
+});
 
 it.each([
   [401,"Copy a fresh feed URL"],
@@ -26,7 +41,10 @@ it.each([
     expect(error).toMatchObject({code:"UNAUTHORIZED_OR_EXPIRED_FEED"});
     expect(String(error)).toContain(expected);
     const diagnostic=JSON.stringify(warning.mock.calls);
-    expect(diagnostic).toContain(`"status":${status}`);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(warning.mock.calls[0][0] as string)).toMatchObject({
+      event:"kairos.operation",provider:"canvas",code:"UPSTREAM_HTTP_ERROR",status,result:"error",
+    });
     expect(diagnostic).not.toContain("private-secret");
     expect(diagnostic).not.toContain("hidden-feed-code");
     expect(diagnostic).not.toContain("private response body");

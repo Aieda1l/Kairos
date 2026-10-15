@@ -17,7 +17,7 @@ describe("unauthenticated source connection probes",()=>{
     {
       provider:"Canvas",
       route:()=>import("@/app/api/sources/canvas/test/route"),
-      payload:{feedUrl:"https://canvas.example.edu/calendar.ics"},
+      payload:{feedUrl:"https://canvas.uw.edu/feeds/calendars/synthetic.ics"},
     },
     {
       provider:"Ed",

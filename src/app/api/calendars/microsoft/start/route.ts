@@ -1,3 +1,4 @@
+import {isCalendarReturnTo} from '@/lib/auth/return-to';
 import {z} from "zod";
 import {
   buildMicrosoftAuthorizationUrl,
@@ -7,8 +8,10 @@ import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 import {registerOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
+import {OAuthControlPausedError} from "@/lib/db/d1/repositories/oauth-requests";
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 
-const schema=z.object({connectionId:z.string().min(1).optional()}).strict();
+const schema=z.object({connectionId:z.string().min(1).optional(),returnTo:z.string().refine(isCalendarReturnTo).optional()}).strict();
 
 export async function POST(request:Request){
   let body:unknown={};
@@ -35,6 +38,7 @@ export async function POST(request:Request){
       provider:"microsoft" as const,
       redirectUri,
       connectionId:parsed.data.connectionId??null,
+      returnTo:parsed.data.returnTo??"/sources",
     };
     const registered=runtime.kind==="legacy"
       ?registerOAuthRequest(input)
@@ -49,6 +53,9 @@ export async function POST(request:Request){
       }).toString(),
     });
   }catch(error){
+    const admission=abuseErrorResponse(error);
+    if(admission)return admission;
+    if(error instanceof OAuthControlPausedError)return Response.json({code:error.code,message:error.message},{status:503,headers:{"cache-control":"no-store"}});
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(

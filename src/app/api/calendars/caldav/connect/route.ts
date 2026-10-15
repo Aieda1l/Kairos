@@ -1,3 +1,4 @@
+import {abuseErrorResponse} from "@/lib/abuse/guard";
 import {z} from "zod";
 import {connectCaldavCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
@@ -31,6 +32,7 @@ export async function POST(request:Request){
       );
     return Response.json({connection});
   }catch(error){
+    const ownership=abuseErrorResponse(error);if(ownership)return ownership;
     const e=error instanceof CalendarSyncError
       ?error
       :new CalendarSyncError(

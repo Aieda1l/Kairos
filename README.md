@@ -1,20 +1,27 @@
-# Kairos
+﻿# Kairos
 
-Kairos is an assignment dashboard for students. It combines Canvas deadlines, Canvas submission status, a direct read-only Gradescope connector, a direct read-only Ed connector, and outbound calendar synchronization to Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar.
+Kairos is a UW-first assignment dashboard, open to students signing in with Google or Microsoft identities. It combines Canvas deadlines and submission status, read-only Gradescope coursework from Firefox, and a direct read-only Ed connector. Optional calendar connections publish deadline copies to Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar. Identity sign-in and calendar consent are separate.
 
-This is a personal tool, not an official University of Washington product. It does not use UW logos and never asks for your UW NetID, Canvas, or Gradescope password.
+Kairos is an independent student project, not an official University of Washington product. It does not ask for your UW NetID, Canvas or Gradescope password. The Firefox Canvas connector currently supports `canvas.uw.edu`; source access depends on your own courses and accounts.
 
-## Requirements
+## Hosted status
 
-- Node.js 22 or newer
-- npm 10 or newer
-- Firefox for Canvas submission-status and Gradescope browser-local sync
-- An Ed personal API token if you want to connect Ed
-- A Google OAuth web-application client ID if you want Google Calendar sync
-- A Microsoft Entra public-client application ID if you want Outlook / Microsoft 365 Calendar sync
-- An Apple Account app-specific password if you want iCloud Calendar sync
+The Milestone 6 foundation is hosted at `https://mykairos.me`. Historical acceptance and security review are recorded in [acceptance-milestone-6.md](docs/deployment/acceptance-milestone-6.md) and [security-review-2026-10-10.md](docs/deployment/security-review-2026-10-10.md). M7 engineering is implemented and reviewed; public beta launch and exact-release hosted acceptance remain pending. See the [engineering closeout](docs/deployment/closeout-milestone-7.md) and [milestone plan](docs/superpowers/plans/2026-10-10-milestone-7-public-beta.md).
 
-## Install and run
+Recorded operator evidence establishes published Google OAuth, verified domain ownership, deployed public-page corrections and successful Search Console access. The latest operator update reports Google branding fully approved after review and a successful general smoke test with two Kairos accounts; exact-release acceptance and applicable calendar/data-access verification remain separate. Milestone 7 onboarding, admission, recovery and operational changes are implemented and locally reviewed; this continuation made no production deployment. Persistent application observability remains disabled. See [the acceptance checklist](docs/deployment/acceptance-milestone-7.md) and [current readiness](docs/deployment/readiness-milestone-7.md).
+
+Public pages: [Home](https://mykairos.me/), [Privacy](https://mykairos.me/privacy), [Terms](https://mykairos.me/terms), [Support](https://mykairos.me/support), [Security](https://mykairos.me/security). New content may be pending deployment. See [provider configuration and approval runbook](docs/deployment/public-beta-providers.md) and [contact routing and support runbook](docs/deployment/public-beta-support.md).
+
+Kairos and the Firefox extension use the [MIT License](LICENSE), with Copyright (c) 2026 Kairos contributors. The standalone extension includes the same [license](extension/firefox/LICENSE) and [third-party notices](extension/firefox/THIRD_PARTY_NOTICES) for bundled code. Mozilla has published signed 0.4.0; ordinary installation, native consent and source reads are operator-confirmed. The retained submission ZIPs are unsigned build inputs. An actual version upgrade remains unverified.
+
+## Requirements and local development
+
+- Node.js 22.13+ and npm 10+
+- Firefox 140+ on desktop for Canvas submission status and Gradescope browser-local sync
+- A Canvas private calendar feed URL and/or Ed personal API token for the sources you select
+- Google and Microsoft confidential Web OAuth identity clients with server-held secrets for sign-in
+- Separate calendar OAuth configuration for optional Google/Microsoft calendar access
+- An Apple Account app-specific password and an existing writable calendar named **Kairos** for optional iCloud access
 
 ```bash
 npm install
@@ -22,183 +29,99 @@ npm run build:extension
 npm run dev
 ```
 
-Open `http://localhost:3000`. The root route is the public Kairos homepage; authenticated dashboard routes live under **Upcoming**, **Calendar**, **Assignments**, **Sources**, and **Settings**.
+Open `http://localhost:3000`. The root is the public homepage; authenticated dashboard routes include **Upcoming**, **Calendar**, **Assignments**, **Sources**, and **Settings**. Local development uses the D1-backed vinext runtime and applies local D1 migrations before startup. Keep private environment files out of Git. Production uses Cloudflare Workers and user-scoped Cloudflare D1, not the historical plaintext local SQLite adapter.
 
-Local development uses the D1-backed vinext runtime and applies local D1 migrations before startup.
+## Firefox bridge
 
-## Milestone 6 hosted status
+Build with `npm run build:extension`, then open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `extension/firefox/manifest.json`. Temporary add-ons are removed when Firefox restarts. This remains a developer/acceptance workflow, not public signed installation.
 
-The automated implementation for the multi-user hosted foundation is complete. Production deployment and real-account hosted acceptance at `https://mykairos.me` are still pending, so Milestone 6 is not yet marked complete.
+Install [Kairos Bridge 0.4.0 from Mozilla Add-ons](https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/). The public record and signed artifact match the reviewed release; normal Firefox installation, native consent and Canvas/Gradescope reads are operator-confirmed. The listing now includes the data disclosure and full privacy-policy link. Onboarding uses the verified listing; missing/invalid distribution configuration still produces no install link. See [publication evidence and the future upgrade check](docs/deployment/firefox-0.4.0-publication.md).
 
-The hosted acceptance gate uses two independent users and verifies production Google/Microsoft sign-in, strict cross-user isolation, Google/Microsoft/iCloud calendar flows, the Firefox bridge on the exact production origin, account deletion isolation, credential non-exposure, and rollback. The checklist is in `docs/deployment/acceptance-milestone-6.md`.
+The published 0.4.0 manifest requests `tabs` and explicit Kairos, Canvas and Gradescope host access. Its required Firefox data categories are `websiteContent` and `browsingActivity`: normalized source reads and supported-tab detection. Extension publication is separate from website deployment. The page bridge accepts exactly `http://localhost:3000`, `http://127.0.0.1:3000`, and `https://mykairos.me`. It does not request cookie, history, downloads, `<all_urls>`, or webRequest interception permissions.
 
-## Load the Firefox extension
+Version 0.4.0 PONG reports bridge and supported-tab presence with webpage version field `not-shared`. Earlier development builds can send their installed extension version to the Kairos page as compatibility information in PONG. The local popup shows the actual installed version. Source-derived HTTP/DOM diagnostics and version compatibility information are content/control results, not optional telemetry. Passwords, cookies, CSRF tokens, authorization headers and raw authenticated HTML do not cross the page bridge. Normalized results are saved to the hosted account when synced.
 
-Build the extension first:
+## Connect coursework sources
 
-```bash
-npm run build:extension
-```
+### Canvas deadlines
 
-Then in Firefox:
+1. In Canvas **Calendar**, copy your private calendar-feed/iCal export URL. Treat it like a password.
+2. In Kairos **Sources → Canvas**, paste it and choose **Test connection**, then **Connect Canvas**.
+3. Initial sync imports deadlines and opens **Upcoming**.
 
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Choose **Load Temporary Add-on…**.
-3. Select `extension/firefox/manifest.json`.
-4. Open the Kairos extension popup to see Canvas and Gradescope tab detection.
+Hosted Kairos encrypts the feed URL before storing it in user-scoped D1 credentials. The URL is not returned by source-status APIs or rendered back into pages. Never commit a real feed URL.
 
-Temporary Firefox add-ons are removed when Firefox restarts, so reload the extension after a restart.
+### Canvas submission status
 
-The extension requests only `tabs` plus explicit Kairos, Canvas, and Gradescope host access. Its page bridge accepts exactly `http://localhost:3000`, `http://127.0.0.1:3000`, and `https://mykairos.me`; it does **not** request cookie, history, downloads, `<all_urls>`, or webRequest interception permissions.
+1. Load the Firefox extension and sign in normally at `https://canvas.uw.edu`.
+2. Leave a Canvas tab open and check tab detection in the local extension popup.
+3. In Kairos, use **Sync submission status** or stale-on-open refresh.
 
-Milestone 6 keeps Firefox installation development/manual: load the extension as a temporary add-on for local or hosted acceptance testing. Mozilla-signed public distribution is planned separately for public-beta readiness.
+Automatic refresh runs at most once when the dashboard mounts if the previous successful check is at least 15 minutes old. Manual refresh remains available; there is no periodic background alarm. Kairos never asks for exported cookies or a Canvas access token.
 
-## Connect Canvas deadlines
+### Gradescope
 
-1. In Canvas, open **Calendar** and find the calendar-feed/iCal export option.
-2. Copy your private calendar feed URL. Treat it like a password: anyone with the full URL may be able to read the feed.
-3. In Kairos, open **Sources → Canvas**.
-4. Paste the URL, choose **Test connection**, then **Connect Canvas**.
-5. The initial sync imports assignment deadlines and sends you to **Upcoming**.
+1. Load the extension, sign in normally at `https://www.gradescope.com/`, and leave a tab open.
+2. In **Sources → Gradescope**, choose **Discover courses**.
+3. Select student courses and **Save selection**, then **Sync Gradescope**.
 
-The feed URL is stored only in the local SQLite credential table. It is not returned in source-status API responses, rendered into pages, or committed to Git.
+Reads import visible course/assignment IDs and names, release/normal/late due dates, source status text, normalized submission state, published numeric score/max score and canonical assignment links. Normal due dates drive Upcoming and Calendar; late dates remain extra metadata. Stale-on-open refresh runs once when saved data is at least 15 minutes old.
 
-## Enable Canvas submission status
+Gradescope has no supported public student API for this workflow. The connector depends on authenticated student page structure, uses isolated fixture-tested parsers, and fails closed rather than guessing identities when extraction fails. Kairos does not create or own a Gradescope login session.
 
-1. Load the Firefox extension.
-2. Sign in to `https://canvas.uw.edu` normally and leave at least one Canvas tab open.
-3. Open Kairos.
-4. Confirm the extension popup reports a Canvas tab.
-5. Use **Sync submission status**, or let stale-on-open refresh run.
+### Ed
 
-Kairos never asks for a Canvas access token, UW password, exported cookie, or authorization header. The authenticated Canvas page stays inside the extension; Kairos receives only normalized status data.
+1. Create/copy a personal Ed API token in Ed's token settings.
+2. In **Sources → Ed**, test the token, then **Connect Ed**.
+3. Select courses, **Save selection**, and **Sync Ed**.
 
-Automatic status refresh is enabled when the last successful check is at least **15 minutes** old and runs at most once when the dashboard mounts. Manual refresh remains available. There is no periodic background alarm.
+Ed does not need Firefox. Visible Ed Lessons from enabled courses are imported, including undated lessons; hidden/unlisted lessons are excluded. Effective timestamps are preferred, and an undated lesson is not assigned an invented deadline. Completed lessons are resolved for Upcoming. Kairos performs no Ed writes. The beta/unofficial API can change; failed parsing retains previously known data.
 
-## Connect Gradescope
+Hosted Kairos encrypts the Ed token before D1 storage, decrypts it on the server for reads, and never returns/displays it after saving. Ordinary coursework and metadata are not encrypted by Kairos at the application layer. Rotate/revoke an exposed token in Ed.
 
-Gradescope uses the same browser-local trust boundary; Kairos does not create or own a Gradescope login session.
+## Optional calendar destinations
 
-1. Load the Firefox extension.
-2. Sign in normally at `https://www.gradescope.com/` and leave a Gradescope tab open.
-3. In Kairos, open **Sources → Gradescope**.
-4. Choose **Discover courses**.
-5. Select the student courses Kairos should sync and choose **Save selection**.
-6. Choose **Sync Gradescope**, or let stale-on-open refresh run once the saved data is at least 15 minutes old.
+Calendar copies are outbound only and do not change source coursework. Google creates a secondary **Kairos** calendar. Microsoft creates or reuses a dedicated **Kairos** calendar. For iCloud, create a writable calendar named **Kairos** yourself before connecting; the connector discovers it rather than creating it.
 
-The connector imports, when visible to the student:
+An eligible due assignment becomes a 15-minute transparent/free marker at its exact due time. The event includes course/assignment title, source name, status and a cleaned source link. Repeated sync is idempotent; deadline changes update events, deleted generated events are recreated on reconciliation, and explicitly undated assignments lose their generated events. **Hide submitted assignments** defaults on under **Sources → Calendar destinations** and removes Submitted/Graded/Excused work from generated events. Changing it resynchronizes connected destinations.
 
-- course identity and name;
-- assignment identity and title;
-- release date;
-- normal due date;
-- late due date;
-- exact Gradescope status text;
-- normalized submission state;
-- published numeric score and maximum score;
-- a canonical Gradescope assignment link.
+**Sync All** refreshes sources before calendar reconciliation. An open app reconciles a stale destination on becoming visible when the last sync is at least 15 minutes old. Changes are not continuously published while the app is closed.
 
-The normal due date remains the deadline used by **Upcoming** and **Calendar**. A late due date is preserved as additional source metadata rather than silently replacing the original deadline.
+### Google
 
-Gradescope course discovery and assignment reads happen inside the signed-in `www.gradescope.com` content script. Kairos never receives the Gradescope password, session cookie, CSRF token, response headers, or raw authenticated HTML. Website-to-extension requests contain only fixed protocol message types and validated numeric course identifiers; the connector is read-only.
+Use a Google OAuth **Web application** and enable the Calendar API. Register the exact production calendar callback `https://mykairos.me/api/calendars/google/callback`; local development registers the exact origin you use, such as `http://localhost:3000/api/calendars/google/callback` or `http://127.0.0.1:3000/api/calendars/google/callback`.
 
-### Gradescope maintenance caveat
+Configure `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` privately. Authorization code + PKCE requests only `https://www.googleapis.com/auth/calendar.app.created`, with offline access and explicit consent for refresh-token issuance. It does not request broad access to all Google calendars.
 
-Gradescope does not provide a supported public student API for this workflow. This connector therefore depends on the authenticated student web page structure. The parser is isolated, fixture-tested, versioned, and fails closed with a parse error rather than guessing identities, but a future Gradescope HTML change may require an extractor update.
+Identity separately requests `openid email profile`, callback `https://mykairos.me/api/auth/callback/google`, using `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`. Published status is separate from brand/data-access verification and independent non-test-user acceptance.
 
-## Connect Ed
+### Microsoft
 
-Ed uses a direct read-only API connection and does **not** require the Firefox extension.
+Use a confidential **Web** Entra registration, with supported accounts **Accounts in any organizational directory and personal Microsoft accounts** (`AzureADandPersonalMicrosoftAccount`) for `common`. Hosted registration is not a Mobile/desktop public-client flow.
 
-1. In Ed, open the API-token settings page and create/copy a personal API token.
-2. In Kairos, open **Sources → Ed**.
-3. Paste the token and choose **Test connection**.
-4. Choose **Connect Ed**.
-5. Select the Ed courses Kairos should sync and choose **Save selection**.
-6. Choose **Sync Ed**.
+Register `https://mykairos.me/api/calendars/microsoft/callback`. Configure `MICROSOFT_CALENDAR_CLIENT_ID`, `MICROSOFT_CALENDAR_CLIENT_SECRET` (the secret **value**, not secret ID), and `MICROSOFT_CALENDAR_TENANT=common` privately. Hosted authorization code + PKCE uses a server-held secret. Delegated calendar scopes are `offline_access Calendars.ReadWrite`; Kairos lists calendars to find its dedicated destination and reads/writes generated events there. For local Web callbacks, register the actual local URI you use separately.
 
-Kairos imports all visible Ed Lessons from enabled courses, including lessons without due dates. Hidden and unlisted lessons are excluded. Effective release/due timestamps are preferred when Ed supplies them; Kairos never invents a deadline for an undated lesson. Completed Ed lessons are treated as resolved work for Upcoming, while attempted/unattempted lessons remain unresolved.
+Identity separately uses `openid profile email User.Read`, callback `https://mykairos.me/api/auth/callback/microsoft-entra-id`, and `AUTH_MICROSOFT_ENTRA_ID_ID` / `AUTH_MICROSOFT_ENTRA_ID_SECRET`. The issuer defaults to `https://login.microsoftonline.com/common/v2.0`. Managed accounts may require administrator consent.
 
-The Ed token is stored in Kairos's local SQLite `source_credentials` table and is never returned or displayed after it is saved. **The local SQLite database is not encrypted at rest in this milestone**, so anyone with access to that database may be able to recover the token. Use Ed's token settings to rotate/revoke it if necessary.
+### Apple iCloud
 
-The Ed API used by this connector is beta/unofficial and may change independently of Kairos. The client/parser are isolated and fail closed so a changed response does not erase previously known lesson data. Kairos performs no Ed writes.
+Enable Apple Account two-factor authentication and generate an app-specific password at `account.apple.com`. Create a writable calendar named **Kairos** in iCloud Calendar first. In **Sources → Calendar destinations**, enter your Apple Account email and app-specific password, then **Test iCloud** and **Connect iCloud**. The client uses Apple's fixed CalDAV service and validates discovered/redirected Apple partition hosts; there is no arbitrary custom CalDAV URL.
 
-## Publish deadlines to external calendars
+### Storage, deletion and revocation
 
-Calendar destinations are outbound only: Canvas, Gradescope, and Ed bring assignments into Kairos, while Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar receive copies of Kairos deadlines. Calendar edits never change source assignments.
+Hosted source/calendar credentials and persisted pending PKCE verifiers use AES-GCM encryption with a server-held key. Calendar refresh tokens are encrypted; short-lived calendar access tokens are used in memory. Pending calendar authorization expires after ten minutes, but expiry is not immediate row deletion. Identity OAuth access/refresh/ID tokens are not persisted in account records; session records and cookies remain necessary for login.
 
-Kairos creates or uses a dedicated **Kairos** calendar for each destination. Every eligible assignment with a due date becomes a 15-minute transparent/free deadline marker beginning at the exact due timestamp. Repeated sync is idempotent, due-date changes update the existing event, and a manually deleted generated event is recreated on the next reconciliation. Assignments without a due date are not published; if a previously dated assignment becomes explicitly undated, its generated event is removed.
+**Disconnect** removes the Kairos connection, credentials and mappings, leaving remote events/calendars and provider grants. **Remove generated events** attempts deletion while connected; verify its result, then disconnect to stop later reconciliation from recreating eligible events. **Settings → Delete account** removes live user records, not remote events or provider consent. Revoke access separately in Google/Microsoft account controls, Ed token settings, Apple app-specific password controls, or reset an exposed Canvas feed URL.
 
-**Hide submitted assignments** is enabled by default under **Sources → Calendar destinations**. When enabled, Submitted, Graded, and Excused work is removed from generated calendar events; if an assignment becomes active/not-submitted again, its event is recreated. Turn the option off to keep completed deadlines visible in destination calendars. Changing the option immediately resynchronizes connected calendar destinations.
+D1 recovery history can retain deleted records for 7 days (Free) or 30 days (Paid); the operator reports Workers Free, with actual recovery settings and capacity still requiring final acceptance. Persistent application logs are currently disabled. The full [privacy notice](https://mykairos.me/privacy) explains third-party processing, email correspondence, recovery history and prepared controls.
 
-Open **Sources → Calendar destinations** to connect a provider. **Sync All** refreshes assignment sources first, then performs one calendar reconciliation pass using the resulting local database state. While Kairos is open, a stale destination is reconciled when the app becomes visible if the last calendar sync is at least 15 minutes old. Kairos has no hosted background worker, so new upstream changes are not published continuously while the app is closed.
+Legacy local SQLite adapters remain in historical tests; their plaintext model is not the current hosted implementation. The development server uses local D1. Deleting `.data/assignments.sqlite` does not reset current D1 or the hosted account. Use account deletion in the relevant environment; tests use isolated temporary D1 instances. Do not issue remote database deletion/reset commands as a local reset.
 
-### Google Calendar
+## Coursework behavior
 
-1. In Google Cloud, create an OAuth 2.0 client for a **Web application**.
-2. Enable the Google Calendar API for that project.
-3. Add the exact local callback URI for the address you use, for example `http://localhost:3000/api/calendars/google/callback`. If you use the numeric loopback address, also add `http://127.0.0.1:3000/api/calendars/google/callback`.
-4. Put the client ID in `GOOGLE_CALENDAR_CLIENT_ID` and the client secret in `GOOGLE_CALENDAR_CLIENT_SECRET`.
-5. Run Kairos on the same local origin whose callback URI you registered, then choose **Connect Google Calendar** under **Sources → Calendar destinations** and complete Google consent.
+Sources remain independent; Kairos does not silently merge conflicting deadlines. Submitted, Graded and Excused work is hidden from **Upcoming** while remaining in **Calendar** and **All Assignments**. Unknown status remains **Status unavailable** rather than being guessed from a missing grade. Late and Missing are independent flags. Published Gradescope numeric scores are decimal strings; Kairos does not invent percentages or letter grades.
 
-Kairos uses OAuth authorization-code flow with PKCE and a local loopback callback. It requests only `https://www.googleapis.com/auth/calendar.app.created`, which is scoped to secondary calendars created by the app and events on those calendars. Kairos does not request broad access to all calendars. Connect/reconnect explicitly requests consent so Google can issue a refresh token even when the account had previously authorized Kairos.
-
-### Outlook / Microsoft 365
-
-1. Register an application in Microsoft Entra.
-2. Configure it as a **Mobile and desktop application / public client**, enable public-client flows, and register the localhost callback path `http://localhost/api/calendars/microsoft/callback`. Microsoft ignores the port when matching localhost loopback redirects but still matches the path, so keep `/api/calendars/microsoft/callback` exact.
-3. Put the Application (client) ID in `MICROSOFT_CALENDAR_CLIENT_ID`.
-4. Leave `MICROSOFT_CALENDAR_TENANT=common` to support personal Microsoft accounts plus work/school accounts, or replace it with the tenant you intentionally target.
-5. In **Sources → Calendar destinations**, choose **Connect Microsoft Calendar** and complete Microsoft consent.
-
-Kairos uses authorization code + PKCE without a client secret. Microsoft exposes event writing through the broader delegated `Calendars.ReadWrite` permission, plus `offline_access` for refresh-token use. Kairos still writes only its dedicated Kairos calendar.
-
-### Apple iCloud Calendar
-
-1. Make sure your Apple Account uses two-factor authentication.
-2. At `account.apple.com`, open **Sign-In and Security → App-Specific Passwords** and generate a password for Kairos.
-3. In **Sources → Calendar destinations**, enter your Apple Account email and that app-specific password.
-4. Choose **Test iCloud**, then **Connect iCloud**.
-
-Kairos connects only to Apple's fixed iCloud CalDAV service and validates discovered/redirected Apple CalDAV partition hosts before sending credentials. There is no arbitrary custom CalDAV server URL in this milestone.
-
-### Calendar credentials and disconnect behavior
-
-Google/Microsoft refresh tokens and the iCloud app-specific password are stored only in the local server-side SQLite credential table. Short-lived OAuth access tokens and PKCE verifiers are not durable calendar credentials. Calendar secrets are not returned by normal Kairos APIs or rendered back after capture.
-
-**The local SQLite database is not encrypted at rest.** Anyone with access to that database may be able to recover stored calendar credentials. Revoke Google/Microsoft app access at the provider, or revoke the Apple app-specific password, if the local database or device is compromised.
-
-**Disconnect** removes the local Kairos connection, credentials, and event mappings but does not silently delete the remote calendar. **Remove generated events** is a separate explicit action that removes Kairos-managed events while keeping the connection. With Google's narrow app-created-calendar permission, an empty secondary Kairos calendar may need to be deleted manually in Google Calendar settings.
-
-## Submission-status states
-
-Kairos displays these normalized states across sources:
-
-- **Not submitted**
-- **Submitted**
-- **Graded**
-- **Excused**
-- **Status unavailable** for unknown or unavailable data
-
-**Late** and **Missing** are independent flags. Kairos does not infer **Not submitted** merely because a grade is absent.
-
-Published Gradescope scores are stored as decimal strings rather than floating-point calculations. Kairos preserves the displayed score and does not invent percentages or letter grades.
-
-## Cross-source behavior
-
-Canvas, Gradescope, and Ed records remain independent. Kairos does not silently deduplicate assignments or choose one source as the canonical deadline when sources disagree.
-
-Resolved work—Submitted, Graded, or Excused—is hidden from **Upcoming** while remaining visible in **Calendar** and **All Assignments** with its completion styling.
-
-## Tests
-
-Install Playwright browser binaries once after `npm install`:
-
-```bash
-npx playwright install chromium firefox
-```
-
-Then run the verification suite:
+## Verification
 
 ```bash
 npm test
@@ -213,78 +136,6 @@ node scripts/verify-dynamic-dashboard-build.mjs
 node scripts/verify-production-safety.mjs
 ```
 
-The Chromium E2E project covers Canvas iCal onboarding, deterministic Ed API onboarding/sync fixtures, deterministic iCloud/CalDAV calendar create-repeat-update-delete/recreate behavior, and two independent authenticated users with tenant-isolation checks. Firefox E2E tests use deterministic page-level extension bridge shims for Canvas submission status and Gradescope discovery/sync. CI never depends on live Canvas, Gradescope, Ed, Google, Microsoft, or iCloud sessions or real credentials.
+Install Playwright browsers with `npx playwright install chromium firefox` when required. Chromium E2E covers source onboarding, Ed fixtures, iCloud event reconciliation on an existing discovered calendar, and authenticated tenant isolation. Firefox tests use deterministic bridge shims. CI does not rely on live provider credentials. The public-page component checks render real pages without a session and verify purpose, separate consent, privacy limits and domain-only contacts.
 
-### Real-browser acceptance smoke
-
-Canvas:
-
-1. Keep a signed-in `canvas.uw.edu` tab open.
-2. Run **Sync submission status** and confirm a known assignment matches Canvas.
-3. Close all Canvas tabs and verify Kairos reports the no-tab condition without deleting the saved status.
-
-Gradescope:
-
-1. Keep a signed-in `www.gradescope.com` student tab open.
-2. Run **Discover courses** and confirm the expected student courses appear.
-3. Enable at least one course and sync.
-4. Compare at least one real assignment's title, release date, due date, late due date, source status, published score/max score, and link with Gradescope.
-5. Confirm Submitted/Graded work is absent from Upcoming but remains in Calendar and All Assignments.
-6. Close Gradescope tabs, then sign out in a separate check, and verify errors are actionable while previously saved data remains.
-
-Ed:
-
-1. Create/use a personal Ed API token without pasting it into chat, shell history, fixtures, or committed files.
-2. In Kairos, test and connect the token.
-3. Confirm the expected Ed courses appear and enable at least one.
-4. Sync and compare real lesson titles, visibility, progress, release dates, and due dates with Ed.
-5. If the course has an undated lesson, confirm it remains in All Assignments but not Upcoming.
-6. Confirm completed lessons are absent from Upcoming.
-7. Replace the saved token only after a new token validates; an invalid replacement must not destroy the last working credential.
-8. Confirm the saved token is never rendered back by Kairos or returned in Kairos API responses.
-
-### Calendar real-account acceptance smoke
-
-Google Calendar, Outlook / Microsoft 365, and Apple iCloud Calendar have passed real-account smoke on this branch.
-
-Google Calendar:
-
-1. Authorize with your local Google web OAuth application.
-2. Confirm Kairos creates a dedicated **Kairos** calendar and one event for a known due assignment.
-3. Sync again and confirm no duplicate is created.
-4. Change a due date in a source, refresh Kairos, and confirm the same generated event moves.
-5. Delete one generated event in Google Calendar and confirm Kairos recreates it on the next reconciliation.
-6. Delete the whole remote Kairos calendar and confirm ordinary sync reports the missing calendar instead of silently recreating it.
-7. Use **Reconnect Google Calendar** and confirm the explicit reconnect restores a usable destination.
-
-Outlook / Microsoft 365:
-
-1. Complete the same create, repeat, due-date update, event-delete/recreate, whole-calendar-missing, and reconnect checks.
-2. After a local disconnect/reconnect, confirm the surviving remote **Kairos** calendar still has only one event per assignment; Kairos stores a hidden assignment identity on Microsoft events so reconnect can adopt them without duplication.
-3. Confirm the Microsoft consent screen grants calendar write/offline access only and does not request unrelated mail, files, or contacts permissions.
-
-Apple iCloud Calendar:
-
-1. Connect using your Apple Account email plus an app-specific password without pasting the credential into chat, shell history, fixtures, or committed files.
-2. Confirm a dedicated writable **Kairos** calendar is created.
-3. Complete the same create, repeat, due-date update, and event-delete/recreate checks.
-4. Confirm the app-specific password is cleared from the form and never appears in Kairos API responses.
-
-## Reset local data
-
-Stop the development server and remove the local database:
-
-```bash
-rm -f .data/assignments.sqlite .data/assignments.sqlite-wal .data/assignments.sqlite-shm
-```
-
-Then restart with `npm run dev` and reconnect the sources you use.
-
-## Privacy notes
-
-- Do not paste your UW, Canvas, or Gradescope password into Kairos. Ed uses a personal API token; iCloud Calendar uses an Apple app-specific password rather than your primary Apple Account password.
-- Do not commit `.data/`, `.env` files, a real Canvas feed URL, or a real Ed API token.
-- Do not export Canvas or Gradescope cookies for Kairos.
-- The extension has no cookie API permission and never sends authenticated Canvas/Gradescope HTML through the page bridge.
-- A failed or partial sync retains previously known assignment, status, and grade data.
-- Canvas, Gradescope, and Ed may disagree; Kairos preserves those differences rather than destructively merging them.
+For real-account acceptance, use authorized accounts, compare imported fields with official source pages, check sync errors retain prior records, and verify calendar create/repeat/update/event-recreate and explicit removal outcomes. iCloud acceptance requires a pre-existing writable Kairos calendar. A Google/Microsoft whole-calendar deletion should report the missing destination until explicit reconnect. Record account labels and outcomes only; never publish credentials, feed URLs, private inbox addresses or raw authenticated responses. Historical Milestone 6 acceptance does not replace current independent-account, revocation/deletion, provider approval or delivery checks.

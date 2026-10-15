@@ -1,3 +1,4 @@
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarEventLink} from "@/lib/calendar/types";
@@ -40,7 +41,7 @@ export class D1CalendarEventLinkRepository{
   ){}
 
   async get(connectionId:string,assignmentId:string):Promise<CalendarEventLink|null>{
-    const row=await this.db.prepare(`
+    const row=await prepareOwned(this.db,this.scope,`
       ${this.select}
       WHERE user_id=? AND calendar_connection_id=? AND assignment_id=?
     `).bind(this.scope.userId,connectionId,assignmentId).first<Row>();
@@ -48,7 +49,7 @@ export class D1CalendarEventLinkRepository{
   }
 
   async listByConnection(connectionId:string):Promise<CalendarEventLink[]>{
-    const result=await this.db.prepare(`
+    const result=await prepareOwned(this.db,this.scope,`
       ${this.select}
       WHERE user_id=? AND calendar_connection_id=?
       ORDER BY created_at ASC,id ASC
@@ -67,12 +68,12 @@ export class D1CalendarEventLinkRepository{
 
     const id=crypto.randomUUID();
     const at=now.toISOString();
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       INSERT INTO calendar_event_links(
         user_id,id,calendar_connection_id,assignment_id,sync_key,created_at,updated_at
       ) VALUES (?,?,?,?,?,?,?)
       ON CONFLICT(user_id,calendar_connection_id,assignment_id) DO NOTHING
-    `).bind(
+    `,{kind:"calendar",id:connectionId}).bind(
       this.scope.userId,id,connectionId,assignmentId,syncKey,at,at,
     ).run();
 
@@ -88,26 +89,26 @@ export class D1CalendarEventLinkRepository{
     contentHash:string,
     syncedAt:string,
   ):Promise<void>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE calendar_event_links SET
         remote_event_id=?,remote_etag=?,content_hash=?,last_synced_at=?,
         last_error_code=NULL,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(
+    `,{kind:"calendar-link",id}).bind(
       remoteEventId,remoteEtag,contentHash,syncedAt,syncedAt,this.scope.userId,id,
     ).run();
   }
 
   async markError(id:string,errorCode:string,at:string):Promise<void>{
-    await this.db.prepare(`
+    await prepareOwned(this.db,this.scope,`
       UPDATE calendar_event_links SET last_error_code=?,updated_at=?
       WHERE user_id=? AND id=?
-    `).bind(errorCode,at,this.scope.userId,id).run();
+    `,{kind:"calendar-link",id}).bind(errorCode,at,this.scope.userId,id).run();
   }
 
   async delete(id:string):Promise<void>{
-    await this.db.prepare(
+    await prepareOwned(this.db,this.scope,
       "DELETE FROM calendar_event_links WHERE user_id=? AND id=?",
-    ).bind(this.scope.userId,id).run();
+    {kind:"calendar-link",id}).bind(this.scope.userId,id).run();
   }
 }

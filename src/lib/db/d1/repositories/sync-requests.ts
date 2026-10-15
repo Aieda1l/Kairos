@@ -1,3 +1,7 @@
+import {AbuseStorageUnavailableError} from "@/lib/abuse/types";
+import {providerAdmission} from "@/lib/abuse/provider-operation";
+import {currentOperation,holdBridgeOperation,cancelBridgeRegistration,claimBridgeCompletion,OperationOwnershipError} from "@/lib/abuse/operation-lock";
+import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -32,18 +36,23 @@ export class D1SyncRequestRepository{
   ){}
 
   async register<T>(input:SyncRequestRegistration<T>):Promise<void>{
-    await this.db.prepare(`
-      INSERT INTO sync_requests(
-        user_id,request_id,kind,payload_json,created_at,expires_at,consumed_at
-      ) VALUES (?,?,?,?,?,?,NULL)
-    `).bind(
-      this.scope.userId,
-      input.requestId,
-      input.kind,
-      JSON.stringify(input.payload),
-      input.createdAt,
-      input.expiresAt,
-    ).run();
+    const admission=providerAdmission(this.db,this.scope,input.kind==="canvas_submission"?"canvas":"gradescope");
+    const lock=holdBridgeOperation(this.db);
+    try{
+      const result=await prepareOwned(this.db,this.scope,`
+        INSERT INTO sync_requests(
+          user_id,request_id,kind,payload_json,created_at,expires_at,consumed_at,operation_key,owner_nonce,admitted_at_ms,control_version
+        ) VALUES (?,?,?,?,?,?,NULL,?,?,?,?)
+      `,{kind:"bridge",id:input.requestId,key:input.kind==="canvas_submission"?"source:canvas":"source:gradescope"}).bind(
+        this.scope.userId,
+        input.requestId,
+        input.kind,
+        JSON.stringify(input.payload),
+        input.createdAt,
+        input.expiresAt,lock.operationKey,lock.ownerNonce,admission.admittedAtMs,admission.controlVersion,
+      ).run();
+      if(!result.success||result.meta.changes!==1)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+    }catch(error){cancelBridgeRegistration(this.db);throw error;}
   }
 
   async consume<T=unknown>(
@@ -51,24 +60,29 @@ export class D1SyncRequestRepository{
     expectedKind:SyncRequestKind,
     now:Date=new Date(),
   ):Promise<RegisteredSyncRequest<T>|null>{
+    const lock=currentOperation(this.db);
+    if(!lock)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
     const consumedAt=now.toISOString();
-    const claimed=await this.db.prepare(`
+    const claimed=await prepareOwned(this.db,this.scope,`
       UPDATE sync_requests
       SET consumed_at=?
       WHERE user_id=?
         AND request_id=?
         AND kind=?
         AND consumed_at IS NULL
-        AND expires_at>=?
-    `).bind(
+        AND expires_at>=? AND operation_key=? AND owner_nonce=? AND admitted_at_ms IS NOT NULL
+        AND control_version=(SELECT version FROM abuse_controls WHERE control_key=?)
+    `,{kind:"bridge",id:requestId}).bind(
       consumedAt,
       this.scope.userId,
       requestId,
       expectedKind,
-      consumedAt,
+      consumedAt,lock.operationKey,lock.ownerNonce,`provider:${lock.operationKey.split(":")[1]}`,
     ).run();
 
-    if((claimed.meta.changes??0)!==1)return null;
+    if(!claimed.success||![0,1].includes(claimed.meta.changes as number))throw new AbuseStorageUnavailableError();
+    if(claimed.meta.changes!==1)return null;
+    claimBridgeCompletion(this.db);
 
     const row=await this.db.prepare(`
       SELECT request_id,kind,payload_json,created_at,expires_at

@@ -1,3 +1,4 @@
+import {withProviderService} from "@/lib/abuse/provider-operation";
 import "server-only";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
@@ -61,8 +62,6 @@ async function syncHosted(
   connectionId:string,
   deps:HostedSyncDependencies,
 ):Promise<SyncSummary>{
-  const release=acquireSyncLock(`${deps.scope.userId}:${connectionId}`);
-  if(!release)throw new SyncServiceError("SYNC_IN_PROGRESS","A Canvas sync is already running.");
 
   const now=deps.now??(()=>new Date());
   const connections=new D1SourceConnectionRepository(deps.db,deps.scope);
@@ -102,8 +101,6 @@ async function syncHosted(
       await connections.markSyncError(connectionId,completed,code);
     }
     throw error instanceof Error?error:new SyncServiceError("SYNC_FAILED","Canvas sync failed.");
-  }finally{
-    release();
   }
 }
 
@@ -112,6 +109,10 @@ export function syncCanvasConnection(
   deps:SyncDependencies,
 ):Promise<SyncSummary>{
   return isHostedSyncDependencies(deps)
-    ?syncHosted(connectionId,deps)
+    ?(async()=>{
+      const connection=await new D1SourceConnectionRepository(deps.db,deps.scope).getById(connectionId);
+      if(!connection||connection.kind!=="canvas")throw new SyncServiceError("CANVAS_NOT_CONFIGURED","Connect Canvas before syncing.");
+      return withProviderService(deps.db,deps.scope,{provider:"canvas",operation:"manual-sync",resourceId:connectionId},()=>syncHosted(connectionId,deps));
+    })()
     :syncLegacy(connectionId,deps);
 }

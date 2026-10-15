@@ -31,6 +31,14 @@ export class D1SettingsRepository{
     return (await this.get("timezone"))??DEFAULT_TIME_ZONE;
   }
 
+  async getCanvasSubmissionStatusEnabled():Promise<boolean>{
+    return (await this.get("canvas_submission_status_enabled"))!=="0";
+  }
+
+  setCanvasSubmissionStatusEnabled(enabled:boolean):Promise<void>{
+    return this.set("canvas_submission_status_enabled",enabled?"1":"0");
+  }
+
   async setTimeZone(timeZone:string):Promise<void>{
     await this.set("timezone",validateTimeZone(timeZone));
   }

@@ -1,3 +1,5 @@
+import {currentProviderWork,withProviderService} from "@/lib/abuse/provider-operation";
+import {ownsOperation,withOwnedOperation,ownedFetch} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {SourceConnection} from "@/lib/assignments/types";
@@ -6,6 +8,7 @@ import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
 import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
+import {D1OnboardingDraftRepository} from "@/lib/db/d1/repositories/onboarding-drafts";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
 import {SourceCredentialRepository} from "@/lib/db/repositories/source-credentials";
 import {SourceCourseRepository} from "@/lib/db/repositories/source-courses";
@@ -25,11 +28,11 @@ export class EdDiscoveryServiceError extends Error{
   }
 }
 
-export async function testEdConnection(
-  token:string,
-  fetchImpl:typeof fetch=fetch,
-):Promise<{ok:true;itemCount:number}>{
-  const payload=await new EdApiClient(token,fetchImpl).fetchUser();
+export function testEdConnection(token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
+export function testEdConnection(db:D1DatabaseLike,scope:UserScope,token:string,fetchImpl?:typeof fetch):Promise<{ok:true;itemCount:number}>;
+export async function testEdConnection(arg1:string|D1DatabaseLike,arg2?:typeof fetch|UserScope,arg3?:string,arg4?:typeof fetch):Promise<{ok:true;itemCount:number}>{
+  if(typeof arg1!=="string")return withProviderService(arg1,arg2 as UserScope,{provider:"ed",operation:"credential"},()=>testEdConnection(arg3!,ownedFetch(arg4??fetch)));
+  const payload=await new EdApiClient(arg1,(arg2 as typeof fetch|undefined)??fetch).fetchUser();
   return {ok:true,itemCount:parseEdCourses(payload).length};
 }
 
@@ -76,6 +79,7 @@ export function connectEd(
   token:string,
   fetchImpl?:typeof fetch,
   now?:Date,
+  candidateEnvelope?:string|null,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>;
 export async function connectEd(
   db:LegacyDatabase|D1DatabaseLike,
@@ -84,6 +88,7 @@ export async function connectEd(
   arg4?:Date|string,
   arg5?:typeof fetch,
   arg6?:Date,
+  candidateEnvelope?:string|null,
 ):Promise<{connection:SourceConnection;courses:SourceCourse[]}>{
   if(typeof arg2==="string"){
     const legacyDb=db as LegacyDatabase;
@@ -105,11 +110,14 @@ export async function connectEd(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential"))return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>connectEd(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4 as string,arg5,arg6,candidateEnvelope));
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
   const token=arg4 as string;
-  const fetchImpl=arg5??fetch;
+  const fetchImpl=ownedFetch(arg5??fetch);
+  const drafts=new D1OnboardingDraftRepository(hostedDb,scope);
+  const candidate=candidateEnvelope===undefined?await drafts.envelope("ed"):candidateEnvelope;
   const now=arg6??new Date();
   const payload=await new EdApiClient(token,fetchImpl).fetchUser();
   const discovered=parseEdCourses(payload);
@@ -117,10 +125,18 @@ export async function connectEd(
   const connectionRepo=new D1SourceConnectionRepository(hostedDb,scope);
   const credentialRepo=new D1SourceCredentialRepository(hostedDb,scope,keyring);
   const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-  const connection=await connectionRepo.upsertEd("Ed");
-  await credentialRepo.setEdApiToken(connection.id,token);
-  await courseRepo.upsertDiscovered(connection.id,discovered,seenAt);
-  return {connection,courses:await courseRepo.list(connection.id)};
+  const existing=await connectionRepo.getByKind("ed");
+  const id=existing?.id??crypto.randomUUID();
+  const credential=await credentialRepo.prepareEdApiToken(id,token);
+  const results=await hostedDb.batch([
+    connectionRepo.prepareUpsert(id,"ed","Ed",seenAt),
+    credential,
+    courseRepo.prepareDiscovered(id,discovered,seenAt),
+    courseRepo.prepareList(id),
+    connectionRepo.prepareGetByKind("ed"),
+    drafts.prepareAcceptedCleanup("ed",candidate),
+  ]);
+  return {connection:connectionRepo.connectionFromResult(results[4]!),courses:courseRepo.coursesFromResult(results[3]!)};
 }
 
 export function refreshEdCourses(
@@ -152,18 +168,21 @@ export async function refreshEdCourses(
     return {connection,courses:courseRepo.list(connection.id)};
   }
 
+  if(!currentProviderWork(db as D1DatabaseLike,arg2,"ed","credential")){
+    await requireConnectedEdHosted(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring);
+    return withProviderService(db as D1DatabaseLike,arg2,{provider:"ed",operation:"credential"},()=>refreshEdCourses(db as D1DatabaseLike,arg2,arg3 as CredentialKeyring,arg4,arg5));
+  }
   const hostedDb=db as D1DatabaseLike;
   const scope=arg2;
   const keyring=arg3 as CredentialKeyring;
   const {connection,token}=await requireConnectedEdHosted(hostedDb,scope,keyring);
-  const payload=await new EdApiClient(token,arg4??fetch).fetchUser();
+  const payload=await new EdApiClient(token,ownedFetch(arg4??fetch)).fetchUser();
   const courseRepo=new D1SourceCourseRepository(hostedDb,scope);
-  await courseRepo.upsertDiscovered(
-    connection.id,
-    parseEdCourses(payload),
-    (arg5??new Date()).toISOString(),
-  );
-  return {connection,courses:await courseRepo.list(connection.id)};
+  const results=await hostedDb.batch([
+    courseRepo.prepareDiscovered(connection.id,parseEdCourses(payload),(arg5??new Date()).toISOString()),
+    courseRepo.prepareList(connection.id),
+  ]);
+  return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
 }
 
 export function replaceEnabledEdCourses(
@@ -199,6 +218,7 @@ export function replaceEnabledEdCourses(
   }
 
   return (async()=>{
+    if(!ownsOperation(db as D1DatabaseLike,arg2,"source:ed"))return withOwnedOperation(db as D1DatabaseLike,arg2,"source:ed",()=>replaceEnabledEdCourses(db as D1DatabaseLike,arg2,arg3!,arg4??[]));
     const hostedDb=db as D1DatabaseLike;
     const scope=arg2;
     const {connection}=await requireConnectedEdHosted(hostedDb,scope,arg3!);
@@ -212,7 +232,9 @@ export function replaceEnabledEdCourses(
         "Select only courses discovered from your Ed account.",
       );
     }
-    await courseRepo.setEnabled(connection.id,enabledCourseIds);
-    return {connection,courses:await courseRepo.list(connection.id)};
+    const results=await hostedDb.batch([
+      courseRepo.prepareEnabled(connection.id,enabledCourseIds),courseRepo.prepareList(connection.id),
+    ]);
+    return {connection,courses:courseRepo.coursesFromResult(results[1]!)};
   })();
 }
