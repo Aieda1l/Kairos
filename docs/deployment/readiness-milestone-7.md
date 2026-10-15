@@ -34,12 +34,16 @@ The optional live-provider probe cannot succeed with external networking disable
 
 Independent source reviews accepted the fixes. The audit validates **151 coverage units and 17 candidate records**: 128 covered units, 20 with assessed candidate traces, and three external D1 backup/export/restore blocks. The 17 current-source paths are fixed or refuted; none remains a confirmed current-source finding. Distinct post-wave/final-clean critics found no remaining source assignment. Unmodified validators pass. Overall security/readiness stays INCOMPLETE for external evidence. See [security review](security-review-milestone-7.md).
 
+## Latest operator update
+
+The operator reports Google branding fully approved after review, Mozilla extension review still pending, and two Kairos accounts tested with apparently successful results. Record the account test as an operator-reported smoke pass; the tested revision, individual flows and cross-account assertions were not specified. This closes the reported branding-review wait, without establishing calendar-scope approval or exact-release hosted acceptance.
+
 ## Remaining gates
 
 1. Establish actual D1 backup/export permissions, historical deletion/retention, safe restore and key-retirement evidence. Verify production bindings, unsafe flags, ingress, protected-main/environment authority and the exact remote CI/deployment chain.
 2. Complete stored platform/framework log privacy assessment, including vendor database-error logging. Persistent logs, invocation metadata and traces remain disabled.
 3. After explicit approval, release the exact reviewed source and perform two-account hosted acceptance: identity/onboarding, sources, all three calendars, challenge/rate/duplicate-work behavior, revocation and deletion preserving the second account.
-4. Verify the actual signed Firefox listing/artifact and normal install/update. Google/Mozilla outcomes were last reported unresolved; the user will provide updates.
+4. Verify the actual signed Firefox listing/artifact and normal install/update after Mozilla review. Google branding is operator-confirmed approved; establish any applicable separate calendar/data-access state during provider preflight.
 5. Measure actual Free-plan headroom, CPU/errors/query costs and cleanup backlog/retention; verify protected health/maintenance activation and success/failure delivery. Earlier email receipt does not verify new workflows.
 6. Exercise compatible live rollback/forward restore, preserving additive schema, required keys and unsettled ownership. Reconcile onto reviewed protected main before release.
 

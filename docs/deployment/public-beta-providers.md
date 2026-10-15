@@ -2,7 +2,11 @@
 
 Prepared October 10, 2026 for Task7C-2; cross-release disclosures updated October 11. This file is review material, not an approval or deployment record. Parent review and controlled public-page deployment precede resubmission. Do not put client secrets, verification TXT values, real account identifiers, feed URLs, or the private contact destination in this document.
 
-## Current external state
+## Latest operator update
+
+Google branding is now operator-confirmed fully approved after review. Mozilla extension review remains pending. The operator also reports testing two Kairos accounts with apparently successful results, without specifying the tested revision or individual flows. Branding approval does not by itself establish any separate calendar/data-access review state or every hosted acceptance condition. The dated preparation snapshot below is historical; use the [current readiness record](readiness-milestone-7.md) for remaining gates.
+
+## Historical preparation state
 
 | Gate | Evidence / status |
 | --- | --- |
