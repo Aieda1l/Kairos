@@ -1,6 +1,16 @@
 # Milestone 7 engineering closeout and release boundary
 
-Engineering implementation and source review are complete. **Release acceptance is still incomplete.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go. This record does not turn source tests into those outcomes or authorize deployment.
+**Release acceptance is incomplete; a production sign-in defect is being repaired.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go.
+
+## Approved rollout and authentication repair, October 15
+
+The operator explicitly approved the controlled rollout and confirmed prior M6 operations stopped and settled. PR #15 merged as `ead1ad29867caedc8be3ac08755d3545b19d3fd3`; its exact-main CI [passed](https://github.com/Aieda1l/Kairos/actions/runs/38791442235): 1,475 tests, 54 browser cases and the release/build checks. Migrations 0004–0007 were applied forward. Worker `1cdf69a7-a2db-4322-a4a1-557ca0c3cf94` was promoted, rolled back to compatible `ef7d30fc-56d0-44e0-a70b-8640106422b3`, then restored at 100% in deployment `04127153-95e0-4a05-8737-7b4256b02437`. Schema, effective bindings, preview isolation and canonical health were rechecked. An initial immediate canonical 404 is retained; subsequent checks passed without corrective mutation. Authenticated/provider behavior during rollback remains unverified.
+
+Two legacy Canvas/Gradescope uncertain owners were recovered with exact-owner CAS after settlement, with provider controls paused and restored. All four legacy request records remain. No database export/restore, key retirement, API-token creation or paid-plan change occurred. Health monitoring was activated; the [synthetic notification failure](https://github.com/Aieda1l/Kairos/actions/runs/38797919565) ran as intended, but the [normal GitHub check](https://github.com/Aieda1l/Kairos/actions/runs/38798523603) received HTTP 403. Local canonical health remains 200. Notification receipt and the remote 403 require follow-up. Maintenance remains disabled without delegated credentials.
+
+The operator then reported verification overlapping both identity buttons and `AUTH_CHALLENGE_UNAVAILABLE` after solving it. Native workerd reproduces two errors missed by mocked transports: calling `deps.fetchImpl` gives an incorrect receiver, and `redirect: "error"` is unsupported. The repair detaches fetch and uses manual redirects; every non-success response still fails closed. Compact widget dimensions reserve visible space above each button, including at 320px width. The new native CI probe covers both providers' success, rejection, hostname/action mismatch, upstream failure and redirects with no external requests. Before/after evidence: native cases failed before repair and all 12 pass afterward; both layout browser cases failed before reservation and all 24 sign-in browser cases now pass. Focused auth tests (95), project typecheck and scoped lint pass; independent source-only review accepts the delta. Protected exact-main CI and deployment of the repair, followed by real sign-in, remain required.
+
+The sections below retain the earlier pre-release preparation as historical evidence; their approval-pending and undeployed descriptions are superseded by this rollout record.
 
 ## October 15 continuation
 

@@ -18,8 +18,10 @@ export async function verifyTurnstile(
   });
   try{
     await Promise.race([timeout,(async()=>{
-      const response=await deps.fetchImpl("https://challenges.cloudflare.com/turnstile/v0/siteverify",{
-        method:"POST",redirect:"error",cache:"no-store",signal:controller.signal,
+      // Native workerd fetch rejects an arbitrary object as its receiver.
+      const {fetchImpl}=deps;
+      const response=await fetchImpl("https://challenges.cloudflare.com/turnstile/v0/siteverify",{
+        method:"POST",redirect:"manual",cache:"no-store",signal:controller.signal,
         body:new URLSearchParams({secret:deps.secret,response:input.token}),
       });
       if(!response.ok)throw new AuthChallengeError("AUTH_CHALLENGE_UNAVAILABLE");
