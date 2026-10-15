@@ -20,6 +20,8 @@ function simulate(scenario='success',ref='refs/heads/main'){
  const bin=path.join(directory,'bin');fs.mkdirSync(bin);fs.mkdirSync(path.join(directory,'dist/server'),{recursive:true});
  fs.copyFileSync('wrangler.jsonc',path.join(directory,'wrangler.jsonc'));
  const trace=path.join(directory,'trace.jsonl'),output=path.join(directory,'output');fs.writeFileSync(trace,'');fs.writeFileSync(output,'');
+ const cloudState=path.join(directory,'cloud.json');
+ fs.writeFileSync(cloudState,JSON.stringify({schema:1,traffic:'previous-version',users:['dummy-user']}));
  const preload=path.join(directory,'fetch.mjs');
  fs.writeFileSync(preload,`
 import fs from 'node:fs';
@@ -31,14 +33,15 @@ globalThis.fetch=async(value,options)=>{
   if(process.env.SIM_SCENARIO==='ci-failure')run.conclusion='failure';
   if(process.env.SIM_SCENARIO==='ci-wrong-sha')run.head_sha='b'.repeat(40);
   const runs=process.env.SIM_SCENARIO==='ci-pending'?[{...run,id:13,status:'in_progress',conclusion:null},run]:[run];
-  return Response.json({workflow_runs:runs});
+  return Response.json({workflow_runs:process.env.SIM_SCENARIO==='ci-missing'?[]:runs});
  }
  if(url.hostname.endsWith('.workers.dev')){
   if(process.env.SIM_SCENARIO==='stage-transport')throw new Error('private transport sentinel');
   if(process.env.SIM_SCENARIO==='stage-oversize')return new Response('private payload sentinel'.repeat(20));
   return process.env.SIM_SCENARIO==='stage-unhealthy'?Response.json({status:'unavailable',private:'payload sentinel'},{status:503}):Response.json({status:'ok'});
  }
- if(url.href==='https://mykairos.me/api/health')return Response.json({status:'ok'});
+ if(url.href==='https://mykairos.me/api/health')return process.env.SIM_SCENARIO==='production-unhealthy'
+  ?Response.json({status:'unavailable'},{status:503}):Response.json({status:'ok'});
  throw new Error('Unexpected network request');
 };
 `);
@@ -60,11 +63,18 @@ if(command==='npx'&&args[1]==='versions'&&args[2]==='upload'){
  const rows=scenario==='upload-missing'?[]:scenario==='upload-duplicate'?[row,row]:[row];
  fs.writeFileSync(process.env.WRANGLER_OUTPUT_FILE_PATH,rows.map(r=>JSON.stringify(r)).join('\\n'));
 }
-if(command==='npx'&&args[1]==='d1'&&scenario==='migration-failure')process.exit(1);
+if(command==='npx'&&args[1]==='d1'){
+ if(scenario==='migration-failure')process.exit(1);
+ const state=JSON.parse(fs.readFileSync(process.env.SIM_STATE,'utf8'));state.schema=2;fs.writeFileSync(process.env.SIM_STATE,JSON.stringify(state));
+}
+if(command==='npx'&&args[1]==='versions'&&args[2]==='deploy'){
+ if(scenario==='promotion-failure')process.exit(1);
+ const state=JSON.parse(fs.readFileSync(process.env.SIM_STATE,'utf8'));state.traffic=args[3].split('@')[0];fs.writeFileSync(process.env.SIM_STATE,JSON.stringify(state));
+}
 `;
  for(const command of ['node','npm','npx'])fs.writeFileSync(path.join(bin,command),shim,{mode:0o755});
  const environment:NodeJS.ProcessEnv={NODE_ENV:'test',PATH:bin+path.delimiter+(process.env.PATH??''),TMPDIR:directory,
-  NODE_OPTIONS:'--import '+preload,SIM_TRACE:trace,SIM_SCENARIO:scenario,SIM_ROOT:root,
+  NODE_OPTIONS:'--import '+preload,SIM_TRACE:trace,SIM_SCENARIO:scenario,SIM_ROOT:root,SIM_STATE:cloudState,
   GITHUB_REF:ref,GITHUB_SHA:sha,GITHUB_REPOSITORY:'owner/Kairos',GITHUB_OUTPUT:output};
  let status=0,diagnostics='',failedStep='';
  let preflightResult='skipped';
@@ -100,14 +110,14 @@ if(command==='npx'&&args[1]==='d1'&&scenario==='migration-failure')process.exit(
   }
  const events=fs.readFileSync(trace,'utf8').split('\n').filter(Boolean).map(line=>JSON.parse(line)) as Array<{command?:string;args?:string[];fetch?:string}>;
  const cloud=events.filter(event=>event.command==='npx').map(event=>event.args!.slice(1,4).join(' '));
- return {status,failedStep,events,cloud,diagnostics,output:fs.readFileSync(output,'utf8'),directory};
+ return {status,failedStep,events,cloud,diagnostics,output:fs.readFileSync(output,'utf8'),directory,state:JSON.parse(fs.readFileSync(cloudState,'utf8'))};
 }
 
 describe.skipIf(process.platform==='win32')('offline production workflow execution',()=>{
  it('skips all production steps for a non-main ref',()=>{
   const run=simulate('success','refs/heads/feature');expect(run.status).toBe(0);expect(run.events).toEqual([]);
  });
- it.each(['ci-failure','ci-wrong-sha','ci-pending'])('rejects %s before build or upload',scenario=>{
+ it.each(['ci-failure','ci-wrong-sha','ci-pending','ci-missing'])('rejects %s before build or upload',scenario=>{
   const run=simulate(scenario);expect(run.status).not.toBe(0);expect(run.cloud).toEqual([]);
   expect(run.events.some(event=>event.args?.includes('build:vinext'))).toBe(false);
   expect(run.diagnostics).toContain('RELEASE_CI_REQUIRED');expect(run.diagnostics).not.toContain('dummy');
@@ -123,6 +133,18 @@ describe.skipIf(process.platform==='win32')('offline production workflow executi
  it('does not promote after migration failure',()=>{
   const run=simulate('migration-failure');expect(run.status).not.toBe(0);
   expect(run.cloud).toEqual(['versions upload --name','d1 migrations apply']);
+ });
+ it('retains the applied schema and prior traffic after a failed promotion',()=>{
+  const run=simulate('promotion-failure');expect(run.status).not.toBe(0);
+  expect(run.cloud).toEqual(['versions upload --name','d1 migrations apply',`versions deploy ${version}@100`]);
+  expect(run.state).toEqual({schema:2,traffic:'previous-version',users:['dummy-user']});
+  expect(run.events.some(event=>event.fetch==='https://mykairos.me/api/health')).toBe(false);
+ });
+ it('reports post-promotion health failure without issuing an unreviewed rollback',()=>{
+  const run=simulate('production-unhealthy');expect(run.status).not.toBe(0);
+  expect(run.cloud).toEqual(['versions upload --name','d1 migrations apply',`versions deploy ${version}@100`]);
+  expect(run.state).toEqual({schema:2,traffic:version,users:['dummy-user']});
+  expect(run.diagnostics).toContain('HEALTH_CHECK_FAILED');
  });
  it('promotes only the checked version after staged health and migrations',()=>{
   const run=simulate();expect(run.status,run.diagnostics).toBe(0);
