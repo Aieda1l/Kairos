@@ -50,4 +50,5 @@ export const config={matcher:[
   "/api/settings/:path*",
   "/api/sources/:path*",
   "/api/calendars/:path*",
+  "/api/sync-all/:path*",
 ]};

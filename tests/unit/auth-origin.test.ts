@@ -1,12 +1,26 @@
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {NextRequest} from "next/server";
-import {proxy} from "@/proxy";
+import fs from 'node:fs';
+import path from 'node:path';
+import {unstable_doesMiddlewareMatch} from 'next/experimental/testing/server';
+import {proxy,config} from "@/proxy";
 import {resolveAbuseRuntime} from "@/lib/platform/abuse-runtime";
 import {canonicalAppOrigin} from "@/lib/security/request-origin";
 afterEach(()=>vi.unstubAllEnvs());
 const env={DB:{prepare(){},batch(){},exec(){}},KAIROS_APP_URL:"http://127.0.0.1:3000",KAIROS_LOCAL_AUTH:"loopback",KAIROS_ABUSE_TRUSTED_INGRESS:"loopback",
   KAIROS_TURNSTILE_SITE_KEY:"local-site",KAIROS_TURNSTILE_SECRET_KEY:"local-secret",KAIROS_ABUSE_KEY_V1:Buffer.from(new Uint8Array(32).fill(7)).toString("base64url")};
 describe("canonical auth origins and proxy fencing",()=>{
+  it('matches every non-fixture API mutation namespace, including Sync All admission',()=>{
+    const directory='src/app/api';
+    const mutations=fs.readdirSync(directory,{recursive:true}).map(file=>String(file).replaceAll('\\','/'))
+      .filter(file=>file.endsWith('/route.ts')&&!file.startsWith('test-fixtures/'))
+      .filter(file=>/export\s+(?:(?:async\s+)?function\s+(?:POST|PUT|PATCH|DELETE)\b|const\s+(?:POST|PUT|PATCH|DELETE)\b|(?:const\s*)?\{[^}]*\b(?:POST|PUT|PATCH|DELETE)\b)/.test(fs.readFileSync(path.join(directory,file),'utf8')));
+    expect(mutations).toContain('sync-all/start/route.ts');
+    for(const file of mutations){
+      const route='/api/'+file.replace(/\/route\.ts$/,'').replace(/\[[^\]]+\]/g,'example');
+      expect(unstable_doesMiddlewareMatch({config,url:'https://mykairos.me'+route}),route).toBe(true);
+    }
+  });
   it("permits explicit server-owned loopback configuration with all guards active",()=>{
     expect(resolveAbuseRuntime(env)).toMatchObject({appOrigin:"http://127.0.0.1:3000",hostname:"127.0.0.1",trustedIngress:"loopback"});
   });
