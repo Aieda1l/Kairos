@@ -13,6 +13,16 @@ import type {CalendarConnection,CalendarSyncStatus} from "@/lib/calendar/types";
 
 const STALE_AFTER_MS=15*60*1000;
 
+const OAUTH_ERROR_MESSAGES:Record<string,string>={
+  CALENDAR_CONFIG_MISSING:"Microsoft Calendar app credentials or permissions are misconfigured. Check the Entra client ID, client secret value, tenant, and Web redirect URL.",
+  CALENDAR_AUTH_EXPIRED:"Microsoft Calendar rejected the authorization. Start a new connection, and verify the registered redirect URL if this persists.",
+  CALENDAR_PERMISSION_DENIED:"Microsoft connected, but Graph denied calendar access. Check the Calendar app's delegated Calendars.ReadWrite permission, user/admin consent, and Outlook/Exchange mailbox access.",
+  CALENDAR_AUTH_REQUIRED:"Microsoft Calendar needs renewed consent. Start the connection again.",
+  CALENDAR_NETWORK_ERROR:"Kairos could not reach Microsoft during calendar authorization. Try again.",
+  CALENDAR_RATE_LIMITED:"Microsoft is temporarily limiting requests. Try again later.",
+  CALENDAR_UPSTREAM_ERROR:"Microsoft Calendar could not be connected. Check the Entra configuration and try again.",
+};
+
 type CalendarPhase="idle"|"testing"|"connecting"|"syncing"|"success"|"error";
 type CalendarState={phase:CalendarPhase;message:string};
 type CalendarSyncContextValue={
@@ -99,6 +109,24 @@ export function CalendarSyncProvider({
   const setLocal=useCallback((id:string,state:CalendarState)=>{
     setStates(current=>({...current,[id]:state}));
   },[]);
+
+  useEffect(()=>{
+    const url=new URL(window.location.href);
+    if(url.searchParams.get("calendarProvider")!=="microsoft")return;
+    const code=url.searchParams.get("calendarError");
+    if(!code)return;
+    const message=code==="CALENDAR_AUTH_EXPIRED"&&url.searchParams.get("calendarStage")==="calendar_setup"
+      ?"Microsoft signed in successfully, but Outlook rejected calendar access. Try a fresh connection and confirm this Microsoft account can open Outlook Calendar."
+      :Object.hasOwn(OAUTH_ERROR_MESSAGES,code)
+      ?OAUTH_ERROR_MESSAGES[code]
+      :"Microsoft Calendar could not be connected. Try again.";
+    const connection=connectionsRef.current.find(item=>item.provider==="microsoft");
+    setLocal(connection?.id??"microsoft",{phase:"error",message});
+    url.searchParams.delete("calendarProvider");
+    url.searchParams.delete("calendarError");
+    url.searchParams.delete("calendarStage");
+    window.history.replaceState(window.history.state,"",url.pathname+url.search+url.hash);
+  },[setLocal]);
 
   const phaseFor=(id:string):CalendarPhase=>states[id]?.phase??"idle";
   const messageFor=(id:string):string=>states[id]?.message??"";

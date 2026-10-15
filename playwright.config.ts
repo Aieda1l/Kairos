@@ -1,7 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
+import {randomUUID} from "node:crypto";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 
-const e2eDb=".data/e2e.sqlite";
-const resetE2eDb=`node -e "const fs=require('node:fs');for(const s of ['','-wal','-shm']){try{fs.rmSync('${e2eDb}'+s)}catch{}}"`;
+// Run browser tests against a fresh D1 instance without touching local developer data.
+const e2ePersistPath=join(tmpdir(),`kairos-e2e-${randomUUID()}`);
+const e2eCredentialKey="FxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxc";
 
 export default defineConfig({
   testDir:"./tests/e2e",
@@ -12,24 +16,25 @@ export default defineConfig({
     trace:"retain-on-failure",
   },
   webServer:{
-    command:`${resetE2eDb} && npm run dev -- --hostname 127.0.0.1 --port 3000`,
+    command:`npx wrangler d1 migrations apply kairos --local --persist-to "${e2ePersistPath}" && npm run dev:vinext -- --host 127.0.0.1`,
     url:"http://127.0.0.1:3000",
     reuseExistingServer:!process.env.CI,
     env:{
       ...process.env,
+      KAIROS_E2E_PERSIST_PATH:e2ePersistPath,
       E2E_FIXTURES:"1",
-      ASSIGNMENTS_DB_PATH:e2eDb,
+      KAIROS_CREDENTIAL_KEY_V1:e2eCredentialKey,
     },
   },
   projects:[
     {
       name:"chromium",
-      testMatch:/(canvas-onboarding|ed-sync|calendar-sync)\.spec\.ts/,
+      testMatch:/(canvas-onboarding|ed-sync|calendar-sync|multi-user-isolation|sign-out|privacy-boundary)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
       name:"firefox",
-      testMatch:/(submission-status|gradescope-sync)\.spec\.ts/,
+      testMatch:/(submission-status|gradescope-sync|sign-out|privacy-boundary)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],

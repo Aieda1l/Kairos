@@ -1,27 +1,48 @@
-import {getDatabase} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
+import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-connections";
 import {SourceConnectionRepository} from "@/lib/db/repositories/source-connections";
+import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
+import {CanvasSourceError} from "@/lib/sources/canvas-ical/errors";
 import {syncCanvasConnection} from "@/lib/sync/sync-source";
 import {SyncServiceError} from "@/lib/sync/types";
-import {CanvasSourceError} from "@/lib/sources/canvas-ical/errors";
-import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 
 export async function POST(request?:Request){
-  const db=getDatabase();
-  migrate(db);
-  const connection=new SourceConnectionRepository(db).getByKind("canvas");
+  const resolved=await resolveSourceApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
+
+  const connection=runtime.kind==="legacy"
+    ?new SourceConnectionRepository(runtime.db).getByKind("canvas")
+    :await new D1SourceConnectionRepository(runtime.db,runtime.scope)
+      .getByKind("canvas");
+
   if(!connection){
     return Response.json(
       {code:"CANVAS_NOT_CONFIGURED",message:"Connect Canvas before syncing."},
       {status:409},
     );
   }
+
   try{
-    const result=await syncCanvasConnection(connection.id,{db});
-    await reconcileCalendarsAfterSourceWrite(db,{
+    const result=runtime.kind==="legacy"
+      ?await syncCanvasConnection(connection.id,{db:runtime.db})
+      :await syncCanvasConnection(connection.id,{
+        db:runtime.db,
+        scope:runtime.scope,
+        keyring:runtime.keyring,
+      });
+
+    const reconcileOptions={
       defer:request?.headers.get("x-kairos-calendar-sync")==="defer",
       changed:result.inserted+result.updated>0,
-    });
+    };
+    if(runtime.kind==="legacy"){
+      await reconcileCalendarsAfterSourceWrite(runtime.db,reconcileOptions);
+    }else{
+      await reconcileCalendarsAfterSourceWrite(
+        runtime.db,runtime.scope,runtime.keyring,reconcileOptions,
+      );
+    }
     return Response.json(result);
   }catch(error){
     if(error instanceof SyncServiceError||error instanceof CanvasSourceError){

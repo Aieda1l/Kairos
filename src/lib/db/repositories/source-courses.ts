@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type { DiscoveredSourceCourse, SourceCourse } from "@/lib/sources/types";
 
 type Row={
@@ -30,7 +30,7 @@ const map=(row:Row):SourceCourse=>({
 });
 
 export class SourceCourseRepository{
-  constructor(private db:Database.Database){}
+  constructor(private db:LegacyDatabase){}
 
   upsertDiscovered(sourceConnectionId:string,courses:DiscoveredSourceCourse[],seenAt:string):void{
     const existing=this.db.prepare("SELECT id FROM source_courses WHERE source_connection_id=? AND external_course_id=?");

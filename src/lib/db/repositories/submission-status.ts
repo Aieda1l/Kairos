@@ -1,5 +1,5 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type { SubmissionStatusSyncState, SubmissionStatusWrite, SubmissionSyncErrorCode } from "@/lib/submission-status/types";
 
 type SyncRow={
@@ -11,7 +11,7 @@ type SyncRow={
 };
 
 export class SubmissionStatusRepository {
-  constructor(private db:Database.Database){}
+  constructor(private db:LegacyDatabase){}
 
   getSyncState<TError extends string = SubmissionSyncErrorCode>(sourceConnectionId:string):SubmissionStatusSyncState<TError> {
     const row=this.db.prepare(`

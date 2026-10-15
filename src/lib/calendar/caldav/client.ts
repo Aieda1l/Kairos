@@ -15,7 +15,6 @@ export const ICLOUD_CALDAV_ORIGIN="https://caldav.icloud.com/";
 const PRINCIPAL_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`;
 const HOME_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
 const CALENDARS_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><d:current-user-privilege-set/></d:prop></d:propfind>`;
-const CREATE_BODY=`<?xml version="1.0" encoding="UTF-8"?><c:mkcalendar xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:set><d:prop><d:displayname>Kairos</d:displayname><c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set></d:prop></d:set></c:mkcalendar>`;
 
 function mapHttp(status:number):CalendarSyncError{
   if(status===401)return new CalendarSyncError(
@@ -43,10 +42,11 @@ export class CalDavClient{
     options:{allowNotFound?:boolean;allowPrecondition?:boolean}={},
   ):Promise<Response|null>{
     let url=resolveAppleDavUrl(new URL(ICLOUD_CALDAV_ORIGIN),String(input));
+    const fetchImpl=this.fetchImpl;
     for(let redirectCount=0;redirectCount<4;redirectCount++){
       let response:Response;
       try{
-        response=await this.fetchImpl(url,{
+        response=await fetchImpl(url,{
           ...init,
           redirect:"manual",
           headers:{
@@ -116,23 +116,11 @@ export class CalDavClient{
     const context=await this.discoveryContext();
     const existing=context.calendars.find(item=>item.name===name&&item.writable);
     if(existing)return {remoteCalendarId:existing.remoteCalendarId,name:existing.name};
-    const target=resolveAppleDavUrl(context.home,"kairos/");
-    try{
-      await this.request(target,{
-        method:"MKCALENDAR",
-        headers:{"content-type":"application/xml; charset=utf-8"},
-        body:CREATE_BODY,
-      });
-    }catch(error){
-      if(error instanceof CalendarSyncError&&error.code==="CALDAV_NOT_WRITABLE"){
-        throw new CalendarSyncError(
-          "CALDAV_NOT_WRITABLE",
-          "Apple accepted the credentials but would not create a new calendar through CalDAV. Create a calendar named Kairos in iCloud Calendar, then reconnect.",
-        );
-      }
-      throw error;
-    }
-    return {remoteCalendarId:target.href,name};
+    // Workers fetch cannot issue MKCALENDAR, so use a calendar created in iCloud itself.
+    throw new CalendarSyncError(
+      "CALDAV_NOT_WRITABLE",
+      "Kairos cannot create an iCloud calendar from this environment. Create a calendar named Kairos in iCloud Calendar, then reconnect.",
+    );
   }
 
   async getCalendar(calendarId:string):Promise<{remoteCalendarId:string;name:string}|null>{

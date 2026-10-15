@@ -6,8 +6,18 @@ import {
   getMicrosoftCalendarConfig,
   refreshMicrosoftAccessToken,
 } from "@/lib/calendar/microsoft/oauth";
+import {getOAuthRedirectUri} from "@/lib/calendar/local-oauth-origin";
 
 describe("Microsoft Calendar OAuth",()=>{
+  const appId="f27ee34d-f693-4ce9-87cd-b438f914ae0d";
+  it("uses the exact production origin for Microsoft callbacks",()=>{
+    expect(getOAuthRedirectUri(
+      "https://forwarded-host.example/api/calendars/microsoft/start",
+      "/api/calendars/microsoft/callback",
+      {KAIROS_APP_URL:"https://mykairos.me"},
+    )).toBe("https://mykairos.me/api/calendars/microsoft/callback");
+  });
+
   it("uses the public-client PKCE flow with only offline calendar write scopes",()=>{
     const url=buildMicrosoftAuthorizationUrl({
       clientId:"fixture-ms-client",
@@ -31,17 +41,44 @@ describe("Microsoft Calendar OAuth",()=>{
   });
 
   it("requires a client id and defaults the tenant to common",()=>{
-    expect(getMicrosoftCalendarConfig({MICROSOFT_CALENDAR_CLIENT_ID:"client"})).toEqual({
-      clientId:"client",
+    expect(getMicrosoftCalendarConfig({MICROSOFT_CALENDAR_CLIENT_ID:appId})).toEqual({
+      clientId:appId,
+      clientSecret:null,
       tenant:"common",
     });
     expect(getMicrosoftCalendarConfig({
-      MICROSOFT_CALENDAR_CLIENT_ID:"client",
+      MICROSOFT_CALENDAR_CLIENT_ID:appId,
       MICROSOFT_CALENDAR_TENANT:"organizations",
-    })).toEqual({clientId:"client",tenant:"organizations"});
+    })).toEqual({clientId:appId,clientSecret:null,tenant:"organizations"});
+    expect(getMicrosoftCalendarConfig({
+      MICROSOFT_CALENDAR_CLIENT_ID:appId,
+      MICROSOFT_CALENDAR_CLIENT_SECRET:"hosted-secret",
+      MICROSOFT_CALENDAR_TENANT:"organizations",
+    })).toEqual({clientId:appId,clientSecret:"hosted-secret",tenant:"organizations"});
+    expect(()=>getMicrosoftCalendarConfig({
+      KAIROS_APP_URL:"https://mykairos.me",
+      MICROSOFT_CALENDAR_CLIENT_ID:appId,
+    })).toThrowError(expect.objectContaining({code:"CALENDAR_CONFIG_MISSING"}));
+    expect(getMicrosoftCalendarConfig({
+      KAIROS_APP_URL:"https://mykairos.me",
+      MICROSOFT_CALENDAR_CLIENT_ID:appId,
+      MICROSOFT_CALENDAR_CLIENT_SECRET:"hosted-secret",
+    })).toEqual({clientId:appId,clientSecret:"hosted-secret",tenant:"common"});
     expect(()=>getMicrosoftCalendarConfig({})).toThrowError(expect.objectContaining({
       code:"CALENDAR_CONFIG_MISSING",
     }));
+  });
+
+  it("rejects a misplaced Entra client secret before it can enter an authorization URL",()=>{
+    const sensitiveValue="example~secret-value-never-echo";
+    try{
+      getMicrosoftCalendarConfig({MICROSOFT_CALENDAR_CLIENT_ID:sensitiveValue});
+      throw new Error("expected rejection");
+    }catch(error){
+      expect(error).toMatchObject({code:"CALENDAR_CONFIG_MISSING"});
+      expect((error as Error).message).toContain("Application (client) ID");
+      expect((error as Error).message).not.toContain(sensitiveValue);
+    }
   });
 
   it("exchanges authorization codes at the configured fixed Microsoft tenant endpoint",async()=>{
@@ -75,6 +112,27 @@ describe("Microsoft Calendar OAuth",()=>{
     });
   });
 
+  it("sends a confidential client secret for hosted token redemption when configured",async()=>{
+    const fetchMock=vi.fn(async(_input:RequestInfo|URL,init?:RequestInit)=>{
+      const body=new URLSearchParams(String(init?.body));
+      expect(body.get("client_secret")).toBe("hosted-secret");
+      expect(body.get("code_verifier")).toBe("fixture-verifier");
+      return Response.json({
+        access_token:"fixture-access",
+        expires_in:3600,
+        refresh_token:"fixture-refresh",
+      });
+    });
+    await exchangeMicrosoftAuthorizationCode({
+      clientId:"client",
+      clientSecret:"hosted-secret",
+      tenant:"common",
+      code:"fixture-code",
+      codeVerifier:"fixture-verifier",
+      redirectUri:"https://mykairos.me/api/calendars/microsoft/callback",
+    },fetchMock as typeof fetch);
+  });
+
   it("refreshes tokens and preserves provider refresh-token rotation",async()=>{
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       expect(String(input)).toBe("https://login.microsoftonline.com/common/oauth2/v2.0/token");
@@ -101,7 +159,10 @@ describe("Microsoft Calendar OAuth",()=>{
 
   it.each([
     [400,{error:"invalid_grant"},"CALENDAR_AUTH_EXPIRED"],
-    [401,{error:"invalid_client"},"CALENDAR_AUTH_EXPIRED"],
+    [401,{error:"invalid_client"},"CALENDAR_CONFIG_MISSING"],
+    [400,{error:"unauthorized_client"},"CALENDAR_CONFIG_MISSING"],
+    [400,{error:"invalid_scope"},"CALENDAR_CONFIG_MISSING"],
+    [400,{error:"consent_required"},"CALENDAR_AUTH_REQUIRED"],
     [429,{error:"temporarily_unavailable"},"CALENDAR_RATE_LIMITED"],
     [500,{error:"server_error"},"CALENDAR_UPSTREAM_ERROR"],
   ] as const)("maps HTTP %s without echoing refresh secrets",async(status,payload,code)=>{
@@ -118,6 +179,44 @@ describe("Microsoft Calendar OAuth",()=>{
       expect(error).toBeInstanceOf(CalendarSyncError);
       expect(error).toMatchObject({code});
       expect((error as Error).message).not.toContain(secret);
+    }
+  });
+
+  it("logs only allowlisted Microsoft error codes, without response details",async()=>{
+    const secret="fixture-account-and-token-never-echo";
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    try{
+      await expect(exchangeMicrosoftAuthorizationCode({
+        clientId:"client",tenant:"common",code:secret,codeVerifier:secret,
+        redirectUri:"https://mykairos.me/api/calendars/microsoft/callback",
+      },vi.fn(async()=>Response.json({
+        error:"invalid_client",
+        error_description:`Credential problem for ${secret}`,
+      },{status:401})) as typeof fetch)).rejects.toMatchObject({code:"CALENDAR_CONFIG_MISSING"});
+      expect(JSON.stringify(warning.mock.calls)).toContain("invalid_client");
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+    }finally{
+      warning.mockRestore();
+    }
+  });
+
+  it("records only the numeric AADSTS identifier from a rejected code exchange",async()=>{
+    const secret="fixture-sensitive-identity-never-echo";
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    try{
+      await expect(exchangeMicrosoftAuthorizationCode({
+        clientId:"client",tenant:"common",code:secret,codeVerifier:secret,
+        redirectUri:"https://mykairos.me/api/calendars/microsoft/callback",
+      },vi.fn(async()=>Response.json({
+        error:"invalid_grant",
+        error_description:`AADSTS70000: invalid grant for ${secret}`,
+      },{status:400})) as typeof fetch)).rejects.toMatchObject({code:"CALENDAR_AUTH_EXPIRED"});
+      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Calendar token exchange failed",{
+        status:400,safeCode:"invalid_grant",aadstsCode:"70000",
+      });
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(secret);
+    }finally{
+      warning.mockRestore();
     }
   });
 

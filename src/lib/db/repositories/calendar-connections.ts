@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {CalendarConnection,CalendarProvider,CalendarSyncStatus} from "@/lib/calendar/types";
 
 type Row={
@@ -32,7 +32,7 @@ const map=(row:Row):CalendarConnection=>({
 });
 
 export class CalendarConnectionRepository{
-  constructor(private readonly db:Database.Database){}
+  constructor(private readonly db:LegacyDatabase){}
   private readonly select="SELECT id,provider,label,account_label,remote_calendar_id,remote_calendar_name,enabled,last_sync_started_at,last_sync_completed_at,last_sync_status,last_error_code FROM calendar_connections";
 
   list():CalendarConnection[]{

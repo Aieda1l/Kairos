@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {CalendarEventLink} from "@/lib/calendar/types";
 
 type Row={
@@ -28,7 +28,7 @@ const map=(row:Row):CalendarEventLink=>({
 });
 
 export class CalendarEventLinkRepository{
-  constructor(private readonly db:Database.Database){}
+  constructor(private readonly db:LegacyDatabase){}
   private readonly select="SELECT id,calendar_connection_id,assignment_id,sync_key,remote_event_id,remote_etag,content_hash,last_synced_at,last_error_code FROM calendar_event_links";
 
   get(connectionId:string,assignmentId:string):CalendarEventLink|null{

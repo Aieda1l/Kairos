@@ -36,6 +36,15 @@ function connection(overrides:Partial<CalendarConnection>={}):CalendarConnection
 }
 
 describe("Microsoft Calendar client",()=>{
+  it("invokes an injected Workers fetch without binding the client as receiver",async()=>{
+    const fetchImpl=function(this:unknown){
+      if(this!==undefined)throw new TypeError("Illegal invocation");
+      return Promise.resolve(Response.json({id:"remote-calendar"}));
+    } as typeof fetch;
+    await expect(new MicrosoftCalendarClient("token",fetchImpl).createCalendar("Kairos"))
+      .resolves.toMatchObject({remoteCalendarId:"remote-calendar"});
+  });
+
   it("uses a stable UUID-like transaction id for create retries",()=>{
     const first=microsoftTransactionId("fixture-sync-key");
     expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -234,6 +243,47 @@ describe("Microsoft Calendar client",()=>{
       expect((error as Error).message).toContain("MailboxNotEnabledForRESTAPI");
       expect((error as Error).message).not.toContain("private provider diagnostic");
     }
+  });
+
+  it.each([
+    [401,"CALENDAR_AUTH_EXPIRED"],
+    [403,"CALENDAR_PERMISSION_DENIED"],
+  ] as const)("distinguishes a Graph HTTP %s calendar denial",async(status,code)=>{
+    const sensitive="fixture-graph-provider-detail-never-echo";
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const client=new MicrosoftCalendarClient("fixture-access",vi.fn(async()=>Response.json({
+      error:{code:"ErrorAccessDenied",message:sensitive},
+    },{status})) as unknown as typeof fetch);
+    try{
+      await expect(client.findCalendarByName("Kairos")).rejects.toMatchObject({code});
+      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Graph calendar request denied",{
+        status,operation:"GET",providerCode:"ErrorAccessDenied",reason:"unspecified",responseFormat:"json",
+      });
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(sensitive);
+    }finally{
+      warning.mockRestore();
+    }
+  });
+
+  it.each([
+    ["UnknownError","","unspecified"],
+    ["InvalidAuthenticationToken","Access token validation failure. Invalid audience.","invalid_audience"],
+    ["InvalidAuthenticationToken","Lifetime validation failed, the token is expired.","token_expired"],
+    ["InvalidAuthenticationToken","CompactToken parsing failed with error code: 80049217","malformed_token"],
+  ] as const)("logs a safe Graph rejection category for %s without provider messages",async(providerCode,message,reason)=>{
+    const sensitive="private-account-and-access-token-never-echo";
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const client=new MicrosoftCalendarClient(sensitive,async()=>Response.json({
+      error:{code:providerCode,message:message+" "+sensitive,innerError:{requestId:sensitive}},
+    },{status:401}));
+    try{
+      await expect(client.findCalendarByName("Kairos")).rejects.toMatchObject({code:"CALENDAR_AUTH_EXPIRED"});
+      expect(warning).toHaveBeenCalledWith("Kairos Microsoft Graph calendar request denied",{
+        status:401,operation:"GET",providerCode,reason,responseFormat:"json",
+      });
+      expect(JSON.stringify(warning.mock.calls)).not.toContain(sensitive);
+      if(message)expect(JSON.stringify(warning.mock.calls)).not.toContain(message);
+    }finally{warning.mockRestore();}
   });
 
   it.each([

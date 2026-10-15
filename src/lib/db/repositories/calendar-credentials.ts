@@ -1,8 +1,8 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 
 export class CalendarCredentialRepository{
-  constructor(private readonly db:Database.Database){}
+  constructor(private readonly db:LegacyDatabase){}
 
   setOAuthRefreshToken(connectionId:string,token:string):void{
     const at=new Date().toISOString();

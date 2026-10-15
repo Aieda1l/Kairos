@@ -14,7 +14,9 @@ function stableFallback(fields:string[]): string { return `fallback-${crypto.cre
 function directCanvasUrl(raw:string|null): {url:string|null; courseId:string|null} {
   if (!raw) return {url:null,courseId:null};
   try {
-    const url=new URL(raw); const context=url.searchParams.get("include_contexts"); const course=context?.match(/^course_(\d+)$/)?.[1] ?? null; const assignment=url.hash.match(/^#assignment_(\d+)$/)?.[1] ?? null;
+    const url=new URL(raw);
+    if(!["https:","http:"].includes(url.protocol)||url.username||url.password)return {url:null,courseId:null};
+    const context=url.searchParams.get("include_contexts"); const course=context?.match(/^course_(\d+)$/)?.[1] ?? null; const assignment=url.hash.match(/^#assignment_(\d+)$/)?.[1] ?? null;
     if (course && assignment) return {url:`${url.protocol}//${url.host}/courses/${course}/assignments/${assignment}`,courseId:course};
     return {url:raw,courseId:course};
   } catch { return {url:null,courseId:null}; }

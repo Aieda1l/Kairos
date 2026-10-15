@@ -10,6 +10,7 @@ import { Alert } from "@/components/ui/alert";
 import { SourceStatus } from "./source-status";
 import { SyncButton } from "@/features/sync/sync-button";
 import { SyncSummaryView } from "@/features/sync/sync-summary";
+import { navigateDocument } from "@/lib/browser-navigation";
 
 export function CanvasSourceCard({connection:initial}:{connection:SourceConnection|null}){
   const router=useRouter();
@@ -53,8 +54,7 @@ export function CanvasSourceCard({connection:initial}:{connection:SourceConnecti
       setConnection(body.connection);
       setSummary(body.sync);
       setFeedUrl("");
-      router.push("/upcoming");
-      router.refresh();
+      navigateDocument("/upcoming");
     }catch(e){
       setError(e instanceof Error?e.message:"Canvas could not be connected.");
     }finally{

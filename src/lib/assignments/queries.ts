@@ -1,8 +1,15 @@
 import type { Assignment } from "./types";
-import type { AssignmentFilters,AssignmentRepository } from "@/lib/db/repositories/assignments";
+import type { AssignmentFilters } from "@/lib/db/repositories/assignments";
 import { classifyDueDate,type DueGroup } from "@/lib/dates/classify-due-date";
 
-export function getAssignmentsView(repo:AssignmentRepository,filters:AssignmentFilters):Assignment[]{
+type AssignmentListRepository={
+  list(filters:AssignmentFilters):Assignment[]|Promise<Assignment[]>;
+};
+
+export async function getAssignmentsView(
+  repo:AssignmentListRepository,
+  filters:AssignmentFilters,
+):Promise<Assignment[]>{
   return repo.list(filters);
 }
 

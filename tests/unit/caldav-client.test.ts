@@ -55,6 +55,15 @@ describe("CalDAV event serialization",()=>{
 });
 
 describe("Apple iCloud CalDAV client",()=>{
+  it("invokes an injected Workers fetch without binding the client as receiver",async()=>{
+    const fetchImpl=function(this:unknown){
+      if(this!==undefined)throw new TypeError("Illegal invocation");
+      return Promise.resolve(new Response("unauthorized",{status:401}));
+    } as typeof fetch;
+    await expect(new CalDavClient("student@example.com","secret",fetchImpl).discoverCalendars())
+      .rejects.toMatchObject({code:"CALENDAR_AUTH_REQUIRED"});
+  });
+
   it("discovers a writable Kairos calendar through Apple partition URLs",async()=>{
     const calls:Array<{url:string;method:string;authorization:string|null}>=[];
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
@@ -203,7 +212,7 @@ describe("Apple iCloud CalDAV client",()=>{
     await expect(adapter.testConnection()).rejects.toMatchObject({code:"CALENDAR_REMOTE_CALENDAR_MISSING"});
   });
 
-  it("creates a dedicated Kairos collection only during explicit ensureCalendar",async()=>{
+  it("requires a pre-existing writable Kairos calendar",async()=>{
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       if(init?.method==="PROPFIND"){
         if(String(input)===ICLOUD_CALDAV_ORIGIN){
@@ -214,15 +223,13 @@ describe("Apple iCloud CalDAV client",()=>{
         }
         return new Response(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"/>`,{status:207});
       }
-      expect(init?.method).toBe("MKCALENDAR");
-      expect(String(input)).toBe("https://p12-caldav.icloud.com/123/calendars/kairos/");
-      return new Response(null,{status:201});
+      throw new Error(`Unexpected ${init?.method} request to ${String(input)}`);
     });
     const client=new CalDavClient("student@example.com","fixture-app-password",fetchMock as typeof fetch);
     const adapter=new CalDavCalendarAdapter(connection({remoteCalendarId:null,remoteCalendarName:null}),client);
-    await expect(adapter.ensureCalendar()).resolves.toEqual({
-      remoteCalendarId:"https://p12-caldav.icloud.com/123/calendars/kairos/",
-      name:"Kairos",
+    await expect(adapter.ensureCalendar()).rejects.toMatchObject({
+      code:"CALDAV_NOT_WRITABLE",
+      message:expect.stringContaining("Create a calendar named Kairos"),
     });
   });
 
@@ -238,7 +245,7 @@ describe("Apple iCloud CalDAV client",()=>{
     });
   });
 
-  it("gives manual-calendar guidance when Apple rejects MKCALENDAR",async()=>{
+  it("gives manual-calendar guidance when an existing Kairos calendar is not writable",async()=>{
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
       if(init?.method==="PROPFIND"){
         if(String(input)===ICLOUD_CALDAV_ORIGIN){
@@ -247,15 +254,14 @@ describe("Apple iCloud CalDAV client",()=>{
         if(String(input).endsWith("/principal/")){
           return new Response(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:propstat><d:prop><c:calendar-home-set><d:href>https://p12-caldav.icloud.com/123/calendars/</d:href></c:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>`,{status:207});
         }
-        return new Response(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"/>`,{status:207});
+        return new Response(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/123/calendars/kairos/</d:href><d:propstat><d:prop><d:displayname>Kairos</d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>`,{status:207});
       }
-      expect(init?.method).toBe("MKCALENDAR");
-      return new Response("forbidden",{status:403});
+      throw new Error(`Unexpected ${init?.method} request to ${String(input)}`);
     });
     const client=new CalDavClient("student@example.com","fixture-app-password",fetchMock as typeof fetch);
     await expect(client.createCalendar("Kairos")).rejects.toMatchObject({
       code:"CALDAV_NOT_WRITABLE",
-      message:"Apple accepted the credentials but would not create a new calendar through CalDAV. Create a calendar named Kairos in iCloud Calendar, then reconnect.",
+      message:"Kairos cannot create an iCloud calendar from this environment. Create a calendar named Kairos in iCloud Calendar, then reconnect.",
     });
   });
 

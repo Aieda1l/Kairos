@@ -1,6 +1,9 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
+import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
+import {D1CalendarCredentialRepository} from "@/lib/db/d1/repositories/calendar-credentials";
+import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {getGoogleCalendarConfig,refreshGoogleAccessToken} from "@/lib/calendar/google/oauth";
@@ -12,10 +15,16 @@ import {MicrosoftCalendarAdapter} from "@/lib/calendar/microsoft/adapter";
 import {CalDavClient} from "@/lib/calendar/caldav/client";
 import {CalDavCalendarAdapter} from "@/lib/calendar/caldav/adapter";
 import {getCalendarRouteFetch} from "@/lib/calendar/e2e-fixture-fetch";
+import type {CredentialKeyring} from "@/lib/security/credential-cipher";
 
-export function createCalendarAdapterFactory(
-  db:Database.Database,
-  options:{fetchImpl?:typeof fetch;env?:Record<string,string|undefined>}={},
+type FactoryOptions={
+  fetchImpl?:typeof fetch;
+  env?:Record<string,string|undefined>;
+};
+
+function legacyFactory(
+  db:LegacyDatabase,
+  options:FactoryOptions={},
 ):CalendarAdapterFactory{
   const fetchImpl=options.fetchImpl??getCalendarRouteFetch();
   const env=options.env??process.env;
@@ -63,4 +72,80 @@ export function createCalendarAdapterFactory(
       new CalDavClient(credential.username,credential.secret,fetchImpl),
     );
   };
+}
+
+function hostedFactory(
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
+  options:FactoryOptions={},
+):CalendarAdapterFactory{
+  const fetchImpl=options.fetchImpl??getCalendarRouteFetch();
+  const env=options.env??process.env;
+  const credentials=new D1CalendarCredentialRepository(db,scope,keyring);
+
+  return async connection=>{
+    if(connection.provider==="google"){
+      const refreshToken=await credentials.getOAuthRefreshToken(connection.id);
+      if(!refreshToken){
+        throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Google Calendar.");
+      }
+      const config=getGoogleCalendarConfig(env);
+      const token=await refreshGoogleAccessToken({...config,refreshToken},fetchImpl);
+      if(token.refreshToken){
+        await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
+      }
+      return new GoogleCalendarAdapter(
+        connection,
+        new GoogleCalendarClient(token.accessToken,fetchImpl),
+      );
+    }
+
+    if(connection.provider==="microsoft"){
+      const refreshToken=await credentials.getOAuthRefreshToken(connection.id);
+      if(!refreshToken){
+        throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Microsoft Calendar.");
+      }
+      const config=getMicrosoftCalendarConfig(env);
+      const token=await refreshMicrosoftAccessToken({...config,refreshToken},fetchImpl);
+      if(token.refreshToken){
+        await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
+      }
+      return new MicrosoftCalendarAdapter(
+        connection,
+        new MicrosoftCalendarClient(token.accessToken,fetchImpl),
+      );
+    }
+
+    const credential=await credentials.getCaldavCredentials(connection.id);
+    if(!credential){
+      throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Apple Calendar.");
+    }
+    return new CalDavCalendarAdapter(
+      connection,
+      new CalDavClient(credential.username,credential.secret,fetchImpl),
+    );
+  };
+}
+
+export function createCalendarAdapterFactory(
+  db:LegacyDatabase,
+  options?:FactoryOptions,
+):CalendarAdapterFactory;
+export function createCalendarAdapterFactory(
+  db:D1DatabaseLike,
+  scope:UserScope,
+  keyring:CredentialKeyring,
+  options?:FactoryOptions,
+):CalendarAdapterFactory;
+export function createCalendarAdapterFactory(
+  db:LegacyDatabase|D1DatabaseLike,
+  arg2?:FactoryOptions|UserScope,
+  arg3?:CredentialKeyring,
+  arg4?:FactoryOptions,
+):CalendarAdapterFactory{
+  if(arg2 && "userId" in arg2){
+    return hostedFactory(db as D1DatabaseLike,arg2,arg3!,arg4);
+  }
+  return legacyFactory(db as LegacyDatabase,arg2 as FactoryOptions|undefined);
 }

@@ -1,8 +1,13 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
-import {getDatabase,resetDatabaseSingletonForTests} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {getDatabase,resetDatabaseSingletonForTests} from "../helpers/legacy-db";
+import {migrate} from "../helpers/legacy-db";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
+
+const calendarRuntime=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock("@/lib/platform/calendar-runtime",()=>({
+  getCalendarRouteRuntime:calendarRuntime.get,
+}));
 
 async function getRoute(){return import("@/app/api/calendars/route");}
 async function syncOneRoute(){return import("@/app/api/calendars/[id]/sync/route");}
@@ -21,6 +26,11 @@ describe("calendar destination API",()=>{
   beforeEach(()=>{
     process.env.ASSIGNMENTS_DB_PATH=":memory:";
     resetDatabaseSingletonForTests();
+    calendarRuntime.get.mockImplementation(async()=>{
+      const db=getDatabase();
+      migrate(db);
+      return {kind:"legacy" as const,db};
+    });
   });
   afterEach(()=>{
     resetDatabaseSingletonForTests();

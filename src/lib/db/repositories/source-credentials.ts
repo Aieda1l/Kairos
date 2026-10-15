@@ -1,7 +1,7 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 export class SourceCredentialRepository {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: LegacyDatabase) {}
   setCanvasFeedUrl(connectionId: string, feedUrl: string): void {
     this.db.prepare(`INSERT INTO source_credentials(source_connection_id,canvas_feed_url,updated_at) VALUES (?,?,?)
       ON CONFLICT(source_connection_id) DO UPDATE SET canvas_feed_url=excluded.canvas_feed_url, updated_at=excluded.updated_at`).run(connectionId, feedUrl, new Date().toISOString());

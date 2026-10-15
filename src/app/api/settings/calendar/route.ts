@@ -1,29 +1,27 @@
 import {z} from "zod";
-import {getDatabase} from "@/lib/db/client";
-import {migrate} from "@/lib/db/migrate";
+import {D1SettingsRepository} from "@/lib/db/d1/repositories/settings";
 import {SettingsRepository} from "@/lib/db/repositories/settings";
+import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
 
-const schema=z.object({
-  hideSubmitted:z.boolean(),
-}).strict();
-
-function repo(){
-  const db=getDatabase();
-  migrate(db);
-  return new SettingsRepository(db);
-}
+const schema=z.object({hideSubmitted:z.boolean()}).strict();
 
 export async function GET(){
-  return Response.json({
-    hideSubmitted:repo().getCalendarHideSubmitted(),
-  });
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
+  const hideSubmitted=runtime.kind==="legacy"
+    ?new SettingsRepository(runtime.db).getCalendarHideSubmitted()
+    :await new D1SettingsRepository(runtime.db,runtime.scope).getCalendarHideSubmitted();
+  return Response.json({hideSubmitted});
 }
 
 export async function PUT(request:Request){
+  const resolved=await resolveCalendarApiRuntime();
+  if(!resolved.ok)return resolved.response;
+  const runtime=resolved.runtime;
   let body:unknown;
-  try{
-    body=await request.json();
-  }catch{
+  try{body=await request.json();}
+  catch{
     return Response.json({
       code:"INVALID_REQUEST",
       message:"Choose whether submitted assignments should be hidden.",
@@ -36,6 +34,12 @@ export async function PUT(request:Request){
       message:"Choose whether submitted assignments should be hidden.",
     },{status:400});
   }
-  repo().setCalendarHideSubmitted(parsed.data.hideSubmitted);
+
+  if(runtime.kind==="legacy"){
+    new SettingsRepository(runtime.db).setCalendarHideSubmitted(parsed.data.hideSubmitted);
+  }else{
+    await new D1SettingsRepository(runtime.db,runtime.scope)
+      .setCalendarHideSubmitted(parsed.data.hideSubmitted);
+  }
   return Response.json({hideSubmitted:parsed.data.hideSubmitted});
 }

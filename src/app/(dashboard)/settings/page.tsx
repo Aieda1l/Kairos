@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useSubmissionStatusSync } from "@/features/submission-status/submission-status-provider";
+import {DeleteAccountControl} from "@/features/account/delete-account-control";
 
 const zones=["America/Los_Angeles","America/Denver","America/Chicago","America/New_York","UTC"];
 
@@ -90,6 +91,8 @@ export default function SettingsPage(){
             />
           </dl>
         </section>
+
+        <DeleteAccountControl/>
       </div>
     </div>
   );

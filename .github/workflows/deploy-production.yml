@@ -1,0 +1,58 @@
+name: Deploy Kairos Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify:hosted
+      - name: Prepare temporary production Wrangler config
+        shell: bash
+        env:
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const id=process.env.CLOUDFLARE_D1_DATABASE_ID??"";
+          if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error("Production D1 database ID is missing or invalid.");
+          const config=JSON.parse(fs.readFileSync("wrangler.jsonc","utf8"));
+          config.env.production.d1_databases[0].database_id=id;
+          // The Cloudflare Vite plugin emits a module graph under dist/server.
+          // Keep wrangler.jsonc's source entry for Vite dev/build, but point
+          // Wrangler's production upload at the compiled Worker entry.
+          config.main="dist/server/index.js";
+          config.no_bundle=true;
+          config.rules=[{type:"ESModule",globs:["**/*.js","**/*.mjs"]}];
+          config.env.production.routes=[{
+            pattern:"mykairos.me",zone_name:"mykairos.me",custom_domain:true,
+          }];
+          config.env.production.workers_dev=true;
+          config.env.production.preview_urls=true;
+          fs.writeFileSync(".wrangler.production.jsonc",JSON.stringify(config,null,2));
+          NODE
+      - name: Apply production D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply kairos-production --remote --env production --config .wrangler.production.jsonc
+      - name: Build vinext Workers target
+        run: npm run build:vinext
+      - name: Deploy production Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env production --config .wrangler.production.jsonc --keep-vars

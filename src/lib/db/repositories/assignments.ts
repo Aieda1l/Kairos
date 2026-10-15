@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type { Assignment } from "@/lib/assignments/types";
 import type { NormalizedAssignment } from "@/lib/assignments/normalize";
 import type { SourceKind } from "@/lib/sources/types";
@@ -65,7 +65,7 @@ const map=(r:Row):Assignment=>({
 });
 
 export class AssignmentRepository{
-  constructor(private db:Database.Database){}
+  constructor(private db:LegacyDatabase){}
 
   upsertMany(sourceConnectionId:string,assignments:NormalizedAssignment[],seenAt:string):{inserted:number;updated:number}{
     let inserted=0,updated=0;

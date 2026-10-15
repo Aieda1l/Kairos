@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceKind } from "@/lib/sources/types";
 
@@ -27,7 +27,7 @@ const map=(r:Row):SourceConnection=>({
 });
 
 export class SourceConnectionRepository{
-  constructor(private db:Database.Database){}
+  constructor(private db:LegacyDatabase){}
   private select="SELECT id,kind,label,enabled,last_sync_started_at,last_sync_completed_at,last_sync_status,last_error_code FROM source_connections";
 
   getByKind(kind:SourceKind){

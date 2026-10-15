@@ -32,6 +32,15 @@ function connection(overrides:Partial<CalendarConnection>={}):CalendarConnection
 }
 
 describe("Google Calendar client",()=>{
+  it("invokes an injected Workers fetch without binding the client as receiver",async()=>{
+    const fetchImpl=function(this:unknown){
+      if(this!==undefined)throw new TypeError("Illegal invocation");
+      return Promise.resolve(Response.json({id:"remote-calendar"}));
+    } as typeof fetch;
+    await expect(new GoogleCalendarClient("token",fetchImpl).createCalendar("Kairos"))
+      .resolves.toMatchObject({remoteCalendarId:"remote-calendar"});
+  });
+
   it("uses deterministic base32hex-compatible event IDs",()=>{
     const first=googleEventId("fixture-sync-key");
     expect(first).toMatch(/^[0-9a-v]{5,1024}$/);

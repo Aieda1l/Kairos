@@ -33,6 +33,17 @@ function Harness(){
   </div>;
 }
 
+it("explains a completed Microsoft sign-in followed by rejected Outlook calendar access",async()=>{
+  window.history.replaceState(null,"","/sources?calendarProvider=microsoft&calendarError=CALENDAR_AUTH_EXPIRED&calendarStage=calendar_setup");
+  function ErrorHarness(){
+    const calendar=useCalendarSync();
+    return <span>{calendar.messageFor("microsoft")}</span>;
+  }
+  render(<CalendarSyncProvider initialConnections={[]}><ErrorHarness/></CalendarSyncProvider>);
+  await screen.findByText(/Microsoft signed in successfully, but Outlook rejected calendar access/);
+  expect(window.location.search).toBe("");
+});
+
 beforeEach(()=>{
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

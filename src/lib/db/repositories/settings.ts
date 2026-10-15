@@ -1,10 +1,10 @@
 import "server-only";
-import type Database from "better-sqlite3";
+import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import {validateTimeZone} from "@/lib/dates/validate-timezone";
 import {DEFAULT_TIME_ZONE} from "@/lib/dates/format";
 
 export class SettingsRepository{
-  constructor(private db:Database.Database){}
+  constructor(private db:LegacyDatabase){}
 
   getTimeZone():string{
     const row=this.db.prepare("SELECT value FROM app_settings WHERE key='timezone'")

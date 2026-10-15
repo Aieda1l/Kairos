@@ -2,10 +2,13 @@ import { z } from "zod";
 import { testEdConnection } from "@/lib/ed/discovery-service";
 import { EdSourceError } from "@/lib/sources/ed/errors";
 import { getEdRouteFetch } from "@/lib/ed/e2e-fixture-fetch";
+import {resolveSourceApiRuntime} from "@/lib/platform/source-api-runtime";
 
 const schema=z.object({token:z.string().trim().min(1).max(4096)}).strict();
 
 export async function POST(request:Request){
+  const resolved=await resolveSourceApiRuntime();
+  if(!resolved.ok)return resolved.response;
   let body:unknown;
   try{body=await request.json();}catch{
     return Response.json({ok:false,code:"INVALID_REQUEST",message:"Enter an Ed API token."},{status:400});

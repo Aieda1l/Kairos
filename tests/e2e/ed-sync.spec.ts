@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
+import {prepareFixtureUser,waitForAppHydration} from "./helpers";
 
-test("connects Ed, selects courses, and syncs dated and undated lessons without leaking the PAT",async({page,request})=>{
-  const reset=await request.post("/api/test-fixtures/reset");
-  expect(reset.ok()).toBe(true);
+test("connects Ed, selects courses, and syncs dated and undated lessons without leaking the PAT",async({page,context})=>{
+  await prepareFixtureUser(context);
 
   const token="fixture-ed-token-never-echo";
   const apiRequests:Array<{url:string;body:string|null}>=[];
@@ -20,6 +20,7 @@ test("connects Ed, selects courses, and syncs dated and undated lessons without 
   });
 
   await page.goto("/sources");
+  await waitForAppHydration(page);
   const edCard=page.locator("section").filter({has:page.getByRole("heading",{name:"Ed",exact:true})});
   const tokenInput=edCard.getByLabel("Ed API token");
   await tokenInput.fill(token);
