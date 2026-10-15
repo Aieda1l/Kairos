@@ -48,9 +48,11 @@ Account-member metadata at 18:28 UTC reports one accepted Super Administrator. T
 
 The analytics refresh returned a rate-budget error, including one reduced query after the documented wait. The earlier observed 29.362 ms P50 / 251.633 ms P99 remains historical M6 evidence; no new CPU measurement or M7 Free-headroom pass is claimed.
 
+The original three external-policy audit assignments are now independently closed against these attributed facts and the owner-only deletion/restore/key policy. The frozen-base ledger is 131 covered plus 20 assessed candidate traces, zero blocked; unchanged coverage/findings validators pass. Original records remain archived, the original source ref is retained, and later deltas are separately reviewed. The production-readiness validator still returns INCOMPLETE because live release acceptance is not complete. This does not claim an actual database restore.
+
 To finish release acceptance:
 
-1. Preserve the now-recorded single-administrator/no-D1-token/no-external-export access model, operator-only export/restore authority and original key. Finish historical-deletion/restore handling and stored platform/framework privacy evidence; inventory confirmation is not a performed restore.
+1. Preserve the recorded single-administrator/no-D1-token/no-external-export model, operator-only export/restore authority, original key and reviewed deletion-safe recovery policy. Keep log persistence disabled; its framework/platform review remains separate. A database restore is not required for the code-rollback acceptance test and remains a separately approved owner-only operation.
 2. Establish an exclusive cutover window and settle/contain old M6 server/browser work; preserve the four legacy requests and uncertain ownership unless targeted recovery is separately justified.
 3. Obtain explicit approval for the concrete reviewed production release, including additive migrations 0004–0007, staged candidate/fallback checks, traffic promotion and the controlled operator acceptance sequence. General instructions to finish M7 do not replace the earlier explicit production-approval requirement.
 4. Verify actual identity/onboarding/source/calendar/account-isolation/revocation/deletion behavior, real challenge/budget behavior, M7 CPU/query headroom and compatible code rollback/forward restoration. Activate new health/maintenance separately only after prerequisites and approval; verify delivery and costs.

@@ -31,7 +31,7 @@ The later [operational preflight](preflight-milestone-7.md) confirms production 
 | 19 | Two independent real accounts | M6 user-confirmed isolation; synthetic M7 isolation/browser coverage; latest operator report says two Kairos accounts tested and apparently working | Record exact tested revision/flows and complete remaining M7 onboarding/source/calendar/settings/mutation isolation; general smoke success does not establish every assertion |
 | 20 | Real Google/Microsoft/iCloud calendars | M6 real-account acceptance and current fixture/reconciliation tests | Production connect/repeat/update/recreate/disconnect/reconnect smoke for all three |
 | 21 | UW Canvas/Gradescope/Ed remain functional | M6 operator-confirmed flows; current service/bridge/source coverage | Fresh hosted imports/status/courses/errors and source isolation on the release |
-| 22 | Final repository-wide security review | Current source reviews, 151-unit/17-record validators and distinct clean coverage critiques complete | Close three external D1 backup/export/restore blocks and actual production-control/privacy evidence |
+| 22 | Final repository-wide security review | Frozen-base audit complete: 151 terminal units/17 fixed-or-refuted records; former D1 policy blocks closed by attributed facts/policy and distinct critics; later deltas separately reviewed | No unresolved Critical/Important source finding; actual runtime/privacy/operational facts still feed final readiness under row 23 |
 | 23 | Final readiness go | Fresh local gates pass; validated INCOMPLETE readiness decision | Establish required external facts and obtain the final go decision; no production approval inferred |
 
 ## Release record
