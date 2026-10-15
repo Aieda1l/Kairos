@@ -6,6 +6,13 @@ const callbacks=new Set(["/api/auth/callback/google","/api/auth/callback/microso
 
 export function proxy(request:NextRequest){
   const pathname=request.nextUrl.pathname;
+  const url=new URL(request.url);
+  // Version URLs share production bindings. They are storage-health probes,
+  // never an alternate entry to identity, onboarding or provider operations.
+  if(url.hostname.replace(/\.$/,'').endsWith('.workers.dev')
+    &&!(request.method==='GET'&&pathname==='/api/health'&&!url.search)){
+    return NextResponse.json({code:'PREVIEW_HEALTH_ONLY'},{status:404,headers:{'cache-control':'no-store'}});
+  }
   const initiation=pathname==="/sign-in"||pathname==="/api/auth/signin"||pathname.startsWith("/api/auth/signin/")
     ||pathname==="/api/calendars/sync-all"||request.headers.has("next-action");
   if(initiation&&!["GET","HEAD","OPTIONS"].includes(request.method)){
@@ -42,13 +49,5 @@ export function proxy(request:NextRequest){
   return response;
 }
 
-export const config={matcher:[
-  "/upcoming", "/assignments", "/calendar", "/sources", "/settings", "/onboarding",
-  "/sign-in",
-  "/api/auth/:path*",
-  "/api/account",
-  "/api/settings/:path*",
-  "/api/sources/:path*",
-  "/api/calendars/:path*",
-  "/api/sync-all/:path*",
-]};
+// URL-based admission must run even when Host is absent or contradictory.
+export const config={matcher:['/:path*']};

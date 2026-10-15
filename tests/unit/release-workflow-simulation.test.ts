@@ -19,6 +19,7 @@ function simulate(scenario='success',ref='refs/heads/main'){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'kairos-release-'));temporary.push(directory);
  const bin=path.join(directory,'bin');fs.mkdirSync(bin);fs.mkdirSync(path.join(directory,'dist/server'),{recursive:true});
  fs.copyFileSync('wrangler.jsonc',path.join(directory,'wrangler.jsonc'));
+ fs.cpSync('migrations',path.join(directory,'migrations'),{recursive:true});
  const trace=path.join(directory,'trace.jsonl'),output=path.join(directory,'output');fs.writeFileSync(trace,'');fs.writeFileSync(output,'');
  const cloudState=path.join(directory,'cloud.json');
  fs.writeFileSync(cloudState,JSON.stringify({schema:1,traffic:'previous-version',users:['dummy-user']}));
@@ -28,6 +29,32 @@ import fs from 'node:fs';
 const record=value=>fs.appendFileSync(process.env.SIM_TRACE,JSON.stringify(value)+'\\n');
 globalThis.fetch=async(value,options)=>{
  const url=new URL(value);record({fetch:url.origin+url.pathname});
+ if(url.hostname==='api.cloudflare.com'){
+  const state=JSON.parse(fs.readFileSync(process.env.SIM_STATE,'utf8'));
+  if(url.pathname.endsWith('/workers/subdomain'))return Response.json({success:true,result:{subdomain:'account'}});
+  const names=['0001_auth.sql','0002_kairos_tenant_schema.sql','0003_identity_token_minimization.sql','0004_onboarding_state.sql','0005_abuse_controls.sql','0006_bridge_ownership.sql','0007_provider_admission.sql'];
+  if(url.pathname.endsWith('/query')){
+   const count=state.schema===2&&process.env.SIM_SCENARIO!=='migration-result-incomplete'?7:3;
+   const rows=names.slice(0,count);if(process.env.SIM_SCENARIO==='baseline-drift'||(process.env.KAIROS_VERSION_ID&&state.schema===1&&process.env.SIM_SCENARIO==='schema-drift-after-upload'))rows.push('unexpected.sql');
+   return Response.json({success:true,result:[{success:true,results:rows.map(name=>({name})),meta:{rows_written:0}}]});
+  }
+  if(url.pathname.endsWith('/deployments')){
+   const drift=process.env.KAIROS_VERSION_ID&&((state.schema===1&&process.env.SIM_SCENARIO==='active-drift-after-upload')||(state.schema===2&&process.env.SIM_SCENARIO==='active-drift-after-migrate'));
+   return Response.json({success:true,result:{deployments:[{versions:[{version_id:drift?'11111111-2222-3333-4444-555555555555':'fedcba98-7654-3210-fedc-ba9876543210',percentage:100}]}]}});
+  }
+  if(url.pathname.endsWith('/script-settings'))return Response.json({success:true,result:{observability:process.env.SIM_SCENARIO==='stage-logging'?{enabled:true}:null,logpush:false,tail_consumers:[]}});
+  if(url.pathname.includes('/versions/')){
+   const secretNames=['AUTH_SECRET','AUTH_GOOGLE_ID','AUTH_GOOGLE_SECRET','AUTH_MICROSOFT_ENTRA_ID_ID','AUTH_MICROSOFT_ENTRA_ID_SECRET','GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','MICROSOFT_CALENDAR_CLIENT_ID','MICROSOFT_CALENDAR_CLIENT_SECRET','MICROSOFT_CALENDAR_TENANT','KAIROS_CREDENTIAL_KEY_V1','KAIROS_TURNSTILE_SITE_KEY','KAIROS_TURNSTILE_SECRET_KEY','KAIROS_ABUSE_KEY_V1'];
+   const bindings=[...secretNames.map(name=>({name,type:'secret_text'})),{name:'DB',type:'d1',id:'11111111-1111-1111-1111-111111111111'},
+    ...Object.entries({KAIROS_APP_URL:'https://mykairos.me',AUTH_URL:'https://mykairos.me',KAIROS_ABUSE_TRUSTED_INGRESS:'cloudflare',KAIROS_RELEASE_ID:process.env.GITHUB_SHA}).map(([name,text])=>({name,type:'plain_text',text}))];
+   if(process.env.SIM_SCENARIO==='stage-config-failure'||(state.schema===2&&process.env.SIM_SCENARIO==='config-drift-after-migrate'))bindings.push({name:'E2E_FIXTURES',type:'plain_text',text:'1'});
+   if(process.env.SIM_SCENARIO==='stage-wrong-db')bindings.find(b=>b.name==='DB').id='22222222-2222-2222-2222-222222222222';
+   if(process.env.SIM_SCENARIO==='stage-wrong-release')bindings.find(b=>b.name==='KAIROS_RELEASE_ID').text='b'.repeat(40);
+   if(process.env.SIM_SCENARIO==='stage-missing-secret')bindings.splice(bindings.findIndex(b=>b.name==='KAIROS_CREDENTIAL_KEY_V1'),1);
+   return Response.json({success:true,result:{id:'${version}',resources:{bindings,script_runtime:{compatibility_date:'2026-10-06',compatibility_flags:['nodejs_compat']}}}});
+  }
+  throw new Error('Unexpected Cloudflare request');
+ }
  if(url.hostname==='api.github.com'){
   const run={id:12,run_attempt:1,head_sha:process.env.GITHUB_SHA,head_branch:'main',status:'completed',conclusion:'success',event:'push',path:'.github/workflows/milestone-2-ci.yml',head_repository:{full_name:'owner/Kairos'}};
   if(process.env.SIM_SCENARIO==='ci-failure')run.conclusion='failure';
@@ -36,6 +63,8 @@ globalThis.fetch=async(value,options)=>{
   return Response.json({workflow_runs:process.env.SIM_SCENARIO==='ci-missing'?[]:runs});
  }
  if(url.hostname.endsWith('.workers.dev')){
+  if(url.pathname!=='/api/health')return process.env.SIM_SCENARIO==='stage-open'
+   ?Response.json({status:'ok'}):Response.json({code:'PREVIEW_HEALTH_ONLY'},{status:404});
   if(process.env.SIM_SCENARIO==='stage-transport')throw new Error('private transport sentinel');
   if(process.env.SIM_SCENARIO==='stage-oversize')return new Response('private payload sentinel'.repeat(20));
   return process.env.SIM_SCENARIO==='stage-unhealthy'?Response.json({status:'unavailable',private:'payload sentinel'},{status:503}):Response.json({status:'ok'});
@@ -93,9 +122,12 @@ if(command==='npx'&&args[1]==='versions'&&args[2]==='deploy'){
     if(!step.run)continue;
     const interpolate=(text:string)=>text.replace(/\$\{\{\s*(.*?)\s*\}\}/g,(_match,expression:string)=>{
      if(expression==='runner.temp')return directory;
-     if(expression==='github.token'||expression==='secrets.CLOUDFLARE_API_TOKEN'||expression==='secrets.CLOUDFLARE_ACCOUNT_ID')return 'dummy';
+     if(expression==='github.token'||expression==='secrets.CLOUDFLARE_API_TOKEN')return 'dummy';
+     if(expression==='secrets.CLOUDFLARE_ACCOUNT_ID')return 'a'.repeat(32);
+     if(expression==='inputs.expected_active_version')return 'fedcba98-7654-3210-fedc-ba9876543210';
      if(expression==='secrets.CLOUDFLARE_D1_DATABASE_ID')return '11111111-1111-1111-1111-111111111111';
      if(expression==='steps.stage.outputs.version_id')return fs.readFileSync(output,'utf8').match(/^version_id=(.+)$/m)?.[1]??'';
+     if(expression==='steps.baseline.outputs.workers_subdomain')return fs.readFileSync(output,'utf8').match(/^workers_subdomain=(.+)$/m)?.[1]??'';
      throw new Error('Unexpected workflow expression: '+expression);
     });
     const stepEnv=Object.fromEntries(Object.entries(step.env??{}).map(([key,value])=>[key,interpolate(value)]));
@@ -114,6 +146,17 @@ if(command==='npx'&&args[1]==='versions'&&args[2]==='deploy'){
 }
 
 describe.skipIf(process.platform==='win32')('offline production workflow execution',()=>{
+ it.each(['active-drift-after-upload','schema-drift-after-upload','active-drift-after-migrate','config-drift-after-migrate'])('withholds the next mutation after %s',scenario=>{
+  const run=simulate(scenario);expect(run.status).not.toBe(0);
+  const migrated=scenario.endsWith('-migrate');
+  expect(run.cloud).toEqual(migrated?['versions upload --name','d1 migrations apply']:['versions upload --name']);
+  expect(run.state).toEqual({schema:migrated?2:1,traffic:'previous-version',users:['dummy-user']});
+ });
+ it.each(['baseline-drift','stage-config-failure','stage-wrong-db','stage-wrong-release','stage-missing-secret','stage-logging','stage-open','migration-result-incomplete'])('stops on %s before the next production mutation',scenario=>{
+  const run=simulate(scenario);expect(run.status).not.toBe(0);
+  expect(run.cloud).toEqual(['baseline-drift','stage-logging'].includes(scenario)?[]:scenario==='migration-result-incomplete'?['versions upload --name','d1 migrations apply']:['versions upload --name']);
+  expect(run.state.traffic).toBe('previous-version');
+ });
  it('skips all production steps for a non-main ref',()=>{
   const run=simulate('success','refs/heads/feature');expect(run.status).toBe(0);expect(run.events).toEqual([]);
  });
@@ -127,7 +170,7 @@ describe.skipIf(process.platform==='win32')('offline production workflow executi
  });
  it.each(['upload-failure','upload-missing','upload-duplicate','upload-wrong-host','upload-bad-id','stage-unhealthy','stage-transport','stage-oversize'])('never migrates or promotes after %s',scenario=>{
   const run=simulate(scenario);expect(run.status).not.toBe(0);
-  expect(run.cloud).toEqual(['versions upload --name']);expect(run.output).toBe('');
+  expect(run.cloud).toEqual(['versions upload --name']);expect(run.output).toBe('workers_subdomain=account\n');
   expect(run.diagnostics).not.toMatch(/private|payload sentinel|attacker/);
  });
  it('does not promote after migration failure',()=>{
@@ -149,12 +192,16 @@ describe.skipIf(process.platform==='win32')('offline production workflow executi
  it('promotes only the checked version after staged health and migrations',()=>{
   const run=simulate();expect(run.status,run.diagnostics).toBe(0);
   expect(run.cloud).toEqual(['versions upload --name','d1 migrations apply',`versions deploy ${version}@100`]);
-  expect(run.output).toBe(`version_id=${version}\n`);
-  expect(run.events.filter(event=>event.fetch).map(event=>event.fetch)).toEqual([
+  expect(run.output).toBe(`workers_subdomain=account\nversion_id=${version}\n`);
+  expect(run.events.filter(event=>event.fetch&&!event.fetch.startsWith('https://api.cloudflare.com/')).map(event=>event.fetch)).toEqual([
    'https://api.github.com/repos/owner/Kairos/actions/workflows/milestone-2-ci.yml/runs',
    'https://01234567-kairos-production.account.workers.dev/api/health',
+   'https://01234567-kairos-production.account.workers.dev/onboarding',
+   'https://01234567-kairos-production.account.workers.dev/api/auth/providers',
    'https://mykairos.me/api/health',
   ]);
+  expect(run.events.filter(event=>event.command==='node'&&event.args?.[0]==='scripts/verify-release-state.mjs').map(event=>event.args?.[1]))
+   .toEqual(['baseline','staged','migrated']);
   const config=JSON.parse(fs.readFileSync(path.join(run.directory,'.wrangler.production.jsonc'),'utf8'));
   expect(config.main).toBe('dist/server/index.js');expect(config.no_bundle).toBe(true);
   expect(config.env.production.vars.KAIROS_RELEASE_ID).toBe(sha);

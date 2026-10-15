@@ -14,28 +14,40 @@ function stagedUrl(value,prefix){
   ||!new RegExp('^'+expected+'-kairos-production\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.workers\\.dev$').test(url.hostname))throw rejected();
  return url.origin;
 }
-export function parseUploadedVersion(rows,alias){
+export function parseUploadedVersion(rows,alias,workersSubdomain){
  try{
-  if(!/^m7-[a-f0-9]{12}$/.test(alias??'')||!Array.isArray(rows)||rows.length>100)throw rejected();
+  if(!/^m7-[a-f0-9]{12}$/.test(alias??'')||!Array.isArray(rows)||rows.length>100
+   ||!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(workersSubdomain??''))throw rejected();
   const uploads=rows.filter(r=>r?.type==='version-upload');
   if(uploads.length!==1||uploads[0].worker_name!=='kairos-production'||!versionId.test(uploads[0].version_id??''))throw rejected();
-  stagedUrl(uploads[0].preview_alias_url,alias);
-  return {versionId:uploads[0].version_id,url:stagedUrl(uploads[0].preview_url,uploads[0].version_id.slice(0,8))};
+  const aliasUrl=stagedUrl(uploads[0].preview_alias_url,alias);
+  const prefix=uploads[0].version_id.slice(0,8),url=stagedUrl(uploads[0].preview_url,prefix);
+  if(new URL(aliasUrl).hostname!==`${alias}-kairos-production.${workersSubdomain}.workers.dev`
+   ||new URL(url).hostname!==`${prefix}-kairos-production.${workersSubdomain}.workers.dev`)throw rejected();
+  return {versionId:uploads[0].version_id,url};
  }catch{throw rejected();}
 }
-export async function verifyStagedHealth(value,fetchImpl=fetch){
+async function verifyStagedResponse(value,pathname,status,key,expected,fetchImpl){
  const controller=new AbortController();let timer;
  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new Error('Staged health failed.'));},10000);});
  try{
   const origin=stagedUrl(value);
   await Promise.race([timeout,(async()=>{
-   const response=await fetchImpl(origin+'/api/health',{redirect:'error',cache:'no-store',signal:controller.signal});
-   if(response.status!==200||!response.body)throw new Error();
+   const response=await fetchImpl(origin+pathname,{redirect:'error',cache:'no-store',signal:controller.signal});
+   if(response.status!==status||!response.body)throw new Error();
    const reader=response.body.getReader();let bytes=0,text='';const decoder=new TextDecoder();
    try{while(true){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>256)throw new Error();text+=decoder.decode(part.value,{stream:true});}text+=decoder.decode();}
    finally{void reader.cancel().catch(()=>{});}
-   const body=JSON.parse(text);if(!body||body.status!=='ok'||Object.keys(body).length!==1)throw new Error();
+   const body=JSON.parse(text);if(!body||body[key]!==expected||Object.keys(body).length!==1)throw new Error();
   })()]);
  }catch{controller.abort();throw new Error('Staged health failed.');}
  finally{clearTimeout(timer);}
+}
+export async function verifyStagedHealth(value,fetchImpl=fetch){
+ await verifyStagedResponse(value,'/api/health',200,'status','ok',fetchImpl);
+}
+export async function verifyStagedIsolation(value,fetchImpl=fetch){
+ for(const pathname of ['/onboarding','/api/auth/providers']){
+  await verifyStagedResponse(value,pathname,404,'code','PREVIEW_HEALTH_ONLY',fetchImpl);
+ }
 }

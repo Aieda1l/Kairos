@@ -10,6 +10,28 @@ afterEach(()=>vi.unstubAllEnvs());
 const env={DB:{prepare(){},batch(){},exec(){}},KAIROS_APP_URL:"http://127.0.0.1:3000",KAIROS_LOCAL_AUTH:"loopback",KAIROS_ABUSE_TRUSTED_INGRESS:"loopback",
   KAIROS_TURNSTILE_SITE_KEY:"local-site",KAIROS_TURNSTILE_SECRET_KEY:"local-secret",KAIROS_ABUSE_KEY_V1:Buffer.from(new Uint8Array(32).fill(7)).toString("base64url")};
 describe("canonical auth origins and proxy fencing",()=>{
+  it.each([undefined,'mykairos.me'])('reaches the preview boundary independently of Host %s',host=>{
+    const url='https://01234567-kairos-production.account.workers.dev/';
+    const headers=host?{host}:undefined;
+    expect(unstable_doesMiddlewareMatch({config,url,headers})).toBe(true);
+    expect(proxy(new NextRequest(url,{headers})).status).toBe(404);
+  });
+  it.each(['/', '/onboarding', '/api/auth/providers', '/api/auth/callback/google', '/api/sources/ed/sync', '/api/test-fixtures/session', '/api/health?probe=private'])
+  ('limits production-bound Workers.dev access to the exact health read: %s',pathname=>{
+    const hostname='01234567-kairos-production.account.workers.dev';
+    const url='https://'+hostname+pathname;
+    expect(unstable_doesMiddlewareMatch({config,url,headers:{host:hostname}})).toBe(true);
+    const response=proxy(new NextRequest(url,{headers:{host:hostname,origin:'https://mykairos.me','x-forwarded-host':'mykairos.me'}}));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+  it('permits only GET health on Workers.dev while preserving canonical and local requests',()=>{
+    const url='https://m7-aaaaaaaaaaaa-kairos-production.account.workers.dev/api/health';
+    expect(proxy(new NextRequest(url)).status).toBe(200);
+    expect(proxy(new NextRequest(url,{method:'POST'})).status).toBe(404);
+    expect(proxy(new NextRequest('https://mykairos.me/onboarding')).status).toBe(200);
+    expect(proxy(new NextRequest('http://127.0.0.1:3000/onboarding')).status).toBe(200);
+  });
   it('matches every non-fixture API mutation namespace, including Sync All admission',()=>{
     const directory='src/app/api';
     const mutations=fs.readdirSync(directory,{recursive:true}).map(file=>String(file).replaceAll('\\','/'))
