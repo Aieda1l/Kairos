@@ -14,6 +14,24 @@ type FixtureState={
   events:FixtureEvent[];
 };
 
+test('private calendar inputs wait for hydration before accepting edits',async({page,context})=>{
+  await prepareFixtureUser(context);
+  let release!:()=>void,requests=0;
+  const ready=new Promise<void>(resolve=>{release=resolve;});
+  await page.route('**/src/features/onboarding/private-drafts.tsx*',async route=>{requests++;await ready;await route.continue();});
+  try{
+    await page.goto('/sources',{waitUntil:'commit'});
+    await expect.poll(()=>requests).toBeGreaterThan(0);
+    await expect(page.getByLabel('Apple Account email')).toBeDisabled();
+    await expect(page.getByLabel('Apple app-specific password')).toBeDisabled();
+  }finally{release();}
+  await expect(page.getByLabel('Apple Account email')).toBeEnabled();
+  await page.getByLabel('Apple Account email').fill('synthetic@example.invalid');
+  await page.getByLabel('Apple app-specific password').fill('synthetic-password');
+  await expect(page.getByRole('button',{name:'Test iCloud',exact:true})).toBeEnabled();
+  await expect(page.getByLabel('Apple Account email')).toHaveValue('synthetic@example.invalid');
+});
+
 test("publishes Canvas deadlines to iCloud idempotently without exposing calendar credentials",async({page,context})=>{
   // This flow includes cold Workers compilation, discovery, multiple syncs,
   // deadline changes, and provider failure handling; retain normal assertion deadlines.

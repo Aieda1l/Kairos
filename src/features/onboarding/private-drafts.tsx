@@ -1,5 +1,5 @@
 "use client";
-import {createContext,useContext,useEffect,useRef,type InputHTMLAttributes,type ReactNode} from 'react';
+import {createContext,useContext,useEffect,useRef,useSyncExternalStore,type InputHTMLAttributes,type ReactNode} from 'react';
 import {Button} from '@/components/ui/button';
 import type {SecretDraft} from '@/lib/onboarding/secret-draft';
 export type DraftKind=SecretDraft['kind'];
@@ -20,10 +20,16 @@ export function PrivateDraftProvider({value,children}:{value:PrivateDraftSession
 export function usePrivateDrafts(){return useContext(Context);}
 // The value lives in memory and the input's live property, never in an HTML
 // value attribute. This also avoids serializing a fresh secret on Back.
+const subscribeReady=()=>()=>{};
+const clientReady=()=>true;
+const serverReady=()=>false;
 export function MemoryInput({value,onValueChange,...props}:Omit<InputHTMLAttributes<HTMLInputElement>,'value'|'onChange'|'defaultValue'>&{value:string;onValueChange:(value:string)=>void}){
+  // Pre-hydration edits have no React change handler and could be erased by the
+  // initial live-value effect. Make the field editable only after hydration.
+  const ready=useSyncExternalStore(subscribeReady,clientReady,serverReady);
   const ref=useRef<HTMLInputElement>(null);
   useEffect(()=>{if(ref.current&&ref.current.value!==value)ref.current.value=value;},[value]);
-  return <input {...props} ref={ref} onChange={e=>onValueChange(e.target.value)} className={props.className??'min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2'}/>;
+  return <input {...props} disabled={!ready||props.disabled} ref={ref} onChange={e=>onValueChange(e.target.value)} className={props.className??'min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2'}/>;
 }
 export function PrivateDraftControls({kind,input,busy,onError}:{kind:DraftKind;input:SecretDraft|null;busy:boolean;onError:(message:string)=>void}){
   const drafts=usePrivateDrafts();if(!drafts)return null;
