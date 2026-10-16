@@ -66,7 +66,7 @@ type CalendarRepositories={
   assignments:{list():Promise<Assignment[]>};
   settings:{getCalendarHideSubmitted():Promise<boolean>};
   links:{
-    get(connectionId:string,assignmentId:string):Promise<CalendarEventLink|null>;
+    listByConnection(connectionId:string):Promise<CalendarEventLink[]>;
     ensure(connectionId:string,assignmentId:string,syncKey:string,now?:Date):Promise<CalendarEventLink>;
     markSynced(id:string,remoteEventId:string,remoteEtag:string|null,contentHash:string,syncedAt:string):Promise<void>;
     markError(id:string,errorCode:string,at:string):Promise<void>;
@@ -89,7 +89,7 @@ function legacyRepositories(db:LegacyDatabase):CalendarRepositories{
     assignments:{list:async()=>assignments.list()},
     settings:{getCalendarHideSubmitted:async()=>settings.getCalendarHideSubmitted()},
     links:{
-      get:async(connectionId,assignmentId)=>links.get(connectionId,assignmentId),
+      listByConnection:async connectionId=>links.listByConnection(connectionId),
       ensure:async(connectionId,assignmentId,syncKey,now)=>links.ensure(connectionId,assignmentId,syncKey,now),
       markSynced:async(id,remoteEventId,remoteEtag,contentHash,syncedAt)=>{
         links.markSynced(id,remoteEventId,remoteEtag,contentHash,syncedAt);
@@ -115,7 +115,7 @@ function hostedRepositories(db:D1DatabaseLike,scope:UserScope):CalendarRepositor
     assignments:{list:()=>assignments.list()},
     settings:{getCalendarHideSubmitted:()=>settings.getCalendarHideSubmitted()},
     links:{
-      get:(connectionId,assignmentId)=>links.get(connectionId,assignmentId),
+      listByConnection:connectionId=>links.listByConnection(connectionId),
       ensure:(connectionId,assignmentId,syncKey,now)=>links.ensure(connectionId,assignmentId,syncKey,now),
       markSynced:(id,remoteEventId,remoteEtag,contentHash,syncedAt)=>
         links.markSynced(id,remoteEventId,remoteEtag,contentHash,syncedAt),
@@ -192,6 +192,9 @@ async function reconcileWithRepositories(
 
   const assignments=await repositories.assignments.list();
   const hideSubmitted=await repositories.settings.getCalendarHideSubmitted();
+  // The calendar owner excludes competing link mutations for this destination.
+  // Read its tenant-scoped mappings once, retaining each SQL/transport fence.
+  const savedLinks=new Map((await repositories.links.listByConnection(connection.id)).map(link=>[link.assignmentId,link]));
   let cursor=0;
   let halted=false;
   const failure=(error:unknown,wrote:boolean)=>{
@@ -204,7 +207,7 @@ async function reconcileWithRepositories(
     let wrote=false;
     const assignment=assignments[index]!;
     const projection=projectAssignment(assignment,{hideSubmitted});
-    let link=await repositories.links.get(connection.id,assignment.id);
+    let link=savedLinks.get(assignment.id)??null;
 
     if(!projection){
       if(!link)return {kind:"skipped"};
