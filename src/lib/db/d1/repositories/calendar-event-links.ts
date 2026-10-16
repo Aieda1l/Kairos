@@ -1,7 +1,7 @@
 import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {CalendarEventLink} from "@/lib/calendar/types";
+import type {CalendarEventLink,CalendarLinkSyncWrite} from "@/lib/calendar/types";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
 
 type Row={
@@ -97,6 +97,24 @@ export class D1CalendarEventLinkRepository{
     `,{kind:"calendar-link",id}).bind(
       remoteEventId,remoteEtag,contentHash,syncedAt,syncedAt,this.scope.userId,id,
     ).run();
+  }
+
+  async markExistingSyncedMany(connectionId:string,writes:CalendarLinkSyncWrite[]):Promise<number>{
+    const json=JSON.stringify(writes);
+    if(!writes.length||writes.length>100||new Set(writes.map(w=>w.id)).size!==writes.length||new TextEncoder().encode(json).byteLength>1_000_000)throw new Error('Invalid calendar completion batch.');
+    const result=await prepareOwned(this.db,this.scope,`
+      INSERT INTO calendar_event_links(user_id,id,calendar_connection_id,assignment_id,sync_key,remote_event_id,remote_etag,content_hash,last_synced_at,last_error_code,created_at,updated_at)
+      SELECT link.user_id,link.id,link.calendar_connection_id,link.assignment_id,link.sync_key,
+        json_extract(item.value,'$.remoteEventId'),json_extract(item.value,'$.remoteEtag'),json_extract(item.value,'$.contentHash'),
+        json_extract(item.value,'$.syncedAt'),NULL,link.created_at,json_extract(item.value,'$.syncedAt')
+      FROM calendar_event_links link JOIN json_each(?) item ON link.id=json_extract(item.value,'$.id')
+      WHERE link.user_id=? AND link.calendar_connection_id=?
+      ON CONFLICT(user_id,id) DO UPDATE SET remote_event_id=excluded.remote_event_id,remote_etag=excluded.remote_etag,
+        content_hash=excluded.content_hash,last_synced_at=excluded.last_synced_at,last_error_code=NULL,updated_at=excluded.updated_at
+    `,{kind:'calendar',id:connectionId}).bind(json,this.scope.userId,connectionId).run();
+    const changed=Number(result.meta.changes);
+    if(!result.success||!Number.isSafeInteger(changed)||changed<0||changed>writes.length)throw new Error('Calendar completion failed.');
+    return changed;
   }
 
   async markError(id:string,errorCode:string,at:string):Promise<void>{

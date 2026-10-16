@@ -37,9 +37,21 @@ export type CalendarAdapterFactory=(
   connection:CalendarConnection,
 )=>Promise<CalendarDestinationAdapter>;
 
+const fencedTransports=new WeakSet<CalendarDestinationAdapter>();
+/** Hosted factory only: every outbound request of this adapter must already use
+ * ownedFetch. In-memory identity cannot be supplied by a request or provider. */
+export function registerFencedCalendarAdapter<T extends CalendarDestinationAdapter>(adapter:T):T{
+  fencedTransports.add(adapter);
+  return adapter;
+}
+
 export function guardCalendarAdapter(adapter:CalendarDestinationAdapter):CalendarDestinationAdapter{
+  const transportFenced=fencedTransports.has(adapter);
   const call=async<T>(work:()=>Promise<T>):Promise<T>=>{
-    await checkOwnedOperation();
+    // Built-in hosted clients validate immediately before EVERY HTTP request,
+    // including each request in a multi-request adapter method. Custom adapters
+    // retain the boundary check because they may use a different transport.
+    if(!transportFenced)await checkOwnedOperation();
     if(ownedWorkStopped())return Promise.reject(new CalendarSyncError("CALENDAR_RATE_LIMITED","Provider scheduling has stopped for this operation."));
     return work();
   };

@@ -2,6 +2,7 @@
 import {build} from 'esbuild';
 import {Miniflare,Log,LogLevel,convertV4MiniflareOptions} from 'miniflare';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 const bundled=await build({entryPoints:['dist/server/index.js'],bundle:true,write:false,format:'esm',platform:'browser',external:['node:*','cloudflare:*'],logLevel:'silent'});
 let script=bundled.outputFiles[0].text;
 const exportAt=script.lastIndexOf('\nexport {');
@@ -20,8 +21,20 @@ const counter=`const probeFetch=${defaultName}.fetch;${defaultName}.fetch=async(
 script=script.slice(0,exportAt)+'\n'+counter+script.slice(exportAt);
 const fixture=`let calendarWrites=0;export default {async fetch(request){
  const url=new URL(request.url);
+ if(url.hostname==='login.microsoftonline.com'&&url.pathname.endsWith('/token'))return Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600,token_type:'Bearer'});
+ if(url.hostname==='graph.microsoft.com'){
+  if(request.method==='GET'&&!url.pathname.includes('/events'))return Response.json({id:'synthetic-existing-microsoft',name:'Kairos',canEdit:true});
+  if(request.method==='GET'&&url.pathname.includes('/events/')){const id=decodeURIComponent(url.pathname.split('/').at(-1));return Response.json({id,singleValueExtendedProperties:[{id:'String {2f7d7a8c-8936-4e44-a436-9d7878afc0b1} Name KairosAssignmentId',value:id.replace('event-','')}]});}
+  calendarWrites++;return new Response(null,{status:502});
+ }
  if(url.pathname==='/__probe/summary')return Response.json({calendarWrites});
  if(url.href==='https://oauth2.googleapis.com/token')return Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600,token_type:'Bearer'});
+ if(url.href==='https://www.googleapis.com/calendar/v3/calendars/synthetic-existing-calendar'&&request.method==='GET')return Response.json({id:'synthetic-existing-calendar',summary:'Kairos'});
+ if(url.hostname==='www.googleapis.com'&&url.pathname.includes('/events/')){
+  const id=decodeURIComponent(url.pathname.split('/').at(-1));
+  if(request.method==='GET')return Response.json({id});
+  if(request.method==='PATCH'){calendarWrites++;return Response.json({id});}
+ }
  if(url.href==='https://www.googleapis.com/calendar/v3/users/me/calendarList/synthetic-existing-calendar'&&request.method==='GET')return Response.json({id:'synthetic-existing-calendar',accessRole:'owner'});
  if(url.hostname==='www.googleapis.com'&&request.method!=='GET')calendarWrites++;
  if(url.href==='https://challenges.cloudflare.com/turnstile/v0/siteverify'){
@@ -39,7 +52,7 @@ const bindings={KAIROS_APP_URL:'https://mykairos.me',AUTH_URL:'https://mykairos.
  AUTH_MICROSOFT_ENTRA_ID_ID:'synthetic-id',AUTH_MICROSOFT_ENTRA_ID_SECRET:'synthetic-secret',
  KAIROS_TURNSTILE_SITE_KEY:'local-probe-site',KAIROS_TURNSTILE_SECRET_KEY:'local-probe-secret',
  KAIROS_ABUSE_KEY_V1:Buffer.from(new Uint8Array(32).fill(7)).toString('base64url'),KAIROS_CREDENTIAL_KEY_V1:Buffer.from(new Uint8Array(32).fill(9)).toString('base64url')};
-bindings.GOOGLE_CALENDAR_CLIENT_ID='synthetic-client';bindings.GOOGLE_CALENDAR_CLIENT_SECRET='synthetic-client-secret';const options=convertV4MiniflareOptions({cf:false,log:new Log(LogLevel.NONE),workers:[
+bindings.MICROSOFT_CALENDAR_CLIENT_ID='00000000-0000-4000-8000-000000000001';bindings.MICROSOFT_CALENDAR_CLIENT_SECRET='synthetic-secret';bindings.MICROSOFT_CALENDAR_TENANT='common';bindings.GOOGLE_CALENDAR_CLIENT_ID='synthetic-client';bindings.GOOGLE_CALENDAR_CLIENT_SECRET='synthetic-client-secret';const options=convertV4MiniflareOptions({cf:false,log:new Log(LogLevel.NONE),workers:[
  // Miniflare's HTTP proxy rewrites Host to its loopback listener. The local
  // ingress fixture restores the canonical host before the unchanged app runs.
  {name:'ingress',script:`export default {fetch(request,env){const headers=new Headers(request.headers);headers.set('host',new URL(request.url).host);return env.APP.fetch(new Request(request,{headers}));}};`,modules:true,compatibilityDate:'2026-10-06',serviceBindings:{APP:'app'}},
@@ -102,11 +115,46 @@ try{
  const callbackOwner=await db.prepare("SELECT state FROM operation_locks WHERE user_id=? AND operation_key='calendar:google'").bind(user).first();
  results.push({mode:'google-reconnect-preserves-destination-and-events',status:callback.status,calendarWrites:fixtureState.calendarWrites,
    ok:callback.status===307&&connected.remote_calendar_id==='synthetic-existing-calendar'&&connected.enabled===1&&link.remote_event_id==='a'.repeat(64)&&grants.n===1&&callbackOwner.state==='idle'&&fixtureState.calendarWrites===0});
+
+ await db.prepare("INSERT INTO calendar_connections(user_id,id,provider,label,remote_calendar_id,remote_calendar_name,enabled,created_at,updated_at) VALUES (?,?,'microsoft','Microsoft Calendar','synthetic-existing-microsoft','Kairos',0,?,?)").bind(user,'synthetic-microsoft',at,at).run();
+ const msStart=await worker.fetch(origin+'/api/calendars/microsoft/start',{method:'POST',redirect:'manual',headers,body:JSON.stringify({connectionId:'synthetic-microsoft'})});
+ const msBody=await msStart.json();if(msStart.status!==200)throw new Error('MS_AUTH_START');
+ const msState=new URL(msBody.authorizationUrl).searchParams.get('state');
+ const msCallback=await worker.fetch(origin+'/api/calendars/microsoft/callback?state='+encodeURIComponent(msState)+'&code=synthetic-code',{redirect:'manual',headers});
+ if(msCallback.status!==307)throw new Error('MS_AUTH_CALLBACK');
+ const msAssignments=(await db.prepare('SELECT id,course_name,title,source_status_text,source_url FROM assignments WHERE user_id=? LIMIT 17').bind(user).all()).results;
+ const startsAt='2026-10-20T23:59:00.000Z',endsAt='2026-10-21T00:14:00.000Z';
+ for(const a of msAssignments){
+  await db.prepare('UPDATE assignments SET due_at=? WHERE user_id=? AND id=?').bind(startsAt,user,a.id).run();
+  const projection={assignmentId:a.id,title:'['+a.course_name+'] '+a.title,description:['Course: '+a.course_name,'Source: Gradescope','Status: '+a.source_status_text,'Due: '+startsAt,'','Open in source:',a.source_url].join('\n'),startsAt,endsAt,sourceUrl:a.source_url};
+  const hash=createHash('sha256').update(JSON.stringify(projection)).digest('hex');
+  await db.prepare("INSERT INTO calendar_event_links(user_id,id,calendar_connection_id,assignment_id,sync_key,remote_event_id,content_hash,created_at,updated_at) VALUES (?,?,'synthetic-microsoft',?,?,?,?,?,?)").bind(user,'ms-link-'+a.id,a.id,'key-'+a.id,'event-'+a.id,hash,at,at).run();
+ }
+ await db.prepare("INSERT INTO app_settings(user_id,key,value,updated_at) VALUES (?,'calendar_hide_submitted','0',?)").bind(user,at).run();
+ const msSync=await worker.fetch(origin+'/api/calendars/synthetic-microsoft/sync',{method:'POST',redirect:'manual',headers});
+ const msResult=await msSync.json(),msOwner=await db.prepare("SELECT state FROM operation_locks WHERE user_id=? AND operation_key='calendar:microsoft'").bind(user).first();
+ results.push({mode:'microsoft17-existing-events',status:msSync.status,statements:msSync.headers.get('x-probe-d1-statements'),owner:msOwner?.state,result:msResult,ok:msSync.status===200&&msResult.unchangedCount===17&&msOwner?.state==='idle'&&Number(msSync.headers.get('x-probe-d1-statements'))<=45});
+
+
+ // Recovered Google mappings have no trusted content hash. Their first sync
+ // updates existing events; any attempted calendar/event creation fails closed.
+ await db.prepare('UPDATE assignments SET due_at=NULL WHERE user_id=?').bind(user).run();
+ const googleAssignments=[assignment,...msAssignments.filter(a=>a.id!==assignment.id)].slice(0,11);
+ for(let i=0;i<googleAssignments.length;i++){
+  const a=googleAssignments[i];await db.prepare('UPDATE assignments SET due_at=? WHERE user_id=? AND id=?').bind(startsAt,user,a.id).run();
+  if(i>0)await db.prepare("INSERT INTO calendar_event_links(user_id,id,calendar_connection_id,assignment_id,sync_key,remote_event_id,created_at,updated_at) VALUES (?,?,'synthetic-google',?,?,?,?,?)").bind(user,'google-link-'+i,a.id,'google-key-'+i,createHash('sha256').update('synthetic-google-event-'+i).digest('hex'),at,at).run();
+ }
+ const googleSync=await worker.fetch(origin+'/api/calendars/synthetic-google/sync',{method:'POST',redirect:'manual',headers});
+ const googleSyncResult=await googleSync.json(),googleSyncOwner=await db.prepare("SELECT state FROM operation_locks WHERE user_id=? AND operation_key='calendar:google'").bind(user).first();
+ const afterEvents=await (await (await mf.getWorker('fixture')).fetch('http://fixture.invalid/__probe/summary')).json();
+ results.push({mode:'google11-recovered-events',status:googleSync.status,statements:Number(googleSync.headers.get('x-probe-d1-statements')),owner:googleSyncOwner?.state,result:googleSyncResult,
+  ok:googleSync.status===200&&googleSyncResult.updatedCount===11&&googleSyncResult.createdCount===0&&googleSyncOwner?.state==='idle'&&afterEvents.calendarWrites===11&&Number(googleSync.headers.get('x-probe-d1-statements'))<=50});
+
  await db.prepare("UPDATE sessions SET expires='2000-01-01T00:00:00.000Z'").run();
  const expired=await worker.fetch(origin+'/sign-in?returnTo=/sources',{redirect:'manual',headers:{cookie:'__Secure-authjs.session-token=synthetic-live-session'}});
  const markup=await expired.text();
  results.push({mode:'expired-session-shared-widget',status:expired.status,ok:expired.status===200&&(markup.match(/<form[ >]/g)??[]).length===1&&markup.includes('Continue with Google')&&markup.includes('Continue with Microsoft')});
  const summary={code:results.every(r=>r.ok)?'COMPILED_PROVIDER_WORK_PASSED':'COMPILED_PROVIDER_WORK_FAILED',externalRequests:0,results};
  fs.mkdirSync('artifacts/native-provider-completion',{recursive:true});fs.writeFileSync('artifacts/native-provider-completion/summary.json',JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
- if(results.length!==9||results.some(r=>!r.ok))process.exitCode=1;
+ if(results.length!==11||results.some(r=>!r.ok))process.exitCode=1;
 }catch{console.error('COMPILED_PROVIDER_WORK_FAILED');process.exitCode=1;}finally{await mf.dispose();}

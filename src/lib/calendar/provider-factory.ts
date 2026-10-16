@@ -1,4 +1,4 @@
-import {settleCalendarWrite} from "@/lib/calendar/adapter";
+import {registerFencedCalendarAdapter,settleCalendarWrite} from "@/lib/calendar/adapter";
 import {ownsOperation,ownedFetch,OperationOwnershipError} from "@/lib/abuse/operation-lock";
 import "server-only";
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
@@ -99,10 +99,10 @@ function hostedFactory(
         if(token.refreshToken)await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
         return token;
       });
-      return new GoogleCalendarAdapter(
+      return registerFencedCalendarAdapter(new GoogleCalendarAdapter(
         connection,
         new GoogleCalendarClient(token.accessToken,fetchImpl),
-      );
+      ));
     }
 
     if(connection.provider==="microsoft"){
@@ -116,20 +116,20 @@ function hostedFactory(
         if(token.refreshToken)await credentials.setOAuthRefreshToken(connection.id,token.refreshToken);
         return token;
       });
-      return new MicrosoftCalendarAdapter(
+      return registerFencedCalendarAdapter(new MicrosoftCalendarAdapter(
         connection,
         new MicrosoftCalendarClient(token.accessToken,fetchImpl),
-      );
+      ));
     }
 
     const credential=await credentials.getCaldavCredentials(connection.id);
     if(!credential){
       throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Reconnect Apple Calendar.");
     }
-    return new CalDavCalendarAdapter(
+    return registerFencedCalendarAdapter(new CalDavCalendarAdapter(
       connection,
       new CalDavClient(credential.username,credential.secret,fetchImpl),
-    );
+    ));
   };
 }
 

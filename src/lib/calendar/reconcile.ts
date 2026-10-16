@@ -15,7 +15,7 @@ import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-conne
 import {CalendarEventLinkRepository} from "@/lib/db/repositories/calendar-event-links";
 import {SettingsRepository} from "@/lib/db/repositories/settings";
 import type {Assignment} from "@/lib/assignments/types";
-import type {CalendarConnection,CalendarEventLink,CalendarSyncStatus} from "@/lib/calendar/types";
+import type {CalendarConnection,CalendarEventLink,CalendarLinkSyncWrite,CalendarSyncStatus} from "@/lib/calendar/types";
 import {guardCalendarAdapter} from "@/lib/calendar/adapter";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {CalendarSyncError,type CalendarSyncErrorCode} from "@/lib/calendar/errors";
@@ -66,9 +66,10 @@ type CalendarRepositories={
   assignments:{list():Promise<Assignment[]>};
   settings:{getCalendarHideSubmitted():Promise<boolean>};
   links:{
-    get(connectionId:string,assignmentId:string):Promise<CalendarEventLink|null>;
+    listByConnection(connectionId:string):Promise<CalendarEventLink[]>;
     ensure(connectionId:string,assignmentId:string,syncKey:string,now?:Date):Promise<CalendarEventLink>;
     markSynced(id:string,remoteEventId:string,remoteEtag:string|null,contentHash:string,syncedAt:string):Promise<void>;
+    markExistingSyncedMany?(connectionId:string,writes:CalendarLinkSyncWrite[]):Promise<number>;
     markError(id:string,errorCode:string,at:string):Promise<void>;
     delete(id:string):Promise<void>;
   };
@@ -89,7 +90,7 @@ function legacyRepositories(db:LegacyDatabase):CalendarRepositories{
     assignments:{list:async()=>assignments.list()},
     settings:{getCalendarHideSubmitted:async()=>settings.getCalendarHideSubmitted()},
     links:{
-      get:async(connectionId,assignmentId)=>links.get(connectionId,assignmentId),
+      listByConnection:async connectionId=>links.listByConnection(connectionId),
       ensure:async(connectionId,assignmentId,syncKey,now)=>links.ensure(connectionId,assignmentId,syncKey,now),
       markSynced:async(id,remoteEventId,remoteEtag,contentHash,syncedAt)=>{
         links.markSynced(id,remoteEventId,remoteEtag,contentHash,syncedAt);
@@ -115,7 +116,8 @@ function hostedRepositories(db:D1DatabaseLike,scope:UserScope):CalendarRepositor
     assignments:{list:()=>assignments.list()},
     settings:{getCalendarHideSubmitted:()=>settings.getCalendarHideSubmitted()},
     links:{
-      get:(connectionId,assignmentId)=>links.get(connectionId,assignmentId),
+      listByConnection:connectionId=>links.listByConnection(connectionId),
+      markExistingSyncedMany:(connectionId,writes)=>links.markExistingSyncedMany(connectionId,writes),
       ensure:(connectionId,assignmentId,syncKey,now)=>links.ensure(connectionId,assignmentId,syncKey,now),
       markSynced:(id,remoteEventId,remoteEtag,contentHash,syncedAt)=>
         links.markSynced(id,remoteEventId,remoteEtag,contentHash,syncedAt),
@@ -192,6 +194,9 @@ async function reconcileWithRepositories(
 
   const assignments=await repositories.assignments.list();
   const hideSubmitted=await repositories.settings.getCalendarHideSubmitted();
+  // The calendar owner excludes competing link mutations for this destination.
+  // Read its tenant-scoped mappings once, retaining each SQL/transport fence.
+  const savedLinks=new Map((await repositories.links.listByConnection(connection.id)).map(link=>[link.assignmentId,link]));
   let cursor=0;
   let halted=false;
   const failure=(error:unknown,wrote:boolean)=>{
@@ -199,12 +204,13 @@ async function reconcileWithRepositories(
     else if(wrote&&(!(error instanceof CalendarSyncError)||["CALENDAR_NETWORK_ERROR","CALENDAR_UPSTREAM_ERROR"].includes(error.code))) {halted=true;uncertainOwnedWork();}
   };
   const outcomes:Array<Outcome|undefined>=new Array(assignments.length);
+  const existingUpdates:CalendarLinkSyncWrite[]=[];
 
   const reconcileOne=async(index:number):Promise<Outcome>=>{
     let wrote=false;
     const assignment=assignments[index]!;
     const projection=projectAssignment(assignment,{hideSubmitted});
-    let link=await repositories.links.get(connection.id,assignment.id);
+    let link=savedLinks.get(assignment.id)??null;
 
     if(!projection){
       if(!link)return {kind:"skipped"};
@@ -318,9 +324,11 @@ async function reconcileWithRepositories(
         projection,
         remote.etag,
       );
-      await repositories.links.markSynced(
-        link.id,updated.remoteEventId,updated.etag,hash,completedAt,
-      );
+      if(repositories.links.markExistingSyncedMany&&updated.remoteEventId===link.remoteEventId){
+        // These remote IDs were already persisted. A stopped request retains its
+        // original mappings; it can never turn this update into a duplicate create.
+        existingUpdates.push({id:link.id,remoteEventId:updated.remoteEventId,remoteEtag:updated.etag,contentHash:hash,syncedAt:completedAt});
+      }else await repositories.links.markSynced(link.id,updated.remoteEventId,updated.etag,hash,completedAt);
       return {kind:"updated"};
     }catch(error){
       failure(error,wrote);
@@ -344,6 +352,12 @@ async function reconcileWithRepositories(
     Math.max(assignments.length,1),
   );
   const settled=await Promise.allSettled(Array.from({length:workerCount},()=>worker()));
+  for(let offset=0;offset<existingUpdates.length;offset+=100){
+    const chunk=existingUpdates.slice(offset,offset+100);
+    try{
+      if(await repositories.links.markExistingSyncedMany!(connection.id,chunk)!==chunk.length)throw new Error('Calendar completion was not saved.');
+    }catch(error){failure(error,true);throw error;}
+  }
   const rejected=settled.find(result=>result.status==="rejected");
   if(rejected?.status==="rejected")throw rejected.reason;
 
