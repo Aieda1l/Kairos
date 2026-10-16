@@ -142,19 +142,7 @@ export async function withOwnedOperation<T>(db:D1DatabaseLike,scope:UserScope,ke
   return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},async()=>{if(options.expectedControlVersion!==undefined)await assertOperationOwner(db,lock);return work();});
 }
 
-const pendingOwnerChecks=new WeakMap<OperationLock,Promise<void>>();
-function assertOperationOwner(db:D1DatabaseLike,lock:OperationLock):Promise<void>{
-  const existing=pendingOwnerChecks.get(lock);
-  if(existing)return existing;
-  // Concurrent checks for this exact server-issued owner share only an in-flight
-  // read. Remove it before returning to callers: never cache a settled decision.
-  const checked:Promise<void>=readOperationOwner(db,lock).finally(()=>{
-    if(pendingOwnerChecks.get(lock)===checked)pendingOwnerChecks.delete(lock);
-  });
-  pendingOwnerChecks.set(lock,checked);
-  return checked;
-}
-async function readOperationOwner(db:D1DatabaseLike,lock:OperationLock):Promise<void>{
+async function assertOperationOwner(db:D1DatabaseLike,lock:OperationLock):Promise<void>{
   try{
   const row=await db.prepare("SELECT (SELECT enabled FROM abuse_controls WHERE control_key=?) AS enabled,(SELECT version FROM abuse_controls WHERE control_key='provider:'||substr(operation_locks.operation_key,instr(operation_locks.operation_key,':')+1)) AS version FROM operation_locks WHERE user_id=? AND operation_key=? AND owner_nonce=? AND state='running'")
     .bind(`provider:${lock.operationKey.split(":")[1]}`,lock.userId,lock.operationKey,lock.ownerNonce).first<{enabled:number;version:number}>();

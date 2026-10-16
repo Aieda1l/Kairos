@@ -26,3 +26,4 @@ export type CalendarEventLink={
   lastSyncedAt:string|null;
   lastErrorCode:string|null;
 };
+export type CalendarLinkSyncWrite={id:string;remoteEventId:string;remoteEtag:string|null;contentHash:string;syncedAt:string};
