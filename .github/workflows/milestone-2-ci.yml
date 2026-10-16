@@ -74,6 +74,8 @@ jobs:
         run: npx vinext check
       - name: Build vinext Workers target
         run: npm run build:vinext
+      - name: Verify compiled provider completion and recovery
+        run: node scripts/verify-workerd-provider-completion.mjs
       - run: node scripts/verify-dynamic-dashboard-build.mjs
       - run: npm run verify:hosted
       - name: Review prohibited credential/permission patterns

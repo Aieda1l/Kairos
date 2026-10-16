@@ -65,7 +65,7 @@ export class D1CalendarConnectionRepository{
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(user_id,id) DO UPDATE SET
         account_label=excluded.account_label,remote_calendar_id=excluded.remote_calendar_id,
-        remote_calendar_name=excluded.remote_calendar_name,updated_at=excluded.updated_at
+        remote_calendar_name=excluded.remote_calendar_name,enabled=excluded.enabled,updated_at=excluded.updated_at
     `,{kind:"calendar",id:connection.id,key:`calendar:${connection.provider}`}).bind(
       this.scope.userId,connection.id,connection.provider,connection.label,connection.accountLabel,
       connection.remoteCalendarId,connection.remoteCalendarName,connection.enabled?1:0,

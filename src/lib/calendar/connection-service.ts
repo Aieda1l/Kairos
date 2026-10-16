@@ -145,7 +145,7 @@ async function connectOAuthHosted(
     if(!existing&&(!(error instanceof CalendarSyncError)||["CALENDAR_NETWORK_ERROR","CALENDAR_UPSTREAM_ERROR"].includes(error.code)))uncertainOwnedCalendarWrite();
     throw error;
   }
-  const updated={...base,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
+  const updated={...base,enabled:true,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
   // Provisioning cannot join this transaction; never delete remote data to compensate.
   try{await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential]);}catch(error){
     uncertainOwnedCalendarWrite();

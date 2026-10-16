@@ -243,6 +243,17 @@ describe("atomic hosted Ed and Gradescope discovery and selection",()=>{
 });
 
 describe("failure-safe hosted calendar replacement",()=>{
+  it('re-enables a recovered Google destination only after fresh consent and preserves its mappings',async()=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google');
+    sqlite.prepare('DELETE FROM calendar_credentials WHERE user_id=? AND calendar_connection_id=?').run(scope.userId,old.id);
+    sqlite.prepare('UPDATE calendar_connections SET enabled=0,last_error_code=? WHERE user_id=? AND id=?').run('CALENDAR_AUTH_REQUIRED',scope.userId,old.id);
+    const links=state(sqlite).calendar_event_links;
+    const fetchImpl=vi.fn<typeof fetch>(async(_url,init)=>{expect(init?.method).toBe('GET');return Response.json({id:'old-remote',summary:'Kairos',accessRole:'owner'});});
+    const result=await connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-refresh',fetchImpl});
+    expect(result).toMatchObject({id:old.id,remoteCalendarId:'old-remote',enabled:true});
+    expect(await new D1CalendarConnectionRepository(db,scope).getById(old.id)).toMatchObject({enabled:true});
+    expect(state(sqlite).calendar_event_links).toEqual(links);
+  });
   it.each(["authorization","read-only","missing","encryption","D1"])("retains credentials, remote IDs, links and freshness on iCloud %s failure",async failure=>{
     const {db,sqlite}=open();const old=await seedCalendar(db);const before=state(sqlite);
     if(failure==="D1")sqlite.exec("CREATE TRIGGER fail_credential BEFORE INSERT ON calendar_credentials BEGIN SELECT RAISE(ABORT,'synthetic credential failure'); END");
