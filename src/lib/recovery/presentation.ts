@@ -37,7 +37,10 @@ export function getRecoveryNotice(code:unknown,options:{key?:string;retryAfterSe
       return notice('Firefox extension not detected. Verify it for your enabled browser features. The public add-on listing is pending review.','verify-extension','/settings');
     case 'RATE_LIMITED':case 'ED_RATE_LIMITED':case 'CALENDAR_RATE_LIMITED':case 'HTTP_429':{
       const seconds=boundedRetryAfter(typeof options.retryAfterSeconds==='number'?options.retryAfterSeconds:NaN);
-      return {...notice(`The provider is limiting requests. Try again in ${seconds} seconds. Saved data is retained.`,'retry'),retryAfterSeconds:seconds};
+      const message=code==='RATE_LIMITED'?`Kairos is limiting repeated requests. Try again in ${seconds} seconds. Saved data is retained.`
+        :code==='HTTP_429'?`Requests are temporarily limited. Try again in ${seconds} seconds. Saved data is retained.`
+          :`The provider is limiting requests. Try again in ${seconds} seconds. Saved data is retained.`;
+      return {...notice(message,'retry'),retryAfterSeconds:seconds};
     }
     case 'SYNC_RECOVERY_REQUIRED':
       return notice('Prior provider work has an uncertain outcome. Your accepted connections and data are retained. Confirm the prior outcome through recovery and support before retrying. Waiting alone does not settle it.','retry','/support');

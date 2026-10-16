@@ -5,6 +5,7 @@ import type { Assignment } from "@/lib/assignments/types";
 import type { NormalizedAssignment } from "@/lib/assignments/normalize";
 import type { SourceKind } from "@/lib/sources/types";
 import type { SubmissionState } from "@/lib/submission-status/types";
+import {normalizeSavedGradescopeAssignment} from '@/lib/gradescope/status';
 
 export type AssignmentFilters={course?:string;source?:SourceKind;search?:string};
 
@@ -35,7 +36,7 @@ type Row={
   submission_extractor_version:string|null;
 };
 
-const map=(r:Row):Assignment=>({
+const map=(r:Row):Assignment=>normalizeSavedGradescopeAssignment({
   id:r.id,
   source:r.source_kind,
   externalId:r.external_id,

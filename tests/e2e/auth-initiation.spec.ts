@@ -1,5 +1,5 @@
 import {expect,test,type Page,type BrowserContext} from '@playwright/test';
-import {waitForAppHydration} from './helpers';
+import {prepareFixtureUser,waitForAppHydration} from './helpers';
 async function providerCalls(context:BrowserContext){
   const response=await context.request.get('/api/test-fixtures/auth-transport');
   expect(response.status()).toBe(200);
@@ -7,7 +7,7 @@ async function providerCalls(context:BrowserContext){
 }
 async function controlledWidget(page:Page,mode:'valid'|'invalid'|'missing'|'wrong-host'|'wrong-action'){
   await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',route=>route.fulfill({contentType:'application/javascript',body:
-    'window.turnstile={render:function(el,o){const p=o.action==="auth_google"?"google":"microsoft";const m='+JSON.stringify(mode)+';const token=m==="missing"?"":m==="invalid"?"fixture-invalid-"+crypto.randomUUID():"fixture-"+p+"-"+crypto.randomUUID()+(m==="valid"?"":"-"+m);o.callback(token);return p;},reset:function(){},remove:function(){}};'}));
+    'window.turnstile={render:function(el,o){const p="google";const m='+JSON.stringify(mode)+';const token=m==="missing"?"":m==="invalid"?"fixture-invalid-"+crypto.randomUUID():"fixture-"+p+"-"+crypto.randomUUID()+(m==="valid"?"":"-"+m);o.callback(token);return p;},reset:function(){},remove:function(){}};'}));
 }
 for(const provider of ['google','microsoft'] as const){
   const label=provider==='google'?'Continue with Google':'Continue with Microsoft';
@@ -34,7 +34,7 @@ for(const provider of ['google','microsoft'] as const){
       const button=page.getByRole('button',{name:label,exact:true});
       if(mode==='missing'){
         await expect(button).toBeDisabled();
-        await button.locator('..').evaluate(node=>(node as HTMLFormElement).requestSubmit());
+        await button.evaluate(node=>{const button=node as HTMLButtonElement;button.disabled=false;button.form!.requestSubmit(button);});
       }else await button.click();
       await expect(page.getByRole('alert').filter({hasText:'Complete the verification and try again.'})).toBeVisible();
       await expect(page).toHaveURL(/\/sign-in$/);expect(calls).toBe(0);
@@ -59,7 +59,7 @@ test('interactive verification stays above both sign-in buttons on narrow and wi
       el.style.position='relative';
       const frame=document.createElement('iframe');frame.title='Controlled verification '+o.action;
       frame.style.cssText='position:absolute;top:0;left:0;border:0;width:'+(o.size==='compact'?150:300)+'px;height:'+(o.size==='compact'?140:65)+'px';
-      el.append(frame);o.callback('fixture-'+(o.action==='auth_google'?'google':'microsoft')+'-'+crypto.randomUUID());
+      el.append(frame);o.callback('fixture-'+'google'+'-'+crypto.randomUUID());
       return o.action;
     },reset:function(){},remove:function(){}};
   `}));
@@ -78,4 +78,27 @@ test('interactive verification stays above both sign-in buttons on narrow and wi
       expect(await button.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));})).toBe(true);
     }
   }
+});
+
+test('one verification serves both identity buttons',async({page})=>{
+  await controlledWidget(page,'valid');
+  await page.goto('/sign-in');await waitForAppHydration(page);
+  await expect(page.locator('form')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:'Continue with Google',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Continue with Microsoft',exact:true})).toBeEnabled();
+});
+
+test('Open Kairos reuses the session in a new tab',async({context,page})=>{
+  await prepareFixtureUser(context);
+  await page.goto('/');
+  await expect(page.getByRole('link',{name:'Open Kairos',exact:true})).toHaveAttribute('href','/upcoming');
+  const next=await context.newPage();
+  await next.goto('/');await next.getByRole('link',{name:'Open Kairos',exact:true}).click();
+  await expect(next).toHaveURL('http://127.0.0.1:3000/upcoming');
+});
+
+test('an existing session bypasses sign-in and retains the safe return path',async({context,page})=>{
+  await prepareFixtureUser(context);
+  await page.goto('/sign-in?returnTo=/sources');
+  await expect(page).toHaveURL('http://127.0.0.1:3000/sources');
 });

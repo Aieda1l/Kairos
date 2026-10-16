@@ -32,7 +32,7 @@ beforeEach(()=>{
   process.env.KAIROS_NEXT_COMPAT_BUILD="1";
   database=openD1TestDatabase();jar=new Map();
   runtime={db:database.db,hmacKey:new Uint8Array(32).fill(7),appOrigin:"https://mykairos.me",hostname:"mykairos.me",turnstileSecret:"fixture-secret",trustedIngress:"cloudflare",
-    fetchImpl:vi.fn(async()=>Response.json({success:true,hostname:"mykairos.me",action:"auth_google"}))};
+    fetchImpl:vi.fn(async()=>Response.json({success:true,hostname:"mykairos.me",action:"auth_sign_in"}))};
   fixtures.runtime.mockResolvedValue(runtime);fixtures.headers.mockResolvedValue(headers());
   fixtures.cookies.mockResolvedValue({set:(name:string,value:string)=>jar.set(name,value),get:(name:string)=>jar.has(name)?{value:jar.get(name)}:undefined});
   fixtures.get.mockImplementation(async()=>Response.json({ok:true}));
@@ -78,9 +78,9 @@ describe("actual Auth.js route and public action admission",()=>{
     expect((await (await route()).GET(req("callback/google?state=fixture-state","GET",undefined,{cookie}))).status).toBe(400);
     expect(fixtures.get).not.toHaveBeenCalled();
   });
-  it("uses independent cookies for providers and exact Microsoft widget action",async()=>{
+  it("uses independent cookies for providers and shared widget action",async()=>{
     const google=await admittedCookie();
-    vi.mocked(runtime.fetchImpl).mockImplementation(async()=>Response.json({success:true,hostname:"mykairos.me",action:"auth_microsoft"}));
+    vi.mocked(runtime.fetchImpl).mockImplementation(async()=>Response.json({success:true,hostname:"mykairos.me",action:"auth_sign_in"}));
     const microsoft=await admittedCookie("microsoft-entra-id");
     expect(google.startsWith("kairos.auth-attempt.google=")).toBe(true);
     expect(microsoft.startsWith("kairos.auth-attempt.microsoft-entra-id=")).toBe(true);
@@ -122,7 +122,7 @@ describe("actual Auth.js route and public action admission",()=>{
     expect((await boundary.POST(local("signin/google",form(),{origin:"http://localhost:3000"}))).status).toBe(403);expect(runtime.fetchImpl).not.toHaveBeenCalled();
     // The production hostname is rejected locally; expected-host validation is never disabled.
     expect((await boundary.POST(local("signin/google",form()))).status).toBe(400);expect(fixtures.post).not.toHaveBeenCalled();
-    vi.mocked(runtime.fetchImpl).mockImplementation(async()=>Response.json({success:true,hostname:"127.0.0.1",action:"auth_google"}));
+    vi.mocked(runtime.fetchImpl).mockImplementation(async()=>Response.json({success:true,hostname:"127.0.0.1",action:"auth_sign_in"}));
     const admitted=await boundary.POST(local("signin/google",form()));
     const cookie=admitted.headers.get("set-cookie")!;
     expect(cookie.includes("Secure")).toBe(false);expect(cookie.includes("HttpOnly")).toBe(true);

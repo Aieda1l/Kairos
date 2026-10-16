@@ -2,6 +2,8 @@ import Link from "next/link";
 import {safeReturnTo} from "@/lib/auth/return-to";
 import {identitySignInFailureMessage} from '@/lib/recovery/presentation';
 import {AuthInitiationForm} from "@/features/auth/auth-initiation-form";
+import {redirect} from 'next/navigation';
+import {AuthenticationRequiredError,requireUserScope} from '@/lib/auth/user-scope';
 
 type SignInPageProps={
   searchParams:Promise<{returnTo?:string|string[];error?:string|string[]}>;
@@ -14,7 +16,10 @@ function first(value:string|string[]|undefined):string|null{
 
 export default async function SignInPage({searchParams}:SignInPageProps){
   const params=await searchParams;
-  const returnTo=safeReturnTo(first(params.returnTo));
+  const returnTo=safeReturnTo(first(params.returnTo),'/upcoming');
+  let signedIn=false;
+  try{await requireUserScope();signedIn=true;}catch(error){if(!(error instanceof AuthenticationRequiredError))throw error;}
+  if(signedIn)redirect(returnTo);
   const errorCode=first(params.error);
   const errorMessage=identitySignInFailureMessage(errorCode);
   // Public site key only. Server verification never accepts widget success as proof.
@@ -31,8 +36,7 @@ export default async function SignInPage({searchParams}:SignInPageProps){
         </p>
       )}
       <div className="mt-8 space-y-3">
-        <AuthInitiationForm provider="google" siteKey={siteKey} returnTo={returnTo}/>
-        <AuthInitiationForm provider="microsoft-entra-id" siteKey={siteKey} returnTo={returnTo}/>
+        <AuthInitiationForm siteKey={siteKey} returnTo={returnTo}/>
       </div>
       <p className="mt-6 text-sm leading-6 text-[var(--muted)]">Calendar permissions are connected separately after sign-in.</p>
     </main>

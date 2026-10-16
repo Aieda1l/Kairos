@@ -6,6 +6,7 @@ import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 import type {SourceKind} from "@/lib/sources/types";
 import type {SubmissionState} from "@/lib/submission-status/types";
+import {normalizeSavedGradescopeAssignment} from '@/lib/gradescope/status';
 
 export type D1AssignmentFilters={course?:string;source?:SourceKind;search?:string};
 
@@ -36,7 +37,7 @@ type Row={
   submission_extractor_version:string|null;
 };
 
-const map=(row:Row):Assignment=>({
+const map=(row:Row):Assignment=>normalizeSavedGradescopeAssignment({
   id:row.id,
   source:row.source_kind,
   externalId:row.external_id,

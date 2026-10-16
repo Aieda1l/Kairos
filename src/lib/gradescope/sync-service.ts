@@ -11,6 +11,7 @@ import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses"
 import {D1SubmissionStatusRepository} from "@/lib/db/d1/repositories/submission-status";
 import {D1SyncRequestRepository} from "@/lib/db/d1/repositories/sync-requests";
 import { z } from "zod";
+import {normalizeGradescopeResult} from './status';
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
 import { SourceCourseRepository } from "@/lib/db/repositories/source-courses";
@@ -401,7 +402,8 @@ async function completeGradescopeSyncHosted(
   for(const courseResult of successfulCourses){
     const course=courseById.get(courseResult.courseId);
     if(!course)return recordInvalidHosted(db,scope,registered,now);
-    for(const assignment of courseResult.assignments){
+    for(const rawAssignment of courseResult.assignments){
+      const assignment=normalizeGradescopeResult(rawAssignment);
       if(seenAssignments.has(assignment.assignmentId)){
         return recordInvalidHosted(db,scope,registered,now);
       }
@@ -555,7 +557,8 @@ function completeGradescopeSyncLegacy(
   for(const courseResult of successfulCourses){
     const course=courseById.get(courseResult.courseId);
     if(!course)return recordInvalid(db,registered,now);
-    for(const assignment of courseResult.assignments){
+    for(const rawAssignment of courseResult.assignments){
+      const assignment=normalizeGradescopeResult(rawAssignment);
       if(seenAssignments.has(assignment.assignmentId))return recordInvalid(db,registered,now);
       seenAssignments.add(assignment.assignmentId);
       incoming.push(assignment);

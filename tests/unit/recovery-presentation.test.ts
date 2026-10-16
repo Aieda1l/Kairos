@@ -91,3 +91,8 @@ it('binds the server settings page to its authenticated scope and sends only the
   const second=await SettingsPage();expect(second.props.account).toEqual({name:'Bob',email:'bob@example.test',identityProvider:'unknown'});
   expect(JSON.stringify(second.props)).not.toMatch(/Alice|alice@|private-account|private-token/);
 });
+it('distinguishes Kairos admission limits from upstream provider throttling',()=>{
+  expect(getRecoveryNotice('RATE_LIMITED',{retryAfterSeconds:328})?.message).toMatch(/Kairos.*328 seconds/);
+  expect(getRecoveryNotice('RATE_LIMITED',{retryAfterSeconds:328})?.message).not.toMatch(/provider is limiting/i);
+  expect(getRecoveryNotice('CALENDAR_RATE_LIMITED',{retryAfterSeconds:328})?.message).toMatch(/provider is limiting/i);
+});

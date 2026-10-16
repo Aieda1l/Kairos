@@ -5,16 +5,18 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const entry=`
 import {verifyTurnstile} from './src/lib/auth/turnstile';
+import {PUBLIC_AUTH_CHALLENGE_ACTION} from './src/lib/auth/challenge-action';
 export default {async fetch(){
  const results=[];
- for(const action of ['auth_google','auth_microsoft']){
+ for(const provider of ['google','microsoft-entra-id']){
+  const action=PUBLIC_AUTH_CHALLENGE_ACTION;
   for(const mode of ['valid','rejected','wrong-host','wrong-action','unavailable','redirect']){
    let code='VERIFIED';
    try{await verifyTurnstile({token:mode+':'+action,expectedAction:action,expectedHostname:'mykairos.me'},
     {secret:'synthetic-secret',fetchImpl:fetch});}
    catch(error){code=error.code??'UNEXPECTED_ERROR';}
    const expected=mode==='valid'?'VERIFIED':['unavailable','redirect'].includes(mode)?'AUTH_CHALLENGE_UNAVAILABLE':'AUTH_CHALLENGE_FAILED';
-   results.push({action,mode,code,ok:code===expected});
+   results.push({provider,action,mode,code,ok:code===expected});
   }
  }
  return Response.json(results);
