@@ -1,11 +1,12 @@
 import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 import type {
   SubmissionStatusSyncState,
   SubmissionStatusWrite,
   SubmissionSyncErrorCode,
+  AssignmentSubmissionStatus,
 } from "@/lib/submission-status/types";
 
 type SyncRow={
@@ -21,6 +22,24 @@ export class D1SubmissionStatusRepository{
     private readonly db:D1DatabaseLike,
     private readonly scope:UserScope,
   ){}
+
+  prepareExternalCompletion(sourceConnectionId:string,results:Array<AssignmentSubmissionStatus&{externalId:string}>,completedAt:string):D1PreparedStatementLike{
+    return prepareOwned(this.db,this.scope,`
+      INSERT INTO assignment_submission_status(user_id,assignment_id,state,is_late,is_missing,submitted_at,checked_at,extractor_version,updated_at)
+      SELECT ?,a.id,json_extract(result.value,'$.state'),json_extract(result.value,'$.isLate'),json_extract(result.value,'$.isMissing'),
+        json_extract(result.value,'$.submittedAt'),json_extract(result.value,'$.checkedAt'),json_extract(result.value,'$.extractorVersion'),?
+      FROM json_each(?) result JOIN assignments a ON a.user_id=? AND a.source_connection_id=? AND a.external_id=json_extract(result.value,'$.externalId')
+      WHERE 1
+      ON CONFLICT(user_id,assignment_id) DO UPDATE SET state=excluded.state,is_late=excluded.is_late,is_missing=excluded.is_missing,
+        submitted_at=excluded.submitted_at,checked_at=excluded.checked_at,extractor_version=excluded.extractor_version,updated_at=excluded.updated_at
+      WHERE assignment_submission_status.checked_at<excluded.checked_at
+    `,{kind:'source',id:sourceConnectionId}).bind(this.scope.userId,completedAt,JSON.stringify(results),this.scope.userId,sourceConnectionId);
+  }
+
+  async recordCompletion<TError extends string>(sourceConnectionId:string,updated:number,failedCount:number,errorCode:TError|null,completedAt:string,successfulChecks:number):Promise<void>{
+    if(!await this.ownsSource(sourceConnectionId))return;
+    await this.writeCompletion(sourceConnectionId,updated,failedCount,errorCode,completedAt,successfulChecks);
+  }
 
   private async ownsSource(sourceConnectionId:string):Promise<boolean>{
     return Boolean(await prepareOwned(this.db,this.scope,
@@ -119,6 +138,11 @@ export class D1SubmissionStatusRepository{
       updated++;
     }
 
+    await this.writeCompletion(sourceConnectionId,updated,failedCount,errorCode,completedAt,successfulChecks);
+    return {updated,ignoredStale};
+  }
+
+  private async writeCompletion<TError extends string>(sourceConnectionId:string,updated:number,failedCount:number,errorCode:TError|null,completedAt:string,successfulChecks:number):Promise<void>{
     if(successfulChecks>0){
       await prepareOwned(this.db,this.scope,`
         INSERT INTO submission_status_sync(
@@ -148,6 +172,5 @@ export class D1SubmissionStatusRepository{
       ).run();
     }
 
-    return {updated,ignoredStale};
   }
 }

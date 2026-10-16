@@ -8,6 +8,7 @@ import { D1SubmissionStatusRepository } from "@/lib/db/d1/repositories/submissio
 import type { CredentialKeyring } from "@/lib/security/credential-cipher";
 import { ALICE, BOB } from "../helpers/test-users";
 import { openD1TestDatabase } from "../helpers/d1-test-db";
+import {withOwnedOperation} from '@/lib/abuse/operation-lock';
 
 const keyring:CredentialKeyring={
   activeKeyId:"k1",
@@ -24,6 +25,33 @@ async function seedUsers(sqlite:ReturnType<typeof openD1TestDatabase>["sqlite"])
 }
 
 describe("tenant-scoped D1 source repositories",()=>{
+  it('fences bulk status inserts and conflicts by tenant, source and live control version',async()=>{
+    const {db,sqlite,close}=openD1TestDatabase();
+    try{
+      await seedUsers(sqlite);
+      const alice={userId:ALICE.id},bob={userId:BOB.id};
+      const grade=await new D1SourceConnectionRepository(db,alice).upsertGradescope('Synthetic');
+      const canvas=await new D1SourceConnectionRepository(db,alice).upsertCanvas('Synthetic');
+      const foreign=await new D1SourceConnectionRepository(db,bob).upsertGradescope('Synthetic');
+      for(const [scope,source] of [[alice,grade],[alice,canvas],[bob,foreign]] as const){
+        await new D1AssignmentRepository(db,scope).upsertMany(source.id,[{source:source.kind,externalId:'shared-external-id',courseId:null,courseName:'Synthetic',title:'Synthetic',releaseAt:null,dueAt:null,lateDueAt:null,status:'unknown',sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null}],now);
+      }
+      const repo=new D1SubmissionStatusRepository(db,alice);
+      const result={externalId:'shared-external-id',state:'submitted' as const,isLate:false,isMissing:false,submittedAt:null,checkedAt:now,extractorVersion:'synthetic'};
+      await withOwnedOperation(db,alice,'source:gradescope',async()=>{
+        expect((await repo.prepareExternalCompletion(grade.id,[result],now).run()).meta.changes).toBe(1);
+        await expect(repo.prepareExternalCompletion(canvas.id,[result],now).run()).rejects.toMatchObject({code:'SYNC_RECOVERY_REQUIRED'});
+        await expect(repo.prepareExternalCompletion(foreign.id,[result],now).run()).rejects.toMatchObject({code:'SYNC_RECOVERY_REQUIRED'});
+        expect((await repo.prepareExternalCompletion(grade.id,[{...result,checkedAt:'2000-01-01T00:00:00.000Z'}],now).run()).meta.changes).toBe(0);
+      });
+      await expect(withOwnedOperation(db,alice,'source:gradescope',async()=>{
+        const pending=repo.prepareExternalCompletion(grade.id,[{...result,state:'graded',checkedAt:'2030-01-01T00:00:00.000Z'}],now);
+        await db.prepare("UPDATE abuse_controls SET enabled=0,version=version+1 WHERE control_key='provider:gradescope'").run();
+        await pending.run();
+      })).rejects.toMatchObject({code:'ABUSE_STORAGE_UNAVAILABLE'});
+      expect(sqlite.prepare('SELECT user_id,state,checked_at FROM assignment_submission_status').all()).toEqual([{user_id:ALICE.id,state:'submitted',checked_at:now}]);
+    }finally{close();}
+  });
   it.each([
     ['Submitted25 Minutes Late','submitted'],
     ['Submitted1 Day, 4 Hours Late','submitted'],

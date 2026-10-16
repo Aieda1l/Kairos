@@ -113,6 +113,7 @@ function rowGuard(table:string,row:string,target:OwnedMutationTarget):string{
       if(target.kind!=="calendar"&&target.kind!=="calendar-link")break;
       return base+`${target.kind==="calendar"?`${row}.calendar_connection_id` : id}=${targetId} AND ${calendarConnection(user,`${row}.calendar_connection_id`)}`;
     case "assignment_submission_status":
+      if(target.kind==='source')return base+`EXISTS (SELECT 1 FROM assignments assignment JOIN source_connections resource ON resource.user_id=assignment.user_id AND resource.id=assignment.source_connection_id WHERE assignment.user_id=${user} AND assignment.id=${row}.assignment_id AND resource.id=${targetId} AND 'source:'||resource.kind=${ownerKey})`;
       if(target.kind!=="source-assignment")break;
       return base+`${row}.assignment_id=${targetId} AND EXISTS (SELECT 1 FROM assignments assignment JOIN source_connections resource ON resource.user_id=assignment.user_id AND resource.id=assignment.source_connection_id WHERE assignment.user_id=${user} AND assignment.id=${row}.assignment_id AND resource.id=${targetConnection} AND 'source:'||resource.kind=${ownerKey})`;
     case "sync_requests":

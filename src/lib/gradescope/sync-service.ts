@@ -435,34 +435,36 @@ async function completeGradescopeSyncHosted(
     }
   }
 
-  const upserted=await assignmentRepo.upsertMany(connectionId,normalized,completedAt);
-  const afterByExternalId=new Map(
-    (await assignmentRepo.list({source:"gradescope"}))
-      .map(item=>[item.externalId,item]),
-  );
-  const writes:SubmissionStatusWrite[]=[];
-  for(const assignment of incoming){
-    const local=afterByExternalId.get(assignment.assignmentId);
-    if(!local)return recordInvalidHosted(db,scope,registered,now);
-    writes.push({
-      assignmentLocalId:local.id,
-      state:assignment.state,
-      isLate:assignment.isLate,
-      isMissing:assignment.isMissing,
-      submittedAt:assignment.submittedAt,
-      checkedAt:assignment.checkedAt,
-      extractorVersion:assignment.extractorVersion,
-    });
+  const normalizedById=new Map(normalized.map(row=>[row.externalId,row]));
+  const chunks=[];
+  for(let offset=0;offset<incoming.length;offset+=100){
+    const rows=incoming.slice(offset,offset+100);
+    const metadata=rows.flatMap(row=>{const value=normalizedById.get(row.assignmentId);return value?[value]:[];});
+    const statuses=rows.map(row=>({externalId:row.assignmentId,state:row.state,isLate:row.isLate,isMissing:row.isMissing,
+      submittedAt:row.submittedAt,checkedAt:row.checkedAt,extractorVersion:row.extractorVersion}));
+    // Leave headroom for generated IDs and fencing metadata under D1's string
+    // bound. Validate every chunk before committing any assignment data.
+    if([metadata,statuses].some(value=>new TextEncoder().encode(JSON.stringify(value)).byteLength>1_000_000))throw new GradescopeSyncServiceError('INVALID_RESULT','The Gradescope result exceeds the supported record size.');
+    chunks.push({statuses,metadata});
   }
-
-  const applied=await statusRepo.applyCompletion(
-    connectionId,
-    writes,
-    failedCourseCount,
-    errorCode,
-    completedAt,
-    successfulCourses.length,
-  );
+  const upserted={inserted:0,updated:0},applied={updated:0,ignoredStale:0};
+  for(const chunk of chunks){
+    const statuses=chunk.statuses;
+    // Metadata and its statuses commit together. No per-assignment D1 calls.
+    const result=await db.batch([
+      assignmentRepo.prepareCountNew(connectionId,chunk.metadata),
+      assignmentRepo.prepareUpsertMany(connectionId,chunk.metadata,completedAt),
+      statusRepo.prepareExternalCompletion(connectionId,statuses,completedAt),
+    ]);
+    const inserted=result[0]?.results?.[0]?.inserted,updated=result[2]?.meta.changes;
+    if(result.length!==3||result.some(row=>!row.success)||!Number.isSafeInteger(inserted)||Number(inserted)<0||Number(inserted)>chunk.metadata.length
+      ||result[1].meta.changes!==chunk.metadata.length||!Number.isSafeInteger(updated)||Number(updated)<0||Number(updated)>statuses.length){
+      throw new GradescopeSyncServiceError('INVALID_RESULT','The Gradescope result could not be committed.');
+    }
+    upserted.inserted+=Number(inserted);upserted.updated+=chunk.metadata.length-Number(inserted);
+    applied.updated+=Number(updated);applied.ignoredStale+=statuses.length-Number(updated);
+  }
+  await statusRepo.recordCompletion(connectionId,applied.updated,failedCourseCount,errorCode,completedAt,successfulCourses.length);
   const state=await statusRepo.getSyncState<GradescopeSyncErrorCode>(connectionId);
   return {
     requestId:input.requestId,
