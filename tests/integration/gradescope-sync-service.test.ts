@@ -49,6 +49,16 @@ const assignment=(overrides:Record<string,unknown>={})=>({
 });
 
 describe("Gradescope sync service",()=>{
+  it('normalizes a late submission sent as unknown by the published bridge',()=>{
+    const {db,assignments}=setup(['123']);
+    try{
+      const started=startGradescopeSync(db,new Date('2026-10-05T05:00:00.000Z'));
+      completeGradescopeSync(db,{requestId:started.requestId,batches:[{protocolVersion:1,requestId:started.requestId,errorCode:null,courses:[{
+        courseId:'123',checkedAt:'2026-10-05T05:05:00.000Z',errorCode:null,parseDiagnosticCounts:[],assignments:[assignment({state:'unknown',sourceStatusText:'Submitted25 Minutes Late',gradeScore:null,gradeMax:null,gradeDisplay:null})],
+      }]}]},new Date('2026-10-05T05:05:01.000Z'));
+      expect(assignments.list()[0]).toMatchObject({status:'submitted',submissionStatus:{state:'submitted',isLate:true,checkedAt:'2026-10-05T05:05:00.000Z'}});
+    }finally{db.close();}
+  });
   it("starts with the exact enabled courses and rejects an empty enabled set",()=>{
     const {db,connection,statuses}=setup(["456","123"]);
     const started=startGradescopeSync(db,new Date("2026-10-05T05:00:00.000Z"));

@@ -1,4 +1,5 @@
 import 'server-only';
+import {PUBLIC_AUTH_CHALLENGE_ACTION} from '@/lib/auth/challenge-action';
 const transports=new WeakMap<object,typeof fetch>();
 const counters=new WeakMap<object,{siteverifyCalls:number;providerCalls:number}>();
 export function isLocalFixtureEnvironment(env:Record<string,unknown>):boolean{
@@ -22,8 +23,8 @@ export function localAuthFixtureFetch(env:Record<string,unknown>):typeof fetch|u
       const params=new URLSearchParams(text),token=params.get('response')??'',secret=params.get('secret');
       if((init?.method??(input instanceof Request?input.method:'GET'))!=='POST'||!['synthetic-secret','1x0000000000000000000000000000000AA'].includes(secret??'')||spent.has(token)||!/^fixture-(google|microsoft)(?:$|-)/.test(token))return Response.json({success:false});
       spent.add(token);
-      const google=token.startsWith('fixture-google'),wrongHost=token.endsWith('-wrong-host'),wrongAction=token.endsWith('-wrong-action');
-      return Response.json({success:true,hostname:wrongHost?'unexpected.invalid':origin.hostname,action:wrongAction?'unexpected':google?'auth_google':'auth_microsoft'});
+      const wrongHost=token.endsWith('-wrong-host'),wrongAction=token.endsWith('-wrong-action');
+      return Response.json({success:true,hostname:wrongHost?'unexpected.invalid':origin.hostname,action:wrongAction?'unexpected':PUBLIC_AUTH_CHALLENGE_ACTION});
     }
     counts.providerCalls++;
     if(url.href==='https://accounts.google.com/.well-known/openid-configuration')return Response.json({

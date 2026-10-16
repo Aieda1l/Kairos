@@ -24,6 +24,27 @@ async function seedUsers(sqlite:ReturnType<typeof openD1TestDatabase>["sqlite"])
 }
 
 describe("tenant-scoped D1 source repositories",()=>{
+  it.each([
+    ['Submitted25 Minutes Late','submitted'],
+    ['Submitted1 Day, 4 Hours Late','submitted'],
+    ['2.0 / 10.05 Hours, 31 Minutes Late','graded'],
+  ] as const)('recognizes saved 0.4.0 Gradescope late status %s without a new sync',async(sourceStatusText,state)=>{
+    const {db,sqlite,close}=openD1TestDatabase();
+    try{
+      await seedUsers(sqlite);
+      const scope={userId:ALICE.id};
+      const source=await new D1SourceConnectionRepository(db,scope).upsertGradescope('Gradescope');
+      const assignments=new D1AssignmentRepository(db,scope);
+      await assignments.upsertMany(source.id,[{source:'gradescope',externalId:'late-fixture',courseId:'123',courseName:'Fixture course',title:'Fixture assignment',
+        releaseAt:null,dueAt:null,lateDueAt:null,status:'unknown',sourceStatusText,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null}],now);
+      const saved=(await assignments.list())[0];
+      await new D1SubmissionStatusRepository(db,scope).applyCompletion(source.id,[{assignmentLocalId:saved.id,state:'unknown',isLate:false,isMissing:false,submittedAt:null,checkedAt:now,extractorVersion:'gradescope-html-v1'}],0,null,now);
+      const writes=sqlite.prepare('SELECT total_changes() AS n').get();
+      expect((await assignments.list())[0]).toMatchObject({status:state,sourceStatusText,submissionStatus:{state,isLate:true,checkedAt:now,extractorVersion:'gradescope-html-v1'}});
+      expect(await new D1AssignmentRepository(db,{userId:BOB.id}).list()).toEqual([]);
+      expect(sqlite.prepare('SELECT total_changes() AS n').get()).toEqual(writes);
+    }finally{close();}
+  });
   it("allows the same source kind per user and hides known cross-user ids",async()=>{
     const {db,sqlite,close}=openD1TestDatabase();
     await seedUsers(sqlite);

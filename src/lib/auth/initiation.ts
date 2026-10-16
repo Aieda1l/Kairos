@@ -9,6 +9,7 @@ import {enforceRequestOrigin,isLoopbackOrigin,RequestOriginError} from "@/lib/se
 import {createOperationContext,getOperationContext,operationDataField,runWithOperationContext} from "@/lib/operations/context";
 import {emitOperationEvent,type OperationOutcome} from "@/lib/operations/events";
 import {AuthChallengeError,verifyTurnstile} from "./turnstile";
+import {PUBLIC_AUTH_CHALLENGE_ACTION} from './challenge-action';
 import {hasAuthDiagnosticFailure,runWithAuthOutcomeOwner} from "./diagnostics";
 
 export type {IdentityProvider};
@@ -48,7 +49,7 @@ export async function enforcePublicAuthInitiation(runtime:AbuseRuntime,provider:
   await enforceBudget(runtime,{class:"auth-initiation",provider,network});
   const values=formData.getAll("cf-turnstile-response");
   if(values.length!==1||typeof values[0]!=="string")throw new AuthChallengeError("AUTH_CHALLENGE_FAILED");
-  await verifyTurnstile({token:values[0],expectedHostname:runtime.hostname,expectedAction:provider==="google"?"auth_google":"auth_microsoft"},
+  await verifyTurnstile({token:values[0],expectedHostname:runtime.hostname,expectedAction:PUBLIC_AUTH_CHALLENGE_ACTION},
     {secret:runtime.turnstileSecret,fetchImpl:runtime.fetchImpl});
   return {provider,version:control.version,expiresAt:Date.now()+600_000,nonce:crypto.randomUUID()};
 }

@@ -10,11 +10,11 @@ it('only selects the controlled transport in explicit local fixture mode',()=>{
 });
 it('real verification still requires successful matching action and hostname',async()=>{
   const transport=localAuthFixtureFetch({...local})!;
-  for(const [token,action] of [['fixture-google','auth_google'],['fixture-microsoft','auth_microsoft']]){
+  for(const [token,action] of [['fixture-google','auth_sign_in'],['fixture-microsoft','auth_sign_in']]){
     await expect(verifyTurnstile({token,expectedAction:action,expectedHostname:'127.0.0.1'},{secret:'synthetic-secret',fetchImpl:transport})).resolves.toBeUndefined();
   }
   for(const token of ['fixture-invalid','fixture-google-wrong-host','fixture-google-wrong-action']){
-    await expect(verifyTurnstile({token,expectedAction:'auth_google',expectedHostname:'127.0.0.1'},{secret:'synthetic-secret',fetchImpl:transport})).rejects.toMatchObject({code:'AUTH_CHALLENGE_FAILED'});
+    await expect(verifyTurnstile({token,expectedAction:'auth_sign_in',expectedHostname:'127.0.0.1'},{secret:'synthetic-secret',fetchImpl:transport})).rejects.toMatchObject({code:'AUTH_CHALLENGE_FAILED'});
   }
 });
 it('rejects replay and unexpected destinations without a network call',async()=>{

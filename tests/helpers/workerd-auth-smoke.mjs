@@ -21,7 +21,7 @@ import {Auth} from "@auth/core";
 let verifyCalls=0;
 globalThis.fetch=async input=>{
   const url=String(input);
-  if(url==="https://challenges.cloudflare.com/turnstile/v0/siteverify"){verifyCalls++;return Response.json({success:true,hostname:"mykairos.me",action:"auth_google"});}
+  if(url==="https://challenges.cloudflare.com/turnstile/v0/siteverify"){verifyCalls++;return Response.json({success:true,hostname:"mykairos.me",action:"auth_sign_in"});}
   if(url==="https://accounts.google.com/.well-known/openid-configuration")return Response.json({issuer:"https://accounts.google.com",authorization_endpoint:"https://accounts.google.com/o/oauth2/auth",token_endpoint:"https://oauth2.googleapis.com/token",jwks_uri:"https://accounts.google.com/jwks",code_challenge_methods_supported:["S256"]});
   throw new Error("Unexpected fixture transport");
 };

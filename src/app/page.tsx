@@ -37,7 +37,7 @@ export default function HomePage(){
             Sign in with Google or Microsoft
           </Link>
           <Link
-            href="/sign-in?returnTo=/upcoming"
+            href="/upcoming"
             className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 font-medium"
           >
             Open Kairos
