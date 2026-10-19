@@ -316,6 +316,25 @@ it("auto-syncs a stale destination once and refreshes again only after another 1
   await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(2));
 });
 
+it.each(['http','provider'] as const)('spaces failed automatic calendar checks without blocking manual retries: %s',async mode=>{
+  let now=Date.parse('2026-10-19T22:00:00.000Z');
+  vi.spyOn(Date,'now').mockImplementation(()=>now);
+  const requests=vi.fn(async()=>mode==='http'
+    ?Response.json({code:'SERVICE_UNAVAILABLE'},{status:503})
+    :Response.json({results:[{connectionId:google.id,status:'error',errorCode:'SERVICE_UNAVAILABLE'}]}));
+  vi.stubGlobal('fetch',requests);
+  render(<CalendarSyncProvider initialConnections={[google]}><AdmittedHarness/></CalendarSyncProvider>);
+  await act(async()=>{await Promise.resolve();});
+  expect(requests).toHaveBeenCalledTimes(1);
+  for(let i=0;i<6;i++)await act(async()=>{document.dispatchEvent(new Event('visibilitychange'));});
+  expect(requests).toHaveBeenCalledTimes(1);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Manual batch'}));
+  expect(requests).toHaveBeenCalledTimes(2);
+  now+=15*60*1000;
+  await act(async()=>{document.dispatchEvent(new Event('visibilitychange'));});
+  expect(requests).toHaveBeenCalledTimes(3);
+});
+
 it("does not start overlapping auto-syncs on repeated visibility events",async()=>{
   const now=Date.now();
   vi.spyOn(Date,"now").mockReturnValue(now);

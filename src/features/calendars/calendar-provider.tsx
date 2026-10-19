@@ -114,6 +114,7 @@ export function CalendarSyncProvider({
   const busyUntil=useRef<Record<string,number>>({});
   const completionVersion=useRef<Record<string,number>>({});
   const syncAllPromiseRef=useRef<Promise<void>|null>(null);
+  const automaticRetryAt=useRef(0);
 
   useEffect(()=>{
     connectionsRef.current=connections;
@@ -413,9 +414,13 @@ export function CalendarSyncProvider({
   useEffect(()=>{
     const checkStale=()=>{
       if(document.visibilityState!=="visible")return;
+      if(Date.now()<automaticRetryAt.current)return;
       if(!connectionsRef.current.some(connection=>isConnectionStale(connection))){
         return;
       }
+      // Failed checks leave completion stale. Pace attempts too, so switching
+      // tabs cannot exhaust the shared Sync All admission budget on failures.
+      automaticRetryAt.current=Date.now()+STALE_AFTER_MS;
       void syncAll();
     };
 

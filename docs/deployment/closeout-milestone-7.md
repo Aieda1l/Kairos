@@ -1,6 +1,20 @@
 # Milestone 7 engineering closeout and release boundary
 
-**Release acceptance is incomplete. The first sign-in repair is deployed; the shared sign-in, returning-session and provider follow-ups await publication and real-account confirmation.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go.
+**Release acceptance is incomplete. The shared sign-in, returning-session, Gradescope and calendar recovery repairs are deployed; real-account confirmation and capacity/operational gates remain.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go.
+
+## Verified repair release, October 19
+
+Post-release acceptance confirms Gradescope works; read-only production state records 25 updated statuses and no failures. Ed's recorded attempt was October 19 at 04:10 UTC, before the reported completed lessons, with no held owner. The operator then confirmed the failed path was Sync All and Ed's own sync button worked. This supports skipped source work behind the shared budget; no Ed parser change is indicated by this report.
+
+The rate-limit investigation found that automatic calendar checks and manual Sync All share the six-admissions-per-ten-minute budget. Failed automatic checks leave their destination stale, so each return to a visible tab could immediately retry, including while a provider is administratively paused. A regression reproduces seven requests from the initial check and six visibility events. The follow-up spaces automatic attempts by 15 minutes within the mounted dashboard; manual retries, server admission limits and ownership controls remain unchanged. Reloading/remounting still permits a new automatic attempt. This follow-up is not part of the deployed release below.
+
+PR #21 merged as `99c37efae703ff97ff65fc83f7c2771cbcd9601f`. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39288466510) passed 1,539 tests in 155 files, all 63 browser cases and the remaining gates. A fresh archived build passed all 11 native provider checks, nine preview rejections and three health reads. The Gradescope 21-assignment case completes in 17 D1 statements. These are synthetic checks, not real-account acceptance or production CPU headroom.
+
+Under the existing rollout approval, Worker `8bdbfca9-61ae-4cbf-932b-b38e6de5f3bd` was staged, verified and promoted to 100%, deployment `fd4b4987-02a0-4d11-8722-cc736bea9b85`. Effective configuration, seven migrations, required secret binding names, preview isolation and canonical health passed before and after promotion. No schema/key change or remote calendar/event write occurred. Public checks confirm one shared sign-in form, the dashboard entry link, public pages, anonymous session/redirect behavior and invalid-challenge rejection for both identity providers.
+
+Gradescope's recovered owner was confirmed idle and its provider control reopened from version 5 to 6. Google remains paused at version 3 and Microsoft at version 1 on Workers Free. The expanded workload below still requires capacity resolution; Google retains the inactive reconstructed destination and 11 mappings and needs fresh consent once reopening is safe. Real sign-in/session/Gradescope acceptance has been requested. Calendar acceptance, account isolation/revocation/deletion, the GitHub health-check 403 and final operational/readiness gates remain open.
+
+The dated records below preserve earlier evidence; their pending-publication and old-production statements are historical and superseded by this release record.
 
 ## Approved rollout and authentication repair, October 15
 
