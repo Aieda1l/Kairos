@@ -111,16 +111,36 @@ export function CalendarSyncProvider({
   const [states,setStates]=useState<Record<string,CalendarState>>({});
   const connectionsRef=useRef(connections);
   const blockedUntil=useRef<Record<string,number>>({});
+  const busyUntil=useRef<Record<string,number>>({});
+  const completionVersion=useRef<Record<string,number>>({});
   const syncAllPromiseRef=useRef<Promise<void>|null>(null);
 
   useEffect(()=>{
     connectionsRef.current=connections;
   },[connections]);
 
+  const recordCompletion=useCallback((id:string)=>{
+    completionVersion.current[id]=(completionVersion.current[id]??0)+1;
+    delete busyUntil.current[id];
+  },[]);
   const setLocal=useCallback((id:string,state:CalendarState)=>{
-    if(state.recovery?.retryAfterSeconds)blockedUntil.current[id]=Date.now()+state.recovery.retryAfterSeconds*1000;
-    if(state.recovery?.href==="/support"&&state.recovery.key.endsWith("SYNC_RECOVERY_REQUIRED"))blockedUntil.current[id]=Infinity;
-    setStates(current=>({...current,[id]:state}));
+    const previousDeadline=blockedUntil.current[id]??0;
+    const incomingDeadline=state.recovery?.retryAfterSeconds?Date.now()+state.recovery.retryAfterSeconds*1000:0;
+    if(state.recovery?.retryAfterSeconds){
+      const target=state.recovery.waitForCompletion?busyUntil:blockedUntil;
+      target.current[id]=Math.max(target.current[id]??0,incomingDeadline);
+    }
+    if(state.recovery?.requiresSettlement)blockedUntil.current[id]=Infinity;
+    setStates(current=>{
+      const prior=current[id];
+      if(prior?.recovery?.requiresSettlement&&!state.recovery?.requiresSettlement&&blockedUntil.current[id]===Infinity)return current;
+      const priorTimed=prior?.recovery?.retryAfterSeconds&&!prior.recovery.waitForCompletion;
+      const incomingTimed=state.recovery?.retryAfterSeconds&&!state.recovery.waitForCompletion;
+      // Preserve an existing restriction, not an unrelated error that preceded
+      // the restriction introduced by this response. Longer new limits replace it.
+      if(!state.recovery?.requiresSettlement&&priorTimed&&Date.now()<previousDeadline&&(state.phase==='success'||state.phase==='error')&&(!incomingTimed||incomingDeadline<=previousDeadline))return current;
+      return {...current,[id]:state};
+    });
   },[]);
 
   useEffect(()=>{
@@ -149,11 +169,10 @@ export function CalendarSyncProvider({
   const recoveryOperationFor=(id:string):CalendarRecoveryOperation|null=>states[id]?.operation??null;
   function canAttempt(id:string){
     const connection=connectionsRef.current.find(item=>item.id===id);
-    return connection?.lastErrorCode!=="SYNC_RECOVERY_REQUIRED"&&Date.now()>=(blockedUntil.current[id]??0);
+    return connection?.lastErrorCode!=="SYNC_RECOVERY_REQUIRED"&&Date.now()>=Math.max(blockedUntil.current[id]??0,busyUntil.current[id]??0);
   }
   function requestFailure(body:Record<string,unknown>,response:Response,key:string,fallback:string):never{
     const recovery=recoveryFromResponse(body,response,key);
-    if(recovery?.retryAfterSeconds)blockedUntil.current[key]=Date.now()+recovery.retryAfterSeconds*1000;
     if(body.code==="SYNC_RECOVERY_REQUIRED"||body.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[key]=Infinity;
     throw new RecoveryRequestError(recovery,fallback);
   }
@@ -162,6 +181,7 @@ export function CalendarSyncProvider({
     if(typeof row.connectionId!=="string")return;
     const status=resultStatus(row.status);
     if(!status)return;
+    if(status==='success'||status==='partial')recordCompletion(row.connectionId);
     const completedAt=typeof row.completedAt==="string"?row.completedAt:null;
     const errorCode=typeof row.errorCode==="string"?row.errorCode:null;
 
@@ -179,7 +199,7 @@ export function CalendarSyncProvider({
     });
     connectionsRef.current=nextConnections;
     setConnections(nextConnections);
-  },[]);
+  },[recordCompletion]);
 
   async function refreshAccepted(){
     const response=await fetch('/api/calendars',{cache:'no-store'});
@@ -289,22 +309,25 @@ export function CalendarSyncProvider({
   async function syncConnection(id:string){
     const connection=connections.find(item=>item.id===id);
     if(!connection||!canAttempt(id))return;
+    const startedVersion=completionVersion.current[id]??0;
     setLocal(id,{phase:"syncing",message:""});
     try{
       const response=await fetch(`/api/calendars/${id}/sync`,{method:"POST"});
       const body=await readJson(response);
+      const recovery=recoveryFromResponse(body,response,id);
+      if(recovery?.waitForCompletion&&(completionVersion.current[id]??0)!==startedVersion)return;
       applySyncResult(body);
       if(!response.ok||body.status==="error"){
-        const recovery=recoveryFromResponse(body,response,id);
         if(body.code==="SYNC_RECOVERY_REQUIRED"||body.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[id]=Infinity;
         setLocal(id,{operation:'sync',phase:"error",message:`${connection.label} could not be synchronized. ${recovery?.message??'Retry later; saved data is retained.'}`,recovery});
         return;
       }
       setLocal(id,{
         ...(body.status==='partial'?{operation:'sync' as const}:{}),
+        recovery:body.status==='partial'?recovery:null,
         phase:body.status==="partial"?"error":"success",
         message:body.status==="partial"
-          ?`${connection.label} synchronized with warnings.`
+          ?recovery?.message??`${connection.label} synchronized with warnings.`
           :syncSuccessMessage(connection,body),
       });
     }catch{
@@ -327,12 +350,14 @@ export function CalendarSyncProvider({
       if(!current.some(connection=>canAttempt(connection.id)))return;
       // sync-all cannot exclude a blocked destination; wait instead of bypassing backoff.
       if(current.some(connection=>!canAttempt(connection.id)))return;
+      const startedVersions=new Map(current.map(connection=>[connection.id,completionVersion.current[connection.id]??0]));
       try{
         const response=await fetch("/api/calendars/sync-all",{method:"POST",...syncAllRequestInit({syncAllRunId:runId})});
         const body=await readJson(response);
         if(!response.ok){
           for(const connection of current){
             const recovery=recoveryFromResponse(body,response,connection.id);
+            if(recovery?.waitForCompletion&&(completionVersion.current[connection.id]??0)!==startedVersions.get(connection.id))continue;
             if(body.code==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
             setLocal(connection.id,{operation:'sync-all',phase:"error",message:recovery?.message??"Calendar synchronization failed. Retry later.",recovery});
           }
@@ -346,9 +371,10 @@ export function CalendarSyncProvider({
             if(typeof row.connectionId!=="string")continue;
             const connection=current.find(item=>item.id===row.connectionId);
             if(!connection)continue;
-            applySyncResult(row);
             const status=resultStatus(row.status);
             const recovery=status==="success"?null:recoveryFromResponse(row,undefined,connection.id);
+            if(recovery?.waitForCompletion&&(completionVersion.current[connection.id]??0)!==startedVersions.get(connection.id))continue;
+            applySyncResult(row);
             if(row.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
             setLocal(connection.id,{
               ...(status!=='success'?{operation:'sync-all' as const}:{}),
@@ -357,7 +383,7 @@ export function CalendarSyncProvider({
               message:status==="success"
                 ?`${connection.label} synchronized.`
                 :status==="partial"
-                  ?`${connection.label} synchronized with warnings.`
+                  ?recovery?.message??`${connection.label} synchronized with warnings.`
                   :`${connection.label} could not be synchronized. ${recovery?.message??"Retry later; saved data is retained."}`,
             });
           }

@@ -39,6 +39,19 @@ test("publishes Canvas deadlines to iCloud idempotently without exposing calenda
   await prepareFixtureUser(context);
   const request=context.request;
 
+  // Force the observed response-order race: a rejected automatic pass arrives
+  // after a successful manual pass. Later manual clicks must still send work.
+  let releaseConflict!:()=>void,automaticIntercepted=false;
+  const conflictReady=new Promise<void>(resolve=>{releaseConflict=resolve;});
+  page.once('close',()=>releaseConflict());
+  await page.route('**/api/calendars/sync-all',async route=>{
+    if(automaticIntercepted){await route.continue();return;}
+    automaticIntercepted=true;
+    await conflictReady;
+    if(page.isClosed())return;
+    await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({code:'SYNC_IN_PROGRESS'})});
+  });
+
   const canvasSecret="fixture-secret-never-echo";
   const appPassword="fixture-app-password-never-echo";
   const username="student@example.com";
@@ -81,6 +94,10 @@ test("publishes Canvas deadlines to iCloud idempotently without exposing calenda
 
   await icloudCard.getByRole("button",{name:"Sync Apple iCloud Calendar"}).click();
   await expect(page.getByText(/Apple iCloud Calendar synchronized/i)).toBeVisible();
+  await expect.poll(()=>automaticIntercepted).toBe(true);
+  const rejectedAutomatic=page.waitForResponse(response=>response.url().endsWith('/api/calendars/sync-all')&&response.status()===409);
+  releaseConflict();
+  await rejectedAutomatic;
 
   const readState=async():Promise<FixtureState>=>{
     const response=await request.get("/api/test-fixtures/calendar-state");
@@ -102,7 +119,9 @@ test("publishes Canvas deadlines to iCloud idempotently without exposing calenda
   expect(await renderedSources.text()).not.toContain(appPassword);
   expect(await page.content()).not.toContain(appPassword);
 
+  const repeatedSync=page.waitForResponse(response=>/\/api\/calendars\/[^/]+\/sync$/.test(response.url())&&response.request().method()==='POST',{timeout:5000});
   await icloudCard.getByRole("button",{name:"Sync Apple iCloud Calendar"}).click();
+  expect((await repeatedSync).ok()).toBe(true);
   await expect.poll(async()=> (await readState()).events.length).toBe(1);
   expect((await readState()).events[0]!.id).toBe(remoteEventId);
 
