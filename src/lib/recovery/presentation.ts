@@ -1,4 +1,4 @@
-export type RecoveryNotice={key:string;message:string;action:'connect'|'verify-extension'|'sign-in-and-retry'|'retry'|'reconnect'|'recreate';href?:string;retryAfterSeconds?:number};
+export type RecoveryNotice={key:string;message:string;action:'connect'|'verify-extension'|'sign-in-and-retry'|'retry'|'reconnect'|'recreate';href?:string;retryAfterSeconds?:number;waitForCompletion?:boolean;requiresSettlement?:boolean};
 import {boundedRetryAfter} from '@/lib/abuse/types';
 
 /** Only fixed, recognized codes choose presentation. Never display response messages. */
@@ -43,9 +43,9 @@ export function getRecoveryNotice(code:unknown,options:{key?:string;retryAfterSe
       return {...notice(message,'retry'),retryAfterSeconds:seconds};
     }
     case 'SYNC_RECOVERY_REQUIRED':
-      return notice('Prior provider work has an uncertain outcome. Your accepted connections and data are retained. Confirm the prior outcome through recovery and support before retrying. Waiting alone does not settle it.','retry','/support');
+      return {...notice('Prior provider work has an uncertain outcome. Your accepted connections and data are retained. Confirm the prior outcome through recovery and support before retrying. Waiting alone does not settle it.','retry','/support'),requiresSettlement:true};
     case 'SYNC_IN_PROGRESS':
-      return {...notice('Provider work is already running. Wait for it to finish before retrying.','retry'),retryAfterSeconds:60};
+      return {...notice('Provider work is already running. Wait for it to finish before retrying.','retry'),retryAfterSeconds:60,waitForCompletion:true};
     case 'PROVIDER_AUTHORIZATION_CHANGED':
       return notice('Provider authorization changed during this attempt. Saved data is retained. Review the connection and start a fresh attempt.','retry','/sources');
     case 'CALENDAR_PERMISSION_DENIED':case 'CALENDAR_CONFIG_MISSING':

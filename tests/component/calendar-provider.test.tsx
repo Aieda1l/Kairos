@@ -107,6 +107,8 @@ function Harness(){
   return <div>
     <span data-testid="count">{calendar.connections.length}</span>
     <span data-testid="gmsg">{calendar.messageFor("google-1")}</span>
+    <span data-testid="gstatus">{calendar.connections.find(c=>c.id==='google-1')?.lastSyncStatus}</span>
+    <span data-testid="grecovery">{calendar.recoveryFor('google-1')?.message??''}</span>
     <span data-testid="mmsg">{calendar.messageFor("microsoft-1")}</span>
     <button onClick={()=>void calendar.syncConnection("google-1")}>sync google</button>
     <button onClick={()=>void calendar.syncConnection("microsoft-1")}>sync microsoft</button>
@@ -170,6 +172,40 @@ it("updates one provider state without erasing other connections",async()=>{
   await user.click(screen.getByRole("button",{name:"disconnect apple"}));
   expect(screen.getByTestId("count")).toHaveTextContent("1");
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it.each(['single','batch'] as const)('shows a new partial rate limit after an unrelated %s failure',async path=>{
+  let first!:(response:Response)=>void,calls=0;
+  vi.stubGlobal('fetch',vi.fn<typeof fetch>(async()=>++calls===1?new Promise<Response>(resolve=>{first=resolve;}):Response.json({code:'SERVICE_UNAVAILABLE'},{status:503})));
+  render(<CalendarSyncProvider initialConnections={[{...google,lastSyncCompletedAt:new Date().toISOString()}]}><Harness/><AdmittedHarness/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:path==='single'?'sync google':'Manual batch'}));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  const row={connectionId:google.id,status:'partial',errorCode:'RATE_LIMITED',retryAfterSeconds:60,completedAt:new Date().toISOString()};
+  await act(async()=>first(Response.json(path==='single'?row:{status:'partial',results:[row]})));
+  expect(screen.getByTestId('gmsg')).toHaveTextContent(/limiting repeated requests/);
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  expect(calls).toBe(2);
+});
+
+it.each(['single','batch-http','batch-row'] as const)('keeps uncertainty visible across mixed late rate/uncertainty responses in %s',async path=>{
+  for(const lateCode of ['RATE_LIMITED','SYNC_RECOVERY_REQUIRED'] as const){
+    const earlyCode=lateCode==='RATE_LIMITED'?'SYNC_RECOVERY_REQUIRED':'RATE_LIMITED';
+    let first!:(response:Response)=>void,calls=0;
+    const failure=(code:string)=>Response.json({code},{status:code==='RATE_LIMITED'?429:409,headers:code==='RATE_LIMITED'?{'Retry-After':'60'}:{}});
+    const fetchMock=vi.fn<typeof fetch>(async()=>++calls===1?new Promise<Response>(resolve=>{first=resolve;}):failure(earlyCode));
+    vi.stubGlobal('fetch',fetchMock);
+    const view=render(<CalendarSyncProvider initialConnections={[{...google,lastSyncCompletedAt:new Date().toISOString()}]}><Harness/><AdmittedHarness/></CalendarSyncProvider>);
+    const user=userEvent.setup();
+    await user.click(screen.getByRole('button',{name:path==='single'?'sync google':'Manual batch'}));
+    await user.click(screen.getByRole('button',{name:'sync google'}));
+    await act(async()=>first(path==='batch-row'?Response.json({status:'partial',results:[{connectionId:google.id,status:'partial',completedAt:new Date().toISOString(),errorCode:lateCode}]}):failure(lateCode)));
+    expect(screen.getByTestId('gmsg')).toHaveTextContent(/Prior provider work has an uncertain outcome/);
+    const now=Date.now();const clock=vi.spyOn(Date,'now').mockReturnValue(now+61000);
+    await user.click(screen.getByRole('button',{name:'sync google'}));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    clock.mockRestore();view.unmount();
+  }
 });
 
 
@@ -305,4 +341,102 @@ it("does not start overlapping auto-syncs on repeated visibility events",async()
     release(Response.json({status:"success",results:[]}));
     await gate;
   });
+});
+
+it.each([
+  ['SYNC_IN_PROGRESS',false,true],['SYNC_IN_PROGRESS',true,true],
+  ['RATE_LIMITED',false,false],['RATE_LIMITED',true,false],
+  ['SYNC_RECOVERY_REQUIRED',false,false],['SYNC_RECOVERY_REQUIRED',true,false],
+] as const)('keeps %s recovery causal when automatic conflict arrives after success: %s',async(code,late,retryAllowed)=>{
+  let auto!:(response:Response)=>void,manual!:(response:Response)=>void,manualCalls=0;
+  const completed=()=>Response.json({connectionId:google.id,status:'success',completedAt:new Date().toISOString(),createdCount:0,updatedCount:0,deletedCount:0,unchangedCount:1,failedCount:0,errorCode:null});
+  const fetchMock=vi.fn<typeof fetch>(async input=>{
+    if(String(input)==='/api/calendars/sync-all')return new Promise<Response>(resolve=>{auto=resolve;});
+    if(String(input)==='/api/calendars/google-1/sync')return ++manualCalls===1?new Promise<Response>(resolve=>{manual=resolve;}):completed();
+    throw new Error('Unexpected request');
+  });
+  vi.stubGlobal('fetch',fetchMock);
+  render(<CalendarSyncProvider initialConnections={[google]}><Harness/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(1));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(2));
+  const conflict=()=>Response.json({code},{status:code==='RATE_LIMITED'?429:409,headers:code==='RATE_LIMITED'?{'Retry-After':'3600'}:{}});
+  if(late){await act(async()=>manual(completed()));await act(async()=>auto(conflict()));}
+  else{await act(async()=>auto(conflict()));await act(async()=>manual(completed()));}
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  expect(fetchMock).toHaveBeenCalledTimes(retryAllowed?3:2);
+  if(!retryAllowed)expect(screen.getByTestId('gmsg')).toHaveTextContent(code==='RATE_LIMITED'?/limiting repeated requests/:/Prior provider work has an uncertain outcome/);
+  expect(screen.getByTestId('count')).toHaveTextContent('1');
+});
+
+it('retains successful metadata and recovery presentation when an older manual busy response arrives',async()=>{
+  let first!:(response:Response)=>void,calls=0;
+  const fetchMock=vi.fn<typeof fetch>(async()=>++calls===1?new Promise<Response>(resolve=>{first=resolve;}):Response.json({connectionId:google.id,status:'success',completedAt:new Date().toISOString(),errorCode:null}));
+  vi.stubGlobal('fetch',fetchMock);
+  render(<CalendarSyncProvider initialConnections={[{...google,lastSyncCompletedAt:new Date().toISOString(),lastSyncStatus:'success'}]}><Harness/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  await act(async()=>first(Response.json({connectionId:google.id,status:'error',errorCode:'SYNC_IN_PROGRESS'},{status:409})));
+  expect(screen.getByTestId('gstatus')).toHaveTextContent('success');
+  expect(screen.getByTestId('grecovery')).toBeEmptyDOMElement();
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
+it('ignores a late per-connection busy result only for the destination that completed',async()=>{
+  let auto!:(response:Response)=>void,manual!:(response:Response)=>void,calls=0;
+  const success=()=>Response.json({connectionId:google.id,status:'success',completedAt:new Date().toISOString(),errorCode:null});
+  const fetchMock=vi.fn<typeof fetch>(async input=>{
+    if(String(input)==='/api/calendars/sync-all')return new Promise<Response>(resolve=>{auto=resolve;});
+    return ++calls===1?new Promise<Response>(resolve=>{manual=resolve;}):success();
+  });
+  vi.stubGlobal('fetch',fetchMock);
+  render(<CalendarSyncProvider initialConnections={[google,microsoft]}><Harness/></CalendarSyncProvider>);
+  const user=userEvent.setup();await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(1));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  await act(async()=>manual(success()));
+  await act(async()=>auto(Response.json({status:'error',results:[google,microsoft].map(c=>({connectionId:c.id,status:'error',errorCode:'SYNC_IN_PROGRESS'}))})));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  await user.click(screen.getByRole('button',{name:'sync microsoft'}));
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/calendars/google-1/sync');
+});
+
+it.each([false,true])('credential testing cannot settle a sync conflict arriving after the test: %s',async late=>{
+  let auto!:(response:Response)=>void,testCredentials!:(response:Response)=>void;
+  const fetchMock=vi.fn<typeof fetch>(async input=>{
+    if(String(input)==='/api/calendars/sync-all')return new Promise<Response>(resolve=>{auto=resolve;});
+    if(String(input)==='/api/calendars/caldav/test')return new Promise<Response>(resolve=>{testCredentials=resolve;});
+    return Response.json({connectionId:apple.id,status:'success',completedAt:new Date().toISOString(),errorCode:null});
+  });
+  vi.stubGlobal('fetch',fetchMock);
+  function CredentialHarness(){const c=useCalendarSync();return <><button onClick={()=>void c.testIcloud('synthetic@example.invalid','synthetic-secret')}>Test credentials</button><button onClick={()=>void c.syncConnection(apple.id)}>Sync apple</button></>;}
+  render(<CalendarSyncProvider initialConnections={[apple]}><CredentialHarness/></CalendarSyncProvider>);
+  const user=userEvent.setup();await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(1));
+  await user.click(screen.getByRole('button',{name:'Test credentials'}));
+  const conflict=()=>Response.json({code:'SYNC_IN_PROGRESS'},{status:409});
+  if(late){await act(async()=>testCredentials(Response.json({ok:true})));await act(async()=>auto(conflict()));}
+  else{await act(async()=>auto(conflict()));await act(async()=>testCredentials(Response.json({ok:true})));}
+  await user.click(screen.getByRole('button',{name:'Sync apple'}));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ['single','RATE_LIMITED'],['single','SYNC_RECOVERY_REQUIRED'],
+  ['batch','RATE_LIMITED'],['batch','SYNC_RECOVERY_REQUIRED'],
+] as const)('retains an active %s %s warning when an older partial reconciliation arrives',async(path,code)=>{
+  let first!:(response:Response)=>void,calls=0;
+  const fetchMock=vi.fn<typeof fetch>(async()=>++calls===1?new Promise<Response>(resolve=>{first=resolve;}):Response.json({code},{status:code==='RATE_LIMITED'?429:409,headers:code==='RATE_LIMITED'?{'Retry-After':'3600'}:{}}));
+  vi.stubGlobal('fetch',fetchMock);
+  render(<CalendarSyncProvider initialConnections={[{...google,lastSyncCompletedAt:new Date().toISOString()}]}><Harness/><AdmittedHarness/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:path==='single'?'sync google':'Manual batch'}));
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  const result={connectionId:google.id,status:'partial',completedAt:new Date().toISOString(),errorCode:'CALENDAR_PARTIAL_SYNC',failedCount:1};
+  await act(async()=>first(Response.json(path==='single'?result:{status:'partial',results:[result]})));
+  expect(screen.getByTestId('gmsg')).toHaveTextContent(code==='RATE_LIMITED'?/limiting repeated requests/:/Prior provider work has an uncertain outcome/);
+  await user.click(screen.getByRole('button',{name:'sync google'}));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });
