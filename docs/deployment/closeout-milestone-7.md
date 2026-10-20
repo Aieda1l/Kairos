@@ -2,11 +2,21 @@
 
 **Release acceptance is incomplete. The shared sign-in, returning-session, Gradescope and calendar recovery repairs are deployed; real-account confirmation and capacity/operational gates remain.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go.
 
+## Automatic retry repair deployed, October 20
+
+Subsequent operator acceptance: the user reports “Sync All seems to work.” This confirms the repaired path in real use, not acceptance of paused Google/Microsoft calendar work. The health-check 403 was separately reproduced on a GitHub runner and isolated to its default Node User-Agent; see the [monitoring repair record](monitoring.md#october-20-health-check-repair).
+
+PR #22 was self-reviewed with no blocking findings and merged as `0eda3e44d6cdac9846d8d523bdfda3ec085403fe`. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39344708509) passed 1,541 tests in 155 files and all 63 browser cases. A clean archived build passed the 11 compiled provider cases and preview isolation/health probes.
+
+The approved release is Worker `964c690c-c7fc-4abf-9237-e3bb919ab5de` at 100%, deployment `3f818927-af58-4540-9604-bf08a0c28c1c`. Staged and active checks verified configuration, seven migrations, required secret binding names, isolation and health. All 11 anonymous public checks passed. Read-only verification confirms Gradescope enabled at control version 6, Google paused at 3 and Microsoft paused at 1. No schema, key, provider-control or remote calendar/event changes occurred.
+
+The retry pacing applies after loading the new client; it does not clear existing server rate windows. Reloading/remounting allows a fresh automatic attempt, and manual retries remain subject to the existing limits. Real use of the repaired Sync All path remains to be confirmed. M7 capacity, health-monitoring and final hosted acceptance gates remain open.
+
 ## Verified repair release, October 19
 
 Post-release acceptance confirms Gradescope works; read-only production state records 25 updated statuses and no failures. Ed's recorded attempt was October 19 at 04:10 UTC, before the reported completed lessons, with no held owner. The operator then confirmed the failed path was Sync All and Ed's own sync button worked. This supports skipped source work behind the shared budget; no Ed parser change is indicated by this report.
 
-The rate-limit investigation found that automatic calendar checks and manual Sync All share the six-admissions-per-ten-minute budget. Failed automatic checks leave their destination stale, so each return to a visible tab could immediately retry, including while a provider is administratively paused. A regression reproduces seven requests from the initial check and six visibility events. The follow-up spaces automatic attempts by 15 minutes within the mounted dashboard; manual retries, server admission limits and ownership controls remain unchanged. Reloading/remounting still permits a new automatic attempt. This follow-up is not part of the deployed release below.
+The rate-limit investigation found that automatic calendar checks and manual Sync All share the six-admissions-per-ten-minute budget. Failed automatic checks leave their destination stale, so each return to a visible tab could immediately retry, including while a provider is administratively paused. A regression reproduces seven requests from the initial check and six visibility events. The follow-up spaces automatic attempts by 15 minutes within the mounted dashboard; manual retries, server admission limits and ownership controls remain unchanged. Reloading/remounting still permits a new automatic attempt. PR #22 subsequently merged and deployed as recorded below.
 
 PR #21 merged as `99c37efae703ff97ff65fc83f7c2771cbcd9601f`. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39288466510) passed 1,539 tests in 155 files, all 63 browser cases and the remaining gates. A fresh archived build passed all 11 native provider checks, nine preview rejections and three health reads. The Gradescope 21-assignment case completes in 17 D1 statements. These are synthetic checks, not real-account acceptance or production CPU headroom.
 

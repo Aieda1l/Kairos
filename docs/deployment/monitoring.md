@@ -8,6 +8,10 @@ The standalone `node scripts/check-production-health.mjs` accepts only `https://
 
 ## Operator and delivery evidence
 
+### October 20 health-check repair
+
+A bounded [GitHub-runner diagnostic](https://github.com/Aieda1l/Kairos/actions/runs/39482186591) reproduced HTTP 403 with a Cloudflare challenge for the default Node User-Agent. On the same runner, identifying the request as `Kairos-Health/1.0 (+https://mykairos.me)` returned HTTP 200 and the exact healthy payload. The checker now sends that identifier. Canonical-origin, redirect, timeout, response-size and payload checks remain unchanged; no edge protection is disabled. This establishes the header-dependent rejection, not which inaccessible Cloudflare rule issued the challenge. The normal production workflow still needs a successful run after integration.
+
 The monitored destination is the operator's Cloudflare account inbox previously selected for support@mykairos.me/security@mykairos.me. Both separate inbound alias tests arrived (operator confirmation). This does not prove Cloudflare alert or GitHub workflow notification delivery. Do not publish the private destination address or account identifiers.
 
 In Cloudflare, use **Alerts → Overview** to inspect available types and destinations, then **Test** to confirm arrival. Product/plan-specific usage alerts may be unavailable; record exactly what the account offers. A Workers Free plan and a domain Free plan are distinct. In GitHub **Settings → Notifications → System → Actions**, enable email and failed-workflow notifications. Confirm the recipient is monitored. Scheduled notifications follow the workflow creator, cron editor, or re-enabler; repository watching alone is insufficient proof.

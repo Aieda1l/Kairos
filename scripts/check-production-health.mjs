@@ -25,7 +25,7 @@ export async function checkProductionHealth(options={}){
   const deadline=new Promise(done=>{timer=setTimeout(()=>{controller.abort();done(failed('HEALTH_TIMEOUT'));},timeout);});
   const run=(async()=>{
     try{
-      const response=await (options.fetchImpl??fetch)(origin+'/api/health',{method:'GET',redirect:'error',cache:'no-store',signal:controller.signal,headers:{accept:'application/json'}});
+      const response=await (options.fetchImpl??fetch)(origin+'/api/health',{method:'GET',redirect:'error',cache:'no-store',signal:controller.signal,headers:{accept:'application/json','user-agent':'Kairos-Health/1.0 (+https://mykairos.me)'}});
       if(response.status!==200||response.redirected)return failed('HEALTH_CHECK_FAILED',response.status);
       if(!await healthyBody(response))return failed('HEALTH_PAYLOAD_INVALID',response.status);
       return {ok:true,code:'HEALTH_OK',status:200};
