@@ -1,4 +1,4 @@
-for (const [label, agent, cache] of [['identified-cached','Kairos-Health/1.0 (+https://mykairos.me)',false],['identified-exact','Kairos-Health/1.0 (+https://mykairos.me)',true],['compatible-exact','Mozilla/5.0 (compatible; Kairos-Health/1.0; +https://mykairos.me)',true],['default-cached',null,false]]) {
+for (const [label, agent, cache] of [['compatible-first','Mozilla/5.0 (compatible; Kairos-Health/1.0; +https://mykairos.me)',true],['identified-first','Kairos-Health/1.0 (+https://mykairos.me)',true],['identified-repeat','Kairos-Health/1.0 (+https://mykairos.me)',true],['compatible-repeat','Mozilla/5.0 (compatible; Kairos-Health/1.0; +https://mykairos.me)',true]]) {
   try {
     const response=await fetch('https://mykairos.me/api/health',{redirect:'error',...(cache?{cache:'no-store'}:{}),signal:AbortSignal.timeout(10000),headers:{accept:'application/json',...(agent?{'user-agent':agent}:{})}});
     const reader=response.body.getReader();let text='',size=0;
@@ -6,3 +6,4 @@ for (const [label, agent, cache] of [['identified-cached','Kairos-Health/1.0 (+h
     console.log(JSON.stringify({label,status:response.status,challenge:response.headers.get('cf-mitigated')==='challenge'||/just a moment|challenge-platform|cf-chl-/i.test(text),healthy:text.trim()==='{"status":"ok"}',cloudflare:response.headers.get('server')==='cloudflare',ray:response.headers.get('cf-ray')}));
   }catch{console.log(JSON.stringify({label,code:'NETWORK_FAILED'}));}
 }
+
