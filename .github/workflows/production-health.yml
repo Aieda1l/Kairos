@@ -1,18 +1,44 @@
 name: Kairos Production Health
+
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      exercise_failure:
+        description: Generate a synthetic failure to verify notification delivery
+        type: boolean
+        default: false
+        required: false
+
 permissions:
   contents: read
+
+concurrency:
+  group: kairos-production-health
+  cancel-in-progress: false
+
 jobs:
-  diagnostic:
-    if: github.ref == 'refs/heads/fix/production-health-403'
+  health:
+    # Integrating the workflow must not activate production checks before approval.
+    if: ${{ github.ref == 'refs/heads/main' && vars.KAIROS_HEALTH_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      # Actions equality is case-insensitive; shell equality enforces exact inputs
+      # before checkout, health requests or synthetic notification exercises.
+      - name: Require exact main and explicit health activation
+        shell: bash
+        env:
+          KAIROS_HEALTH_ENABLED: ${{ vars.KAIROS_HEALTH_ENABLED }}
+        run: test "$GITHUB_REF" = 'refs/heads/main' && test "$KAIROS_HEALTH_ENABLED" = 'true'
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/diagnose-health-edge.mjs
+      - name: Exercise notification delivery
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.exercise_failure }}
+        run: node -e 'console.log(JSON.stringify({code:"HEALTH_NOTIFICATION_TEST",status:0}));process.exit(1)'
+      - name: Check public storage health
+        if: ${{ !inputs.exercise_failure }}
+        run: node scripts/check-production-health.mjs

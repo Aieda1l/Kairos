@@ -53,6 +53,15 @@ it('synthetic accepts only the canonical origin and its exact healthy payload',a
   expect(fetchImpl).not.toHaveBeenCalled();
   expect(await checkProductionHealth({fetchImpl})).toEqual({ok:true,code:'HEALTH_OK',status:200});
 });
+it('identifies the health monitor so edge filtering does not challenge the default Node agent',async()=>{
+  const fetchImpl=vi.fn<typeof fetch>(async(_url,init)=>{
+    const headers=new Headers(init?.headers);
+    return headers.get('user-agent')==='Kairos-Health/1.0 (+https://mykairos.me)'
+      ?Response.json({status:'ok'})
+      :new Response('challenge',{status:403});
+  });
+  expect(await checkProductionHealth({fetchImpl})).toEqual({ok:true,code:'HEALTH_OK',status:200});
+});
 it('synthetic bounds response size and the complete request deadline',async()=>{
   const fetchImpl=vi.fn<typeof fetch>(async()=>new Response('x'.repeat(257)));
   expect((await checkProductionHealth({fetchImpl})).ok).toBe(false);
