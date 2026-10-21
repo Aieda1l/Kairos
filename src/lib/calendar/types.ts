@@ -13,6 +13,7 @@ export type CalendarConnection={
   lastSyncCompletedAt:string|null;
   lastSyncStatus:CalendarSyncStatus;
   lastErrorCode:string|null;
+  sourceSyncAt?:string;
 };
 
 export type CalendarEventLink={

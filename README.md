@@ -85,7 +85,7 @@ Calendar copies are outbound only and do not change source coursework. Google cr
 
 An eligible due assignment becomes a 15-minute transparent/free marker at its exact due time. The event includes course/assignment title, source name, status and a cleaned source link. Repeated sync is idempotent; deadline changes update events, deleted generated events are recreated on reconciliation, and explicitly undated assignments lose their generated events. **Hide submitted assignments** defaults on under **Sources → Calendar destinations** and removes Submitted/Graded/Excused work from generated events. Changing it resynchronizes connected destinations.
 
-**Sync All** refreshes sources before calendar reconciliation. An open app reconciles a stale destination on becoming visible when the last sync is at least 15 minutes old. Changes are not continuously published while the app is closed.
+**Sync All** refreshes sources, then synchronizes each calendar destination in a separate browser request. Hosted source requests do not perform calendar writes inline. An open app reconciles after a source refresh and on becoming visible when the last calendar sync is at least 15 minutes old. Failed automatic attempts remain paced; changes are not continuously published while the app is closed.
 
 ### Google
 

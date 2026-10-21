@@ -1,5 +1,6 @@
 "use client";
 import {syncAllRequestInit} from '@/lib/sync-all/client';
+import {calendarInvocationsSchema} from '@/lib/sync-all/types';
 import {getRecoveryNotice,recoveryFromResponse,RecoveryRequestError,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import {
@@ -50,6 +51,7 @@ type CalendarSyncContextValue={
   connectIcloud(username:string,secret:string):Promise<boolean>;
   syncConnection(id:string):Promise<void>;
   syncAll(runId?:string):Promise<void>;
+  holdAutomaticSync():()=>void;
   removeEvents(id:string):Promise<void>;
   disconnect(id:string):Promise<void>;
 };
@@ -72,6 +74,7 @@ function isConnectionStale(connection:CalendarConnection,now=Date.now()):boolean
   if(!connection.enabled)return false;
   if(!connection.lastSyncCompletedAt)return true;
   const completed=Date.parse(connection.lastSyncCompletedAt);
+  if(connection.sourceSyncAt&&Date.parse(connection.sourceSyncAt)>completed)return true;
   return !Number.isFinite(completed)||now-completed>=STALE_AFTER_MS;
 }
 
@@ -115,6 +118,14 @@ export function CalendarSyncProvider({
   const completionVersion=useRef<Record<string,number>>({});
   const syncAllPromiseRef=useRef<Promise<void>|null>(null);
   const automaticRetryAt=useRef(0);
+  const sourceRevision=initialConnections.map(c=>`${c.id}:${c.sourceSyncAt??''}`).join('|');
+  const lastSourceRevision=useRef(sourceRevision);
+  const automaticHolds=useRef(0);
+  const holdAutomaticSync=()=>{
+    automaticHolds.current++;
+    let released=false;
+    return ()=>{if(!released){released=true;automaticHolds.current--;}};
+  };
 
   useEffect(()=>{
     connectionsRef.current=connections;
@@ -353,7 +364,8 @@ export function CalendarSyncProvider({
       if(current.some(connection=>!canAttempt(connection.id)))return;
       const startedVersions=new Map(current.map(connection=>[connection.id,completionVersion.current[connection.id]??0]));
       try{
-        const response=await fetch("/api/calendars/sync-all",{method:"POST",...syncAllRequestInit({syncAllRunId:runId})});
+        const init=syncAllRequestInit({syncAllRunId:runId});
+        const response=await fetch("/api/calendars/sync-all",{method:"POST",headers:{...init.headers,'x-kairos-calendar-invocations':'separate'}});
         const body=await readJson(response);
         if(!response.ok){
           for(const connection of current){
@@ -365,28 +377,44 @@ export function CalendarSyncProvider({
           return;
         }
 
-        if(Array.isArray(body.results)){
+        const showResult=(row:Record<string,unknown>,connection:CalendarConnection,resultResponse?:Response)=>{
+            const status=resultResponse&&!resultResponse.ok?'error':resultStatus(row.status);
+            const recovery=status==="success"?null:recoveryFromResponse(row,resultResponse,connection.id);
+            if(recovery?.waitForCompletion&&(completionVersion.current[connection.id]??0)!==startedVersions.get(connection.id))return;
+            if(!resultResponse||resultResponse.ok)applySyncResult(row);
+            if(row.errorCode==="SYNC_RECOVERY_REQUIRED"||row.code==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
+            setLocal(connection.id,{
+              ...(status!=='success'?{operation:'sync-all' as const}:{}),recovery,
+              phase:status==="success"?"success":"error",
+              message:status==="success"?`${connection.label} synchronized.`:status==="partial"
+                ?recovery?.message??`${connection.label} synchronized with warnings.`
+                :`${connection.label} could not be synchronized. ${recovery?.message??"Retry later; saved data is retained."}`,
+            });
+        };
+        if('invocations' in body){
+          const plan=calendarInvocationsSchema.safeParse(body);
+          if(!plan.success||plan.data.invocations.some(i=>!current.some(c=>c.id===i.connectionId)))throw new Error('Invalid calendar plan.');
+          for(const invocation of plan.data.invocations){
+            const connection=current.find(c=>c.id===invocation.connectionId)!;
+            try{
+              const resultResponse=await fetch(`/api/calendars/${encodeURIComponent(connection.id)}/sync`,{
+                method:'POST',headers:{'x-kairos-calendar-run':invocation.runId},
+              });
+              const row=await readJson(resultResponse);
+              if(resultResponse.ok&&(row.connectionId!==connection.id||!resultStatus(row.status)))throw new Error('Invalid calendar result.');
+              showResult(row,connection,resultResponse);
+            }catch{
+              setLocal(connection.id,{operation:'sync-all',phase:'error',message:`${connection.label} could not be synchronized. Retry later; saved data is retained.`,recovery:getRecoveryNotice('SERVICE_UNAVAILABLE',{key:connection.id})});
+            }
+          }
+        }else if(Array.isArray(body.results)){
           for(const result of body.results){
             if(!result||typeof result!=="object"||Array.isArray(result))continue;
             const row=result as Record<string,unknown>;
             if(typeof row.connectionId!=="string")continue;
             const connection=current.find(item=>item.id===row.connectionId);
             if(!connection)continue;
-            const status=resultStatus(row.status);
-            const recovery=status==="success"?null:recoveryFromResponse(row,undefined,connection.id);
-            if(recovery?.waitForCompletion&&(completionVersion.current[connection.id]??0)!==startedVersions.get(connection.id))continue;
-            applySyncResult(row);
-            if(row.errorCode==="SYNC_RECOVERY_REQUIRED")blockedUntil.current[connection.id]=Infinity;
-            setLocal(connection.id,{
-              ...(status!=='success'?{operation:'sync-all' as const}:{}),
-              recovery,
-              phase:status==="success"?"success":"error",
-              message:status==="success"
-                ?`${connection.label} synchronized.`
-                :status==="partial"
-                  ?recovery?.message??`${connection.label} synchronized with warnings.`
-                  :`${connection.label} could not be synchronized. ${recovery?.message??"Retry later; saved data is retained."}`,
-            });
+            showResult(row,connection);
           }
         }
       }catch{
@@ -412,8 +440,20 @@ export function CalendarSyncProvider({
   },[applySyncResult,setLocal]);
 
   useEffect(()=>{
+    if(lastSourceRevision.current!==sourceRevision){
+      lastSourceRevision.current=sourceRevision;
+      const next=connectionsRef.current.map(connection=>{
+        const fresh=initialConnections.find(c=>c.id===connection.id);
+        return fresh?.sourceSyncAt?{...connection,sourceSyncAt:fresh.sourceSyncAt}:connection;
+      });
+      connectionsRef.current=next;setConnections(next);
+      // One new source revision can trigger a pass. Visibility changes alone
+      // cannot reset the failed-attempt pacing for that same revision.
+      automaticRetryAt.current=0;
+    }
     const checkStale=()=>{
       if(document.visibilityState!=="visible")return;
+      if(automaticHolds.current>0)return;
       if(Date.now()<automaticRetryAt.current)return;
       if(!connectionsRef.current.some(connection=>isConnectionStale(connection))){
         return;
@@ -427,7 +467,7 @@ export function CalendarSyncProvider({
     checkStale();
     document.addEventListener("visibilitychange",checkStale);
     return ()=>document.removeEventListener("visibilitychange",checkStale);
-  },[connections.length,syncAll]);
+  },[connections.length,sourceRevision,initialConnections,syncAll]);
 
   async function removeEvents(id:string){
     const connection=connections.find(item=>item.id===id);
@@ -493,6 +533,7 @@ export function CalendarSyncProvider({
     connectIcloud,
     syncConnection,
     syncAll,
+    holdAutomaticSync,
     removeEvents,
     disconnect,
   }}>{children}</Context.Provider>;

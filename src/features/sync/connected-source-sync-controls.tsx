@@ -91,6 +91,7 @@ export function ConnectedSourceSyncControls({
     setRunning(true);
     setCanvasError("");
     setStepErrors({});
+    const releaseCalendarHold=calendars.holdAutomaticSync?.();
 
     try{
       let admitted:SyncAllAdmission;
@@ -138,6 +139,7 @@ export function ConnectedSourceSyncControls({
       if(steps.includes('calendars'))await runStep('calendars',()=>calendars.syncAll(runId));
       router.refresh();
     }finally{
+      releaseCalendarHold?.();
       setRunning(false);
     }
   }

@@ -1,6 +1,6 @@
 # Calendar capacity decision — October 21, 2026 UTC
 
-Status: measurements complete; paid-plan decision and hosted recovery pending.
+Status: the user selected a Free-plan solution. Separate per-destination invocations are implemented and under verification; hosted recovery remains pending. The paid-plan proposal below is retained as the initial alternative, superseded by [the Free-plan design](free-calendar-invocations-2026-10-21.md).
 
 ## Findings
 

@@ -5,6 +5,7 @@ import type {CalendarConnection,CalendarProvider,CalendarSyncStatus} from "@/lib
 import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
 
 type Row={
+  source_sync_at?:string|null;
   id:string;
   provider:CalendarProvider;
   label:string;
@@ -30,12 +31,17 @@ const map=(row:Row):CalendarConnection=>({
   lastSyncCompletedAt:row.last_sync_completed_at,
   lastSyncStatus:row.last_sync_status,
   lastErrorCode:row.last_error_code,
+  ...(row.source_sync_at?{sourceSyncAt:row.source_sync_at}:{}),
 });
 
 export class D1CalendarConnectionRepository{
   private readonly select=`
     SELECT id,provider,label,account_label,remote_calendar_id,remote_calendar_name,enabled,
-      last_sync_started_at,last_sync_completed_at,last_sync_status,last_error_code
+      last_sync_started_at,last_sync_completed_at,last_sync_status,last_error_code,
+      (SELECT MAX(at) FROM (
+        SELECT last_sync_completed_at AS at FROM source_connections WHERE user_id=calendar_connections.user_id
+        UNION ALL SELECT last_successful_at AS at FROM submission_status_sync WHERE user_id=calendar_connections.user_id
+      )) AS source_sync_at
     FROM calendar_connections
   `;
 
