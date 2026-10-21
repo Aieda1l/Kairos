@@ -4,6 +4,7 @@ import {z} from "zod";
 import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {calendarTransportError} from '@/lib/calendar/transport-error';
 import {createOperationContext,getOperationContext} from "@/lib/operations/context";
 import {emitOperationEvent} from "@/lib/operations/events";
 
@@ -117,11 +118,8 @@ export class MicrosoftCalendarClient{
           ...(init.headers??{}),
         },
       });
-    }catch{
-      throw new CalendarSyncError(
-        "CALENDAR_NETWORK_ERROR",
-        "Microsoft Calendar could not be reached.",
-      );
+    }catch(error){
+      throw calendarTransportError(error,'Microsoft Calendar could not be reached.');
     }
 
     if(options.allowNotFound&&response.status===404)return null;

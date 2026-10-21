@@ -14,6 +14,13 @@ import {reconcileCalendarConnection,reconcileAllCalendars} from "@/lib/calendar/
 import {reconcileCalendarsAfterSourceWrite} from "@/lib/calendar/post-source-sync";
 import {connectOAuthCalendar} from "@/lib/calendar/connection-service";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {registerFencedCalendarAdapter} from "@/lib/calendar/adapter";
+import {GoogleCalendarClient} from "@/lib/calendar/google/client";
+import {GoogleCalendarAdapter} from "@/lib/calendar/google/adapter";
+import {MicrosoftCalendarClient} from "@/lib/calendar/microsoft/client";
+import {MicrosoftCalendarAdapter} from "@/lib/calendar/microsoft/adapter";
+import {CalDavClient} from "@/lib/calendar/caldav/client";
+import {CalDavCalendarAdapter} from "@/lib/calendar/caldav/adapter";
 import type {CalendarDestinationAdapter} from "@/lib/calendar/adapter";
 import {registerOAuthRequest} from "@/lib/calendar/oauth-registry";
 import {prepareOwned} from "@/lib/db/d1/owned-mutation";
@@ -28,12 +35,12 @@ const opened:ReturnType<typeof openD1TestDatabase>[]=[];
 const scope={userId:"synthetic-owner"};
 const keyring={activeKeyId:"test",keys:{test:new Uint8Array(32).fill(9)}};
 function open(){const test=openD1TestDatabase();installProviderRuntime(test.db);opened.push(test);test.sqlite.exec("INSERT INTO users(id) VALUES ('synthetic-owner'),('synthetic-other')");return test;}
-async function seedCalendar(test:ReturnType<typeof open>,count=6,provider:"google"|"microsoft"="google"){
+async function seedCalendar(test:ReturnType<typeof open>,count=6,provider:"google"|"microsoft"|"caldav"="google"){
   const source=await new D1SourceConnectionRepository(test.db,scope).upsertCanvas("Synthetic");
   await new D1AssignmentRepository(test.db,scope).upsertMany(source.id,Array.from({length:count},(_,i)=>({source:"canvas" as const,externalId:`synthetic-${i}`,courseId:null,courseName:"Synthetic",title:"Synthetic",releaseAt:null,dueAt:"2026-11-01T00:00:00.000Z",lateDueAt:null,status:"pending" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null})),new Date().toISOString());
   const connections=new D1CalendarConnectionRepository(test.db,scope);
   const connection=await connections.create({provider,label:"Synthetic"});
-  return connections.updateRemoteCalendar(connection.id,"synthetic-calendar","Synthetic");
+  return connections.updateRemoteCalendar(connection.id,provider==='caldav'?'https://p12-caldav.icloud.com/synthetic/calendars/kairos/':"synthetic-calendar","Synthetic");
 }
 function adapter(overrides:Partial<CalendarDestinationAdapter>={}):CalendarDestinationAdapter{return {provider:"google",testConnection:async()=>{},ensureCalendar:async()=>({remoteCalendarId:"synthetic-calendar",name:"Synthetic"}),getEvent:async()=>null,createEvent:async()=>({remoteEventId:"synthetic-event",etag:null}),updateEvent:async()=>({remoteEventId:"synthetic-event",etag:null}),deleteEvent:async()=>{},...overrides};}
 async function hostedCallback(test:ReturnType<typeof open>,provider:"google"|"microsoft",db=test.db,runtimeKeyring=keyring){
@@ -409,6 +416,57 @@ describe("ownership SQL and settled work",()=>{
     expect(calls).toBe(6);
     expect(test.sqlite.prepare("SELECT state FROM operation_locks").get()).toEqual({state:"idle"});
   });
+  it.each((['google','microsoft','caldav'] as const).flatMap(provider=>(['blocked-before-transport','issued-write-fails'] as const).map(mode=>({provider,mode}))))('preserves the distinction between $provider rate cancellation and ambiguous transport: $mode',async({provider,mode})=>{
+    const test=open(),connection=await seedCalendar(test,3,provider);
+    const barrier=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>{resolve=done;});return {promise,resolve};};
+    const thirdReady=barrier(),resume=barrier();let gating=false,issuingWrite=false,checks=0,writes=0,rateReached=false;
+    const wrap=(statement:ReturnType<D1DatabaseLike['prepare']>):ReturnType<D1DatabaseLike['prepare']>=>({
+      bind:(...values)=>wrap(statement.bind(...values)),run:()=>statement.run(),all:()=>statement.all(),first:async<T>()=>{
+        const writeCheck=gating&&issuingWrite,result=await statement.first<T>();
+        if(writeCheck&&++checks===3&&mode==='blocked-before-transport'){thirdReady.resolve();await resume.promise;}
+        return result;
+      },
+    });
+    const db:D1DatabaseLike={batch:test.db.batch.bind(test.db),exec:test.db.exec.bind(test.db),prepare:sql=>{
+      const statement=test.db.prepare(sql);return sql.startsWith('SELECT (SELECT enabled')?wrap(statement):statement;
+    }};
+    installProviderRuntime(db);
+    const transport=vi.fn<typeof fetch>(async(_url,init)=>{
+      if(['GET','PROPFIND'].includes(init?.method??'GET')){
+        gating=true;
+        if(provider==='microsoft'&&new URL(String(_url)).pathname.endsWith('/events'))return Response.json({value:[]});
+        return provider==='caldav'?new Response('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/synthetic/calendars/kairos/</d:href><d:propstat><d:prop><d:displayname>Kairos</d:displayname><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>',{status:207}):Response.json({id:'synthetic-calendar',name:'Kairos',summary:'Kairos',canEdit:true});
+      }
+      writes++;
+      if(writes===1)return Response.json({id:'synthetic-first-event'},{headers:{etag:'synthetic-etag'}});
+      if(writes===2){
+        await thirdReady.promise;
+        const response=new Response(null,{status:429,headers:{'Retry-After':'5'}}),get=response.headers.get.bind(response.headers);
+        vi.spyOn(response.headers,'get').mockImplementation(name=>{if(name.toLowerCase()==='retry-after')rateReached=true;return get(name);});
+        return response;
+      }
+      thirdReady.resolve();await resume.promise;throw new Error('synthetic ambiguous network failure');
+    });
+    const guarded=ownedFetch(transport),fetchImpl:typeof fetch=(input,init)=>{
+      issuingWrite=!['GET','HEAD','PROPFIND','REPORT','OPTIONS'].includes(init?.method??'GET');
+      try{return guarded(input,init);}finally{issuingWrite=false;}
+    };
+    const factory=async()=>registerFencedCalendarAdapter(provider==='google'
+      ?new GoogleCalendarAdapter(connection,new GoogleCalendarClient('synthetic-access',fetchImpl))
+      :provider==='microsoft'?new MicrosoftCalendarAdapter(connection,new MicrosoftCalendarClient('synthetic-access',fetchImpl))
+        :new CalDavCalendarAdapter(connection,new CalDavClient('synthetic@example.invalid','synthetic-password',fetchImpl)));
+    const pending=reconcileCalendarConnection(db,scope,connection.id,{adapterFactory:factory,concurrency:2}).then(result=>({result}),error=>({error}));
+    try{await vi.waitFor(()=>expect(rateReached).toBe(true));}finally{resume.resolve();}
+    const outcome=await pending;
+    if(mode==='blocked-before-transport'){
+      expect(outcome).toMatchObject({result:{status:'partial',createdCount:1,failedCount:2}});expect(writes).toBe(2);
+      expect(test.sqlite.prepare('SELECT DISTINCT last_error_code FROM calendar_event_links WHERE last_error_code IS NOT NULL').all()).toEqual([{last_error_code:'CALENDAR_RATE_LIMITED'}]);
+    }else{expect(outcome).toMatchObject({error:{code:'SYNC_RECOVERY_REQUIRED'}});expect(writes).toBe(3);}
+    const owner=test.sqlite.prepare("SELECT state,not_before_ms-CAST(strftime('%s','now') AS INTEGER)*1000 AS remaining FROM operation_locks").get() as {state:string;remaining:number};
+    expect(owner.state).toBe(mode==='blocked-before-transport'?'idle':'uncertain');expect(owner.remaining).toBeGreaterThan(0);expect(owner.remaining).toBeLessThanOrEqual(5000);
+    expect(test.sqlite.prepare('SELECT COUNT(*) AS n FROM calendar_event_links WHERE remote_event_id IS NOT NULL').get()).toEqual({n:1});
+  });
+
   it("stops additional remote calls after throttling, honors a short Retry-After, and waits for other workers",async()=>{
     const test=open();const connection=await seedCalendar(test);
     let release!:()=>void;let calls=0;

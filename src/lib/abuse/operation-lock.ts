@@ -1,5 +1,5 @@
 import "server-only";
-import {withCalendarOperationLifetime} from '@/lib/platform/calendar-operation-lifetime';
+import {withProviderOperationLifetime} from '@/lib/platform/provider-operation-lifetime';
 import {AsyncLocalStorage} from "node:async_hooks";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -28,6 +28,14 @@ export function operationControlVersion(lock:OperationLock):number|undefined{ret
 type Owner={db:D1DatabaseLike;lock:OperationLock;held:boolean;uncertain:boolean;stopped:boolean;cooldown:number;claimed:boolean;executing:boolean;pending:Set<Promise<unknown>>;calendarWriteStarted:boolean;admissionFailed:boolean;authorizationChanged:boolean};
 const owners=new AsyncLocalStorage<Owner>();
 const activeOwners=new WeakMap<OperationLock,Owner>();
+
+function stoppedTransportError(owner:Owner):OperationOwnershipError|RateLimitedError{
+  // No transport has started at these checks. Keep a known throttle distinct
+  // from an uncertain write; mixed throttle/uncertainty still requires recovery.
+  return !owner.uncertain&&owner.cooldown
+    ?new RateLimitedError(owner.cooldown)
+    :new OperationOwnershipError('SYNC_RECOVERY_REQUIRED');
+}
 
 function bindLock(db:D1DatabaseLike,lock:OperationLock):OperationLock{databases.set(lock,db);return lock;}
 export function acquireOperation(runtime:AbuseRuntime,scope:UserScope,key:OperationKey,options:OperationOptions={}):Promise<OperationLock>{
@@ -139,7 +147,7 @@ export async function withOwnedOperation<T>(db:D1DatabaseLike,scope:UserScope,ke
     if(options.expectedControlVersion!==undefined&&operationControlVersion(currentOperation(db)!)!==options.expectedControlVersion)throw new OperationControlVersionChangedError();
     return work();
   }
-  return withCalendarOperationLifetime(key,async()=>{
+  return withProviderOperationLifetime(key,async()=>{
     const lock=await acquireFromDatabase(db,scope,key,options);
     return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},async()=>{if(options.expectedControlVersion!==undefined)await assertOperationOwner(db,lock);return work();});
   });
@@ -169,23 +177,26 @@ export async function runWithOperationOwnership<T>(lock:OperationLock,work:()=>P
   const owner:Owner={db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false};
   // Reserve synchronously, before validation can yield to a competing entry.
   activeOwners.set(lock,owner);
-  return withCalendarOperationLifetime(lock.operationKey,()=>runOwner(owner,async()=>{await assertOperationOwner(db,lock);return work();}));
+  return withProviderOperationLifetime(lock.operationKey,()=>runOwner(owner,async()=>{await assertOperationOwner(db,lock);return work();}));
 }
 
 export async function withBridgeCompletion<T>(db:D1DatabaseLike,scope:UserScope,requestId:string,kind:string,now:Date,work:()=>Promise<T>):Promise<T>{
   const row=await (async()=>{try{return await db.prepare(`SELECT operation_key,owner_nonce,expires_at,consumed_at,admitted_at_ms,control_version FROM sync_requests WHERE user_id=? AND request_id=? AND kind=?`)
     .bind(scope.userId,requestId,kind).first<{operation_key:OperationKey|null;owner_nonce:string|null;expires_at:string;consumed_at:string|null;admitted_at_ms:number|null;control_version:number|null}>();}catch{throw new AbuseStorageUnavailableError();}})();
   if(!row?.operation_key||!row.owner_nonce||row.consumed_at||!Number.isSafeInteger(row.admitted_at_ms)||row.admitted_at_ms!<0||!Number.isSafeInteger(row.control_version)||row.control_version!<0)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
-  const lock=bindLock(db,{userId:scope.userId,operationKey:row.operation_key,ownerNonce:row.owner_nonce});
-  controlVersions.set(lock,row.control_version!);
-  if(row.expires_at<now.toISOString()){await markOperationUncertain(lock);throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");}
-  const control=await new D1AbuseControlRepository(db).get(`provider:${row.operation_key.split(":")[1] as IntegrationProvider}`);
-  if(!control.enabled)throw new AbuseStorageUnavailableError();
-  if(control.version!==row.control_version)throw new OperationControlVersionChangedError();
-  const active=await db.prepare("SELECT 1 AS active FROM operation_locks WHERE user_id=? AND operation_key=? AND owner_nonce=? AND state='running'")
-    .bind(lock.userId,lock.operationKey,lock.ownerNonce).first();
-  if(!active)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
-  return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},work,true);
+  const operationKey=row.operation_key,ownerNonce=row.owner_nonce;
+  return withProviderOperationLifetime(operationKey,async()=>{
+    const lock=bindLock(db,{userId:scope.userId,operationKey,ownerNonce});
+    controlVersions.set(lock,row.control_version!);
+    if(row.expires_at<now.toISOString()){await markOperationUncertain(lock);throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");}
+    const control=await new D1AbuseControlRepository(db).get(`provider:${operationKey.split(":")[1] as IntegrationProvider}`);
+    if(!control.enabled)throw new AbuseStorageUnavailableError();
+    if(control.version!==row.control_version)throw new OperationControlVersionChangedError();
+    const active=await db.prepare("SELECT 1 AS active FROM operation_locks WHERE user_id=? AND operation_key=? AND owner_nonce=? AND state='running'")
+      .bind(lock.userId,lock.operationKey,lock.ownerNonce).first();
+    if(!active)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+    return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},work,true);
+  });
 }
 
 /** Check before scheduling even adapters that do not use HTTP themselves. */
@@ -205,14 +216,14 @@ export function ownedFetch(fetchImpl:typeof fetch):typeof fetch{
   return (input,init)=>{
     const owner=owners.getStore();
     const perform=async()=>{
-      if(owner?.stopped)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+      if(owner?.stopped)throw stoppedTransportError(owner);
       if(owner){
         try{await assertOperationOwner(owner.db,owner.lock);}catch(error){
           if(error instanceof AbuseStorageUnavailableError)owner.admissionFailed=true;
           if(error instanceof OperationControlVersionChangedError)owner.authorizationChanged=true;
           throw error;
         }
-        if(owner.stopped)throw new OperationOwnershipError("SYNC_RECOVERY_REQUIRED");
+        if(owner.stopped)throw stoppedTransportError(owner);
       }
       const method=(init?.method??(input instanceof Request?input.method:"GET")).toUpperCase();
       const write=owner?.lock.operationKey.startsWith("calendar:")&&!['GET','HEAD','PROPFIND','REPORT','OPTIONS'].includes(method);
