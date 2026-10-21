@@ -1,6 +1,6 @@
 # Hosted acceptance continuation — October 21
 
-Status: in progress. Live observations in this record concern source `6db74878a0ab4db6e04769bc0733b1be0cc91907`, Worker `47580d73-00bc-457b-b74c-7c4eba79cf04`, unless a later deployment is explicitly recorded. Local repair tests do not establish a deployed fix.
+Status: in progress. Initial observations concern source `6db74878a0ab4db6e04769bc0733b1be0cc91907`, Worker `47580d73-00bc-457b-b74c-7c4eba79cf04`. The subsequent verified deployment and source recovery are recorded below. iCloud and overall acceptance remain incomplete.
 
 ## Completed observations
 
@@ -35,6 +35,18 @@ The exact cleanup selector dry run, batch size 100, selected 100 rate events and
 
 ## Remaining sequence
 
-Verify and release the provider settlement/throttle repairs, then perform separately justified exact-owner recovery. Complete iCloud reconciliation and repeat/update/removal behavior, and the disposable-account onboarding, authenticated isolation, revocation, disconnect and deletion journeys while preserving the main account. Representative Free CPU capacity, intended maintenance activation/notification, authenticated rollback and final readiness remain open. Stored production logs stay disabled under the completed privacy assessment.
+The provider settlement/throttle repairs are now deployed and the stopped source owners recovered, as recorded below. Complete iCloud reconciliation and repeat/update/removal behavior, and the disposable-account onboarding, authenticated isolation, revocation, disconnect and deletion journeys while preserving the main account. Representative Free CPU capacity, intended maintenance activation/notification, authenticated rollback and final readiness remain open. Stored production logs stay disabled under the completed privacy assessment.
 
 Private metadata-only receipts are retained under ignored `artifacts/m7-hosted-acceptance/`; they contain no credentials, provider response bodies or coursework. Historical incident records are preserved rather than overwritten.
+
+## Deployment and source recovery
+
+[PR #32](https://github.com/Aieda1l/Kairos/pull/32) merged as `342773cac2936eceb83ea7a2d526c8e99374a724`. Its [exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39693176390) passed 1,619 tests and 63 browser cases. A clean archive passed all 12 compiled-provider fixtures and the expanded native lifetime probe. Worker `cd45739a-7356-4634-b4d3-3ae20a83d659` was staged, checked and promoted to 100% at 23:32 UTC, deployment `7cb5c590-2c49-4307-a27d-9361074e3b03`. Configuration, seven migrations, required binding names, log-persistence-off, preview isolation, canonical health, 11 public smokes and served-client hashes passed. The [post-release health run](https://github.com/Aieda1l/Kairos/actions/runs/39694062760) passed. There was no schema, encryption-key or billing change.
+
+The first source recovery attempt stopped before mutation because the operator had disconnected iCloud while investigating. Live inventory had changed from three calendars/47 mappings to two calendars/34 mappings. The revised read-only plan checked the same account, exact unchanged source-owner and control fingerprints, all 78 assignments/statuses and the empty second account. Only the intended iCloud connection, credential and 13 mappings were absent. The original plan is retained.
+
+At 23:34 UTC, exact-owner recovery paused each source control, advanced its version, CASed the confirmed stopped stale owner to idle and reopened the provider after verifying the unchanged nonce/cooldown. Canvas, Ed and Gradescope controls are enabled at versions 4, 2 and 8. Protected row counts, including 78 assignments, 34 OAuth calendar mappings and all 182 bridge requests, remained unchanged across recovery. Twelve offline SQL cases also verified rejection of wrong owners/versions, fresh work, other-account active work and changed cooldowns. No remote provider writes occurred. A fresh real source operation is still required to confirm the repaired lifetime behavior in production.
+
+iCloud's durable owner is still uncertain after its intentional disconnect. The operator has confirmed all iCloud work stopped. The initial private checker expected the now-removed connection and failed before contacting Apple. The updated checker uses bounded read-only discovery and inventory, with credentials entered only into a local prompt. Six synthetic cases pass, including disconnected discovery, duplicate calendar rejection, missing events and malicious/escaping XML paths. It saves only counts and fingerprints, and does not delete events, reconstruct mappings or recover ownership. The real Apple inventory remains pending; neither reconnection nor duplicate cleanup is claimed successful.
+
+Read-only GitHub policy inspection confirms maintenance is disabled. The production environment permits main only and has reviewer protection, but `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_D1_DATABASE_ID` secret names are absent in both repository and production-environment scopes. Maintenance credential delegation, dry-run execution on the actual workflow, activation and notification remain separate work. No credential was created or supplied to CI.
