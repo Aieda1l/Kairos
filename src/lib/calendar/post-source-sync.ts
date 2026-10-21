@@ -1,5 +1,4 @@
 import "server-only";
-import {withAutomaticCalendarReconciliation} from '@/lib/abuse/sync-all';
 import type {LegacyDatabase} from "@/lib/db/legacy-types";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
@@ -46,16 +45,7 @@ export async function reconcileCalendarsAfterSourceWrite(
 
   const options=arg4!;
   if(options.defer||!options.changed)return;
-  try{
-    await withAutomaticCalendarReconciliation(db as D1DatabaseLike,arg2,()=>reconcileAllCalendars(db as D1DatabaseLike,arg2,{
-      adapterFactory:options.adapterFactory??createCalendarAdapterFactory(
-        db as D1DatabaseLike,
-        arg2,
-        arg3!,
-      ),
-    }));
-  }catch{
-    // Source writes remain authoritative. Reconciliation records provider
-    // health when possible and must never turn a successful pull into failure.
-  }
+  // Hosted source requests never fan out into calendar provider work. Dashboard
+  // reads expose the latest source completion; the open browser reconciles each
+  // destination through its own admitted invocation after the source refresh.
 }

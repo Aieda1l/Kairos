@@ -10,17 +10,44 @@ const defaultName=script.slice(exportAt).match(/\b([A-Za-z_$][A-Za-z0-9_$]*)\s+a
 if(exportAt<0||!defaultName)throw new Error('COMPILED_PROVIDER_EXPORT_INVALID');
 // Instrument only the isolated probe. The production artifact is unchanged.
 const counter=`const probeFetch=${defaultName}.fetch;${defaultName}.fetch=async(request,env,ctx)=>{
- const db=env.DB,prepare=db.prepare,batch=db.batch;let count=0;
- const tick=(n=1)=>{count+=n;if(count>50)throw new Error('Synthetic D1 statement budget exceeded');};
+ const db=env.DB,prepare=db.prepare,batch=db.batch,originalFetch=globalThis.fetch;let count=0,external=0;globalThis.fetch=(...args)=>{if(++external>50)throw new Error("Synthetic external request budget exceeded");return originalFetch(...args);};
+ const tick=(n=1)=>{count+=n;if(count>1000)throw new Error('Synthetic D1 statement budget exceeded');};
  const wrap=statement=>{const bind=statement.bind.bind(statement);statement.bind=(...args)=>wrap(bind(...args));
   for(const method of ['first','all','run']){const call=statement[method].bind(statement);statement[method]=(...args)=>{tick();return call(...args);};}return statement;};
  db.prepare=sql=>wrap(prepare.call(db,sql));db.batch=statements=>{tick(statements.length);return batch.call(db,statements);};
- try{const response=await probeFetch.call(${defaultName},request,env,ctx);const headers=new Headers(response.headers);headers.set('x-probe-d1-statements',String(count));return new Response(response.body,{status:response.status,headers});}
- finally{db.prepare=prepare;db.batch=batch;}
+ try{const response=await probeFetch.call(${defaultName},request,env,ctx);const headers=new Headers(response.headers);headers.set('x-probe-d1-statements',String(count));headers.set('x-probe-external-requests',String(external));return new Response(response.body,{status:response.status,headers});}
+ finally{db.prepare=prepare;db.batch=batch;globalThis.fetch=originalFetch;}
 };`;
 script=script.slice(0,exportAt)+'\n'+counter+script.slice(exportAt);
-const fixture=`let calendarWrites=0;export default {async fetch(request){
+const fixture=`let calendarWrites=0,sequence=0,capacityActive=false;const events=new Map(),transactions=new Map();export default {async fetch(request){
  const url=new URL(request.url);
+ if(url.pathname==='/__probe/reset'){
+  capacityActive=true;events.clear();transactions.clear();calendarWrites=0;
+  for(const row of await request.json())events.set(row.provider+':'+row.event.id,row.event);
+  return Response.json({ok:true});
+ }
+ const provider=url.hostname==='graph.microsoft.com'?'microsoft':url.hostname==='www.googleapis.com'?'google':null;
+ if(capacityActive&&provider&&url.pathname.includes('/events')){
+  const collection=url.pathname.endsWith('/events'),id=decodeURIComponent(url.pathname.split('/').at(-1)),key=provider+':'+id;
+  if(request.method==='GET'){
+   if(!collection)return events.has(key)?Response.json(events.get(key)):new Response(null,{status:404});
+   const query=url.searchParams.get('$filter')??'',assignment=query.match(/value eq '([^']+)'/)?.[1];
+   const all=[...events.entries()].filter(([k])=>k.startsWith(provider+':')).map(([,e])=>e);
+   return Response.json({value:assignment?all.filter(e=>e.singleValueExtendedProperties?.some(p=>p.value===assignment)):all});
+  }
+  if(request.method==='DELETE'){calendarWrites++;events.delete(key);return new Response(null,{status:204});}
+  const body=await request.json();calendarWrites++;
+  if(request.method==='POST'){
+   const eventId=body.id??transactions.get(body.transactionId)??'created-'+(++sequence);
+   if(body.transactionId)transactions.set(body.transactionId,eventId);
+   const event={...body,id:eventId};events.set(provider+':'+eventId,event);return Response.json(event);
+  }
+  if(request.method==='PATCH'){
+   if(!events.has(key))return new Response(null,{status:404});
+   const event={...events.get(key),...body,id};events.set(key,event);return Response.json(event);
+  }
+ }
+
  if(url.hostname==='login.microsoftonline.com'&&url.pathname.endsWith('/token'))return Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600,token_type:'Bearer'});
  if(url.hostname==='graph.microsoft.com'){
   if(request.method==='GET'&&!url.pathname.includes('/events'))return Response.json({id:'synthetic-existing-microsoft',name:'Kairos',canEdit:true});
@@ -150,11 +177,61 @@ try{
  results.push({mode:'google11-recovered-events',status:googleSync.status,statements:Number(googleSync.headers.get('x-probe-d1-statements')),owner:googleSyncOwner?.state,result:googleSyncResult,
   ok:googleSync.status===200&&googleSyncResult.updatedCount===11&&googleSyncResult.createdCount===0&&googleSyncOwner?.state==='idle'&&afterEvents.calendarWrites===11&&Number(googleSync.headers.get('x-probe-d1-statements'))<=50});
 
+
+ {
+ const startsAt='2026-10-22T23:59:00.000Z',endsAt='2026-10-23T00:14:00.000Z';
+ const property='String {2f7d7a8c-8936-4e44-a436-9d7878afc0b1} Name KairosAssignmentId';
+ await db.prepare('DELETE FROM assignments WHERE user_id=?').bind(user).run();
+ for(let i=0;i<66;i++)await db.prepare("INSERT INTO assignments(user_id,id,source_connection_id,source_kind,external_id,course_name,title,due_at,status,source_status_text,first_seen_at,last_seen_at,created_at,updated_at) VALUES (?,?,'synthetic-gs','gradescope',?,'Synthetic',?,?,?, ?,?,?,?,?)")
+  .bind(user,'synthetic-a-'+i,String(i),'Assignment '+i,startsAt,i<16?'pending':'submitted',i<16?'Not Submitted':'Submitted',at,at,at,at).run();
+ await db.prepare("INSERT INTO app_settings(user_id,key,value,updated_at) VALUES (?,'calendar_hide_submitted','1',?) ON CONFLICT(user_id,key) DO UPDATE SET value='1'").bind(user,at).run();
+ async function reset(){
+  await db.prepare('DELETE FROM calendar_event_links WHERE user_id=?').bind(user).run();
+  await db.prepare("UPDATE calendar_connections SET enabled=1 WHERE user_id=?").bind(user).run();
+  const seeds=[];
+  for(const [provider,eligible,hidden] of [['google',3,8],['microsoft',10,7]]){
+   for(const i of [...Array.from({length:eligible},(_,i)=>i),...Array.from({length:hidden},(_,i)=>16+i)]){
+    const id='synthetic-a-'+i,eventId=provider+'-event-'+i;
+    const projection={assignmentId:id,title:'[Synthetic] Assignment '+i,description:['Course: Synthetic','Source: Gradescope','Status: Not Submitted','Due: '+startsAt].join('\n'),startsAt,endsAt,sourceUrl:null};
+    const hash=provider==='microsoft'&&i<16?createHash('sha256').update(JSON.stringify(projection)).digest('hex'):null;
+    await db.prepare('INSERT INTO calendar_event_links(user_id,id,calendar_connection_id,assignment_id,sync_key,remote_event_id,content_hash,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+     .bind(user,provider+'-link-'+i,'synthetic-'+provider,id,provider+'-key-'+i,eventId,hash,at,at).run();
+    seeds.push({provider,event:{id:eventId,...(provider==='microsoft'?{singleValueExtendedProperties:[{id:property,value:id}]}:{})}});
+   }
+  }
+  await (await mf.getWorker('fixture')).fetch('http://fixture.invalid/__probe/reset',{method:'POST',body:JSON.stringify(seeds)});
+ }
+
+ const calls=[];
+ async function splitPass(){
+  const planned=await worker.fetch(origin+'/api/calendars/sync-all',{method:'POST',redirect:'manual',headers:{...headers,'x-kairos-calendar-invocations':'separate'}});
+  const plan=await planned.json();
+  if(planned.status!==200||plan.invocations?.length!==2||Number(planned.headers.get('x-probe-external-requests'))!==0)throw new Error('SPLIT_PREPARATION_FAILED');
+  const pass=[];
+  for(const ticket of plan.invocations){
+   const response=await worker.fetch(origin+'/api/calendars/'+ticket.connectionId+'/sync',{method:'POST',redirect:'manual',headers:{...headers,'x-kairos-calendar-run':ticket.runId}});
+   const result=await response.json(),externalRequests=Number(response.headers.get('x-probe-external-requests')),statements=Number(response.headers.get('x-probe-d1-statements'));
+   const owner=await db.prepare("SELECT state FROM operation_locks WHERE user_id=? AND operation_key=?").bind(user,'calendar:'+ticket.connectionId.replace('synthetic-','')).first();
+   const replayed=await worker.fetch(origin+'/api/calendars/'+ticket.connectionId+'/sync',{method:'POST',redirect:'manual',headers:{...headers,'x-kairos-calendar-run':ticket.runId}});
+   pass.push({provider:ticket.connectionId.replace('synthetic-',''),status:response.status,externalRequests,statements,result,ok:response.status===200&&result.status==='success'&&externalRequests<=50&&statements<1000&&owner.state==='idle'&&replayed.status===400});
+  }
+  calls.push(pass);return pass;
+ }
+ await reset();
+ const oldBatch=await worker.fetch(origin+'/api/calendars/sync-all',{method:'POST',redirect:'manual',headers});
+ const initial=await splitPass(),repeat=await splitPass();
+ const google=initial.find(r=>r.provider==='google').result,microsoft=initial.find(r=>r.provider==='microsoft').result;
+ results.push({mode:'free-plan-split-recovery',calls,ok:oldBatch.status===409&&initial.length===2&&calls.flat().every(r=>r.ok)
+  &&google.createdCount===13&&google.updatedCount===3&&google.deletedCount===8
+  &&microsoft.createdCount===6&&microsoft.deletedCount===7&&microsoft.unchangedCount===10
+  &&repeat.every(r=>r.result.unchangedCount===16&&r.result.createdCount===0&&r.result.deletedCount===0)});
+ }
+
  await db.prepare("UPDATE sessions SET expires='2000-01-01T00:00:00.000Z'").run();
  const expired=await worker.fetch(origin+'/sign-in?returnTo=/sources',{redirect:'manual',headers:{cookie:'__Secure-authjs.session-token=synthetic-live-session'}});
  const markup=await expired.text();
  results.push({mode:'expired-session-shared-widget',status:expired.status,ok:expired.status===200&&(markup.match(/<form[ >]/g)??[]).length===1&&markup.includes('Continue with Google')&&markup.includes('Continue with Microsoft')});
  const summary={code:results.every(r=>r.ok)?'COMPILED_PROVIDER_WORK_PASSED':'COMPILED_PROVIDER_WORK_FAILED',externalRequests:0,results};
  fs.mkdirSync('artifacts/native-provider-completion',{recursive:true});fs.writeFileSync('artifacts/native-provider-completion/summary.json',JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
- if(results.length!==11||results.some(r=>!r.ok))process.exitCode=1;
+ if(results.length!==12||results.some(r=>!r.ok))process.exitCode=1;
 }catch{console.error('COMPILED_PROVIDER_WORK_FAILED');process.exitCode=1;}finally{await mf.dispose();}

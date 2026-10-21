@@ -2,6 +2,7 @@
 import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {afterEach,beforeEach,expect,it,vi} from "vitest";
+import {useRef} from 'react';
 import type {CalendarConnection} from "@/lib/calendar/types";
 import {CalendarSyncProvider,useCalendarSync} from "@/features/calendars/calendar-provider";
 import {GoogleCalendarCard} from '@/features/sources/google-calendar-card';
@@ -31,6 +32,70 @@ function AdmittedHarness(){
     <button onClick={()=>void calendar.syncAll('11111111-1111-4111-8111-111111111111')}>Admitted batch</button>
   </>;
 }
+function SplitHarness(){
+  const calendar=useCalendarSync();
+  return <>
+    <button onClick={()=>void calendar.syncAll()}>Split sync</button>
+    <span data-testid="split-google">{calendar.messageFor(google.id)}</span>
+    <span data-testid="split-microsoft">{calendar.messageFor(microsoft.id)}</span>
+  </>;
+}
+function HeldHarness(){
+  const calendar=useCalendarSync(),release=useRef<(()=>void)|null>(null);
+  return <>
+    <button onClick={()=>{release.current=calendar.holdAutomaticSync();}}>Hold calendars</button>
+    <button onClick={()=>release.current?.()}>Release calendars</button>
+    <button onClick={()=>void calendar.syncAll()}>Final calendar pass</button>
+  </>;
+}
+it('holds automatic source-triggered work until the explicit final pass of Sync All',async()=>{
+  const ticket={connectionId:google.id,runId:'11111111-1111-4111-8111-111111111111'};
+  const requests=vi.fn<typeof fetch>(async input=>String(input)==='/api/calendars/sync-all'
+    ?Response.json({invocations:[ticket]}):Response.json({connectionId:google.id,status:'success',completedAt:new Date().toISOString(),errorCode:null}));
+  vi.stubGlobal('fetch',requests);
+  const fresh={...google,lastSyncCompletedAt:new Date(Date.now()-60000).toISOString(),lastSyncStatus:'success' as const};
+  const view=render(<CalendarSyncProvider initialConnections={[fresh]}><HeldHarness/></CalendarSyncProvider>);
+  const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Hold calendars'}));
+  view.rerender(<CalendarSyncProvider initialConnections={[{...fresh,sourceSyncAt:new Date(Date.now()-1000).toISOString()}]}><HeldHarness/></CalendarSyncProvider>);
+  act(()=>document.dispatchEvent(new Event('visibilitychange')));
+  expect(requests).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button',{name:'Final calendar pass'}));
+  await waitFor(()=>expect(requests).toHaveBeenCalledTimes(2));
+  await user.click(screen.getByRole('button',{name:'Release calendars'}));
+  act(()=>document.dispatchEvent(new Event('visibilitychange')));
+  expect(requests).toHaveBeenCalledTimes(2);
+});
+it('runs destination tickets as separate requests and preserves another destination after a provider failure',async()=>{
+  const tickets=[{connectionId:google.id,runId:'11111111-1111-4111-8111-111111111111'},{connectionId:microsoft.id,runId:'22222222-2222-4222-8222-222222222222'}];
+  const requests=vi.fn<typeof fetch>(async input=>{
+    if(String(input)==='/api/calendars/sync-all')return Response.json({invocations:tickets});
+    if(String(input)===`/api/calendars/${google.id}/sync`)return Response.json({code:'SERVICE_UNAVAILABLE'},{status:503});
+    return Response.json({connectionId:microsoft.id,status:'success',completedAt:new Date().toISOString(),errorCode:null});
+  });
+  vi.stubGlobal('fetch',requests);
+  const fresh=[google,microsoft].map(c=>({...c,lastSyncCompletedAt:new Date().toISOString(),lastSyncStatus:'success' as const}));
+  render(<CalendarSyncProvider initialConnections={fresh}><SplitHarness/></CalendarSyncProvider>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Split sync'}));
+  await waitFor(()=>expect(requests).toHaveBeenCalledTimes(3));
+  expect(requests.mock.calls.slice(1)).toEqual(tickets.map(ticket=>[
+    `/api/calendars/${ticket.connectionId}/sync`,{method:'POST',headers:{'x-kairos-calendar-run':ticket.runId}},
+  ]));
+  expect(screen.getByTestId('split-google').textContent).toContain('could not be synchronized');
+  expect(screen.getByTestId('split-microsoft').textContent).toContain('synchronized.');
+});
+it('a new source revision schedules separate calendar work once while failed visibility retries stay paced',async()=>{
+  const ticket={connectionId:google.id,runId:'11111111-1111-4111-8111-111111111111'};
+  const requests=vi.fn<typeof fetch>(async input=>String(input)==='/api/calendars/sync-all'
+    ?Response.json({invocations:[ticket]}):Response.json({code:'SERVICE_UNAVAILABLE'},{status:503}));
+  vi.stubGlobal('fetch',requests);
+  const fresh={...google,lastSyncCompletedAt:new Date(Date.now()-60000).toISOString(),lastSyncStatus:'success' as const};
+  const view=render(<CalendarSyncProvider initialConnections={[fresh]}><SplitHarness/></CalendarSyncProvider>);
+  expect(requests).not.toHaveBeenCalled();
+  view.rerender(<CalendarSyncProvider initialConnections={[{...fresh,sourceSyncAt:new Date(Date.now()-1000).toISOString()}]}><SplitHarness/></CalendarSyncProvider>);
+  await waitFor(()=>expect(requests).toHaveBeenCalledTimes(2));
+  act(()=>{for(let i=0;i<6;i++)document.dispatchEvent(new Event('visibilitychange'));});
+  expect(requests).toHaveBeenCalledTimes(2);
+});
 it('an admitted final calendar pass waits for older work then starts its own claimed request',async()=>{
   let settle!:(response:Response)=>void;
   const requests=vi.fn<typeof fetch>();
@@ -45,7 +110,7 @@ it('an admitted final calendar pass waits for older work then starts its own cla
   expect(requests).toHaveBeenCalledTimes(1);
   await act(async()=>settle(Response.json({status:'success',results:[]})));
   await waitFor(()=>expect(requests).toHaveBeenCalledTimes(2));
-  expect(requests.mock.calls[1]).toEqual(['/api/calendars/sync-all',{method:'POST',headers:{'x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111'}}]);
+  expect(requests.mock.calls[1]).toEqual(['/api/calendars/sync-all',{method:'POST',headers:{'x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111','x-kairos-calendar-invocations':'separate'}}]);
 });
 
 it.each([
@@ -305,7 +370,7 @@ it("auto-syncs a stale destination once and refreshes again only after another 1
   }]}><div>child</div></CalendarSyncProvider>);
 
   await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(fetchMock).toHaveBeenCalledWith("/api/calendars/sync-all",{method:"POST"});
+  expect(fetchMock).toHaveBeenCalledWith("/api/calendars/sync-all",{method:"POST",headers:{'x-kairos-calendar-invocations':'separate'}});
 
   act(()=>document.dispatchEvent(new Event("visibilitychange")));
   await act(async()=>{await Promise.resolve();});

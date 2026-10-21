@@ -4,6 +4,7 @@ import {reconcileCalendarConnection} from "@/lib/calendar/reconcile";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {resolveCalendarApiRuntime} from "@/lib/platform/calendar-api-runtime";
+import {claimCalendarInvocation} from '@/lib/calendar/invocations';
 
 export async function POST(
   _request:Request,
@@ -33,6 +34,8 @@ export async function POST(
       message:"Calendar connection not found.",
     },{status:404});
   }
+  const runId=_request.headers.get('x-kairos-calendar-run');
+  if(runId!==null)await claimCalendarInvocation(runtime.db,runtime.scope,id,runId);
   return Response.json(await reconcileCalendarConnection(
     runtime.db,runtime.scope,id,{
       adapterFactory:createCalendarAdapterFactory(

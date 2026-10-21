@@ -55,6 +55,33 @@ beforeEach(async()=>{
 afterEach(()=>{test.close();vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 describe('server-issued Sync All admission against real SQL',()=>{
+  it('issues bounded per-destination invocations without provider work or another root admission',async()=>{
+    const calendars=new D1CalendarConnectionRepository(test.db,scope);
+    const google=await calendars.create({provider:'google',label:'Google'});
+    const microsoft=await calendars.create({provider:'microsoft',label:'Microsoft'});
+    await new D1CalendarConnectionRepository(test.db,other).create({provider:'caldav',label:'Other user'});
+    const run=await startSyncAll(runtime,scope);
+    const route=await routes['../../src/app/api/calendars/sync-all/route.ts']!();
+    const request=()=>new Request('https://synthetic.invalid/api/calendars/sync-all',{method:'POST',headers:{
+      'x-kairos-sync-all-run':run.runId,'x-kairos-calendar-invocations':'separate',
+    }});
+    const response=await route.POST(request());expect(response.status).toBe(200);
+    const body=await response.json();
+    expect(body.invocations.map((i:{connectionId:string})=>i.connectionId).sort()).toEqual([google.id,microsoft.id].sort());
+    expect(rows('abuse_rate_events')).toBe(1);
+    expect(runtime.fetchImpl).not.toHaveBeenCalled();
+    expect((await route.POST(request())).status).toBe(400);
+    const single=await import('../../src/app/api/calendars/[id]/sync/route');
+    const ticket=body.invocations.find((i:{connectionId:string})=>i.connectionId===google.id);
+    const attempt=(id:string)=>single.POST(new Request('https://synthetic.invalid/api/calendars/'+id+'/sync',{
+      method:'POST',headers:{'x-kairos-calendar-run':ticket.runId},
+    }),{params:Promise.resolve({id})});
+    expect((await attempt(microsoft.id)).status).toBe(400);
+    expect((await attempt(google.id)).status).toBe(200);
+    expect(rows('abuse_rate_events')).toBe(2);
+    expect((await attempt(google.id)).status).toBe(400);
+    expect(runtime.fetchImpl).not.toHaveBeenCalled();
+  });
   it('authenticates the root before any budget or run mutation',async()=>{
     signedOut=true;
     const route=await routes['../../src/app/api/sync-all/start/route.ts']!();
@@ -204,14 +231,14 @@ describe('server-issued Sync All admission against real SQL',()=>{
     expect(rows('abuse_rate_events')).toBe(13);
     expect(runtime.fetchImpl).not.toHaveBeenCalled();
   });
-  it('actual post-source reconciliation skips a new global debit while keeping child controls',async()=>{
+  it('hosted post-source work leaves calendar admission to a separate browser invocation',async()=>{
     await new D1CalendarConnectionRepository(test.db,scope).create({provider:'google',label:'Synthetic'});
     for(let i=0;i<6;i++)await enforceBudget(runtime,{class:'sync-all',userId:scope.userId});
     await reconcileCalendarsAfterSourceWrite(test.db,scope,keyring,{defer:false,changed:true});
-    expect(rows('abuse_rate_events')).toBe(7);
+    expect(rows('abuse_rate_events')).toBe(6);
     await new D1AbuseControlRepository(test.db).setEnabled('provider:google',false);
     await reconcileCalendarsAfterSourceWrite(test.db,scope,keyring,{defer:false,changed:true});
-    expect(rows('abuse_rate_events')).toBe(7);
+    expect(rows('abuse_rate_events')).toBe(6);
     expect(runtime.fetchImpl).not.toHaveBeenCalled();
   });
 });

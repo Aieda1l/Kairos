@@ -4,6 +4,8 @@
 
 ## Automatic retry repair deployed, October 20
 
+The [October 21 calendar capacity investigation](calendar-capacity-2026-10-21.md) measured the complete expanded recovery workload: Google 29 external requests, Microsoft 31, combined initial sync 60 and repeat 36. An isolated Worker completed 120 D1 queries, so the earlier synthetic 50-statement threshold is not an observed account ceiling. Paid capacity with finite limits is proposed; both provider controls remain paused pending that decision and hosted recovery.
+
 Subsequent operator acceptance: the user reports “Sync All seems to work.” This confirms the repaired path in real use, not acceptance of paused Google/Microsoft calendar work. The health-check 403 was separately reproduced as a transient first-request Cloudflare challenge. A User-Agent-only change was insufficient; the checker with one bounded challenge recheck passes on three fresh runners. See the [monitoring repair record](monitoring.md#october-21-utc-transient-challenge-recovery).
 
 PR #22 was self-reviewed with no blocking findings and merged as `0eda3e44d6cdac9846d8d523bdfda3ec085403fe`. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39344708509) passed 1,541 tests in 155 files and all 63 browser cases. A clean archived build passed the 11 compiled provider cases and preview isolation/health probes.

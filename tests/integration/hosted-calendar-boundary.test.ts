@@ -136,7 +136,7 @@ describe("hosted calendar tenant boundary",()=>{
     close();
   });
 
-  it("post-source reconciliation stays inside the source user's tenant",async()=>{
+  it("hosted post-source work defers provider writes to a separate tenant-scoped invocation",async()=>{
     const {db,sqlite,close}=openD1TestDatabase();installProviderRuntime(db);
     seedUsers(sqlite);
     await seedAssignment(db,ALICE.id,"alice");
@@ -158,6 +158,8 @@ describe("hosted calendar tenant boundary",()=>{
       },
     );
 
+    expect(adapters.calls).toEqual([]);
+    await reconcileCalendarConnection(db,{userId:BOB.id},bob.id,{adapterFactory:adapters.factory});
     expect(adapters.calls).toEqual([bobAssignment.id]);
     close();
   });
