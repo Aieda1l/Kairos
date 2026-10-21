@@ -5,6 +5,7 @@ import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {googleCalendarHttpError} from "./http-error";
+import {calendarTransportError} from '@/lib/calendar/transport-error';
 
 const GOOGLE_CALENDAR_API="https://www.googleapis.com/calendar/v3";
 
@@ -44,11 +45,8 @@ export class GoogleCalendarClient{
           ...(init.headers??{}),
         },
       });
-    }catch{
-      throw new CalendarSyncError(
-        "CALENDAR_NETWORK_ERROR",
-        "Google Calendar could not be reached.",
-      );
+    }catch(error){
+      throw calendarTransportError(error,'Google Calendar could not be reached.');
     }
 
     if(options.allowNotFound&&response.status===404)return null;

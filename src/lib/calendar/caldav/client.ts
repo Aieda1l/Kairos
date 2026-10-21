@@ -2,6 +2,7 @@ import "server-only";
 import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {calendarTransportError} from '@/lib/calendar/transport-error';
 import {
   parseCalendarCollections,
   parseCalendarHomeSet,
@@ -54,8 +55,8 @@ export class CalDavClient{
             ...(init.headers??{}),
           },
         });
-      }catch{
-        throw new CalendarSyncError("CALENDAR_NETWORK_ERROR","Apple Calendar could not be reached.");
+      }catch(error){
+        throw calendarTransportError(error,'Apple Calendar could not be reached.');
       }
       if([301,302,303,307,308].includes(response.status)){
         const location=response.headers.get("location");
