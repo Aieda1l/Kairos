@@ -1,6 +1,6 @@
 # October 21 calendar reconnect and interrupted-operation repair
 
-The Free-plan split release (`67ca0f4`, Worker `e2fdf405-e437-4938-9860-aa3b2b84c53a`) is the production baseline. The user reported Microsoft busy/recovery errors, followed by a local disconnect, and a Google reconnect returning raw `CALENDAR_AUTH_EXPIRED` JSON after consent.
+The incident began on the Free-plan split release (`67ca0f4`, Worker `e2fdf405-e437-4938-9860-aa3b2b84c53a`). The user reported Microsoft busy/recovery errors, followed by a local disconnect, and a Google reconnect returning raw `CALENDAR_AUTH_EXPIRED` JSON after consent. The repair is now deployed as source `5547ff1` / Worker `3f083be0-d112-4035-97f8-185c06506313`; acceptance is recorded below.
 
 ## Evidence and recovery
 
@@ -28,4 +28,8 @@ Both [CalendarList.get](https://developers.google.com/workspace/calendar/api/v3/
 
 ## Release acceptance
 
-Release gates are protected CI, staged build/configuration checks, deployment verification, Microsoft reopening and fresh Google/Microsoft consent. Keep the operational receipt and repair PR with the actual promoted version and verification results; do not clear owners based on elapsed time alone.
+[PR #26](https://github.com/Aieda1l/Kairos/pull/26) merged as `5547ff13a8eb43b7ab749b4dbec8e04e2c7dbff2`. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39644756198) passed 1,571 tests and all 63 browser cases, including native calendar lifetime and compiled-provider checks. The sealed build passed staged configuration, seven-migration schema, required secret-name, isolation and health checks. Worker `3f083be0-d112-4035-97f8-185c06506313` was promoted at 17:40 UTC in deployment `6b54d8bb-1759-48ed-8334-cf540b1fb1a2`; served client hashes and all 11 anonymous smoke checks passed. The [GitHub health check](https://github.com/Aieda1l/Kairos/actions/runs/39645991114) also passed.
+
+Both provider controls are reopened at version 4. A live Free-plan replay using 77 synthetic assignments passed separate first-sync invocations with 29 Google and 45 Microsoft external requests, then 18 each on repeat; both owners returned idle. Temporary replay Workers and D1 were deleted. This establishes the measured request shape, not general Free CPU headroom.
+
+The user subsequently reported success. Read-only production state at 17:48 UTC confirms Microsoft consent consumed at 17:46:54 UTC and successful sync at 17:47:13 UTC: enabled connection, one credential, 17 mappings and idle owner. Google remains disabled with no credential and 11 preserved mappings, despite a consumed callback at 17:46:44 UTC. Its successful reconnect/sync is therefore still unverified; clarification is pending. No remote event writes were made by the recovery procedure. Do not clear owners based on elapsed time alone.
