@@ -26,9 +26,9 @@ const OAUTH_ERROR_MESSAGES:Record<string,string>={
   CALENDAR_UPSTREAM_ERROR:"Microsoft Calendar could not be connected. Check the Entra configuration and try again.",
 };
 const GOOGLE_OAUTH_ERROR_MESSAGES:Record<string,string>={
-  CALENDAR_CONFIG_MISSING:'Google Calendar is temporarily unavailable. Try again later.',
+  CALENDAR_CONFIG_MISSING:'Google Calendar needs a Kairos configuration update. Please contact support.',
   CALENDAR_AUTH_EXPIRED:'Google Calendar rejected the authorization. Start a new connection.',
-  CALENDAR_PERMISSION_DENIED:'Google did not grant write access to the saved Kairos calendar. Use its owning Google account and allow calendar access.',
+  CALENDAR_PERMISSION_DENIED:'Google denied calendar access. Check the consent permissions and use the calendar\'s owning Google account when reconnecting.',
   CALENDAR_AUTH_REQUIRED:'Google Calendar authorization was not completed.',
   CALENDAR_NETWORK_ERROR:'Kairos could not reach Google during calendar authorization. Try again.',
   CALENDAR_RATE_LIMITED:'Google is temporarily limiting requests. Try again later.',

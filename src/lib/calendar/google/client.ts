@@ -4,6 +4,7 @@ import {z} from "zod";
 import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
+import {googleCalendarHttpError} from "./http-error";
 
 const GOOGLE_CALENDAR_API="https://www.googleapis.com/calendar/v3";
 
@@ -19,25 +20,6 @@ const eventSchema=z.object({
 
 export function googleEventId(syncKey:string):string{
   return createHash("sha256").update(syncKey).digest("hex");
-}
-
-function mapHttpError(status:number):CalendarSyncError{
-  if(status===401||status===403){
-    return new CalendarSyncError(
-      "CALENDAR_AUTH_EXPIRED",
-      "Google Calendar authorization is no longer valid.",
-    );
-  }
-  if(status===429){
-    return new CalendarSyncError(
-      "CALENDAR_RATE_LIMITED",
-      "Google Calendar is rate limiting requests.",
-    );
-  }
-  return new CalendarSyncError(
-    "CALENDAR_UPSTREAM_ERROR",
-    "Google Calendar request failed.",
-  );
 }
 
 export class GoogleCalendarClient{
@@ -72,7 +54,7 @@ export class GoogleCalendarClient{
     if(options.allowNotFound&&response.status===404)return null;
     if(options.allowNoContent&&(response.status===204||response.status===404))return null;
     if(options.allowConflict&&response.status===409)return null;
-    if(!response.ok)throw mapHttpError(response.status);
+    if(!response.ok)throw await googleCalendarHttpError(response);
     if(response.status===204)return null;
     try{return await response.json();}catch{
       throw new CalendarSyncError(

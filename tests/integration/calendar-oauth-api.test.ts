@@ -261,6 +261,33 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     expect(destination.toString()).not.toMatch(/private|state=|code=/);
   });
 
+  it.each([
+    ['accessNotConfigured','CALENDAR_CONFIG_MISSING'],
+    ['insufficientPermissions','CALENDAR_PERMISSION_DENIED'],
+    ['userRateLimitExceeded','CALENDAR_RATE_LIMITED'],
+  ] as const)('reports Google calendar creation %s without discarding the successful token-exchange distinction',async(reason,code)=>{
+    const start=await googleStart();
+    const started=await start.POST(post('http://127.0.0.1:3000/api/calendars/google/start'));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get('state')!;
+    const transport=vi.fn(async(input:RequestInfo|URL)=>{
+      if(String(input)==='https://oauth2.googleapis.com/token')return Response.json({access_token:'private-access',refresh_token:'private-refresh',expires_in:3600});
+      if(String(input)==='https://www.googleapis.com/calendar/v3/calendars')return Response.json({error:{message:'private-provider-detail',errors:[{reason}]}},{status:403});
+      throw new Error('Unexpected provider work after rejected creation');
+    });
+    vi.stubGlobal('fetch',transport);
+    const callback=await googleCallback();
+    const response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/google/callback?state=${state}&code=private-authorization-code`));
+    expect(response.status).toBe(303);
+    const destination=new URL(response.headers.get('location')!);
+    expect(destination.pathname).toBe('/sources');
+    expect(destination.searchParams.get('calendarError')).toBe(code);
+    expect(destination.searchParams.get('calendarStage')).toBe('calendar_setup');
+    expect(destination.href).not.toMatch(/private|state=|code=/);
+    expect(transport).toHaveBeenCalledTimes(2);
+    const db=getDatabase();migrate(db);
+    expect(new CalendarConnectionRepository(db).list()).toHaveLength(0);
+  });
+
   it("rejects unknown or replayed Google state before any token request",async()=>{
     const fetchMock=vi.fn();
     vi.stubGlobal("fetch",fetchMock);

@@ -181,6 +181,42 @@ describe("Google Calendar client",()=>{
     await expect(client.createCalendar("Kairos")).rejects.toMatchObject({code});
   });
 
+  it.each([
+    [401,undefined,'CALENDAR_AUTH_EXPIRED'],
+    [403,'insufficientPermissions','CALENDAR_PERMISSION_DENIED'],
+    [403,'forbidden','CALENDAR_PERMISSION_DENIED'],
+    [403,'accessNotConfigured','CALENDAR_CONFIG_MISSING'],
+    [403,'SERVICE_DISABLED','CALENDAR_CONFIG_MISSING'],
+    [403,'rateLimitExceeded','CALENDAR_RATE_LIMITED'],
+    [403,'userRateLimitExceeded','CALENDAR_RATE_LIMITED'],
+    [403,'quotaExceeded','CALENDAR_RATE_LIMITED'],
+    [403,'dailyLimitExceeded','CALENDAR_RATE_LIMITED'],
+    [403,'unknown-private-reason','CALENDAR_PERMISSION_DENIED'],
+    [403,undefined,'CALENDAR_PERMISSION_DENIED'],
+  ] as const)('distinguishes HTTP %s / %s from expired authorization',async(status,reason,code)=>{
+    const transport=vi.fn(async()=>reason
+      ?Response.json({error:{message:'private-provider-detail',errors:[{reason}]}},{status})
+      :new Response('private-non-json-detail',{status}));
+    const client=new GoogleCalendarClient('private-access-token',transport as typeof fetch);
+    try{
+      await client.createCalendar('Kairos');
+      throw new Error('Expected provider rejection');
+    }catch(error){
+      expect(error).toBeInstanceOf(CalendarSyncError);
+      expect(error).toMatchObject({code});
+      expect((error as Error).message).not.toMatch(/private|unknown-private-reason/);
+      expect(error).not.toHaveProperty('cause');
+    }
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies a disabled API in modern Google error details during a saved-calendar sync check',async()=>{
+    const transport=vi.fn(async()=>Response.json({error:{details:[{reason:'SERVICE_DISABLED',metadata:{consumer:'private-project'}}]}},{status:403}));
+    const adapter=new GoogleCalendarAdapter(connection(),new GoogleCalendarClient('private-access-token',transport as typeof fetch));
+    await expect(adapter.testConnection()).rejects.toMatchObject({code:'CALENDAR_CONFIG_MISSING'});
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
   it("maps network failures without leaking the access token",async()=>{
     const secret="fixture-access-token-never-echo";
     const client=new GoogleCalendarClient(secret,vi.fn(async()=>{throw new Error("network "+secret);}) as unknown as typeof fetch);
