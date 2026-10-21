@@ -4,8 +4,11 @@ on:
 permissions:
   contents: read
 jobs:
-  diagnostic:
+  probe:
     if: github.ref == 'refs/heads/fix/production-health-403'
+    strategy:
+      matrix:
+        runner: [1, 2, 3]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -15,4 +18,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/diagnose-health-edge.mjs
+      - run: node scripts/check-production-health.mjs

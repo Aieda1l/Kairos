@@ -68,3 +68,32 @@ it('synthetic bounds response size and the complete request deadline',async()=>{
   const stalled=vi.fn<typeof fetch>(()=>new Promise(()=>{}));
   expect(await checkProductionHealth({fetchImpl:stalled,timeoutMs:1})).toEqual({ok:false,code:'HEALTH_TIMEOUT',status:0});
 });
+it('rechecks a transient Cloudflare challenge once before validating real storage health',async()=>{
+  const cancel=vi.fn();
+  const challenge=new Response(new ReadableStream({cancel}),{status:403,headers:{'cf-mitigated':'challenge'}});
+  const fetchImpl=vi.fn<typeof fetch>()
+    .mockResolvedValueOnce(challenge)
+    .mockResolvedValueOnce(Response.json({status:'ok'}));
+  expect(await checkProductionHealth({fetchImpl})).toEqual({ok:true,code:'HEALTH_OK',status:200});
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(fetchImpl.mock.calls[1]).toEqual(fetchImpl.mock.calls[0]);
+});
+it('fails after a second Cloudflare challenge without reading challenge content',async()=>{
+  const fetchImpl=vi.fn<typeof fetch>(async()=>new Response('challenge',{status:403,headers:{'cf-mitigated':'challenge'}}));
+  expect(await checkProductionHealth({fetchImpl})).toEqual({ok:false,code:'HEALTH_CHECK_FAILED',status:403});
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+});
+it.each([403,429,503])('does not retry ordinary HTTP %s failures',async status=>{
+  const fetchImpl=vi.fn<typeof fetch>(async()=>new Response('unavailable',{status}));
+  expect(await checkProductionHealth({fetchImpl})).toEqual({ok:false,code:'HEALTH_CHECK_FAILED',status});
+  expect(fetchImpl).toHaveBeenCalledOnce();
+});
+it('retains payload validation and the total deadline on the challenge recheck',async()=>{
+  const challenge=()=>new Response(null,{status:403,headers:{'cf-mitigated':'challenge'}});
+  const invalid=vi.fn<typeof fetch>().mockResolvedValueOnce(challenge()).mockResolvedValueOnce(Response.json({status:'unavailable'}));
+  expect(await checkProductionHealth({fetchImpl:invalid})).toEqual({ok:false,code:'HEALTH_PAYLOAD_INVALID',status:200});
+  const stalled=vi.fn<typeof fetch>().mockResolvedValueOnce(challenge()).mockImplementationOnce(()=>new Promise(()=>{}));
+  expect(await checkProductionHealth({fetchImpl:stalled,timeoutMs:10})).toEqual({ok:false,code:'HEALTH_TIMEOUT',status:0});
+  expect(stalled).toHaveBeenCalledTimes(2);
+});
