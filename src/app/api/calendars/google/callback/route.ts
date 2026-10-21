@@ -60,16 +60,19 @@ async function completeCallback(request:Request){
     emitOperationEvent(context,{code:'CALENDAR_AUTH_REQUIRED',result:'rejected',provider:'google',status:303});
     return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google','CALENDAR_AUTH_REQUIRED');
   }
+  let stage:'configuration'|'token_exchange'|'calendar_setup'='configuration';
   try{
     if(runtime.kind==="hosted"&&(!Number.isSafeInteger(registered.controlVersion)||registered.controlVersion!<0))throw new CalendarSyncError("CALENDAR_AUTH_REQUIRED","Calendar authorization request is no longer active.");
     const work=async()=>{
       const config=getGoogleCalendarConfig();
+      stage='token_exchange';
       const token=await settleCalendarWrite(()=>exchangeGoogleAuthorizationCode({
         ...config,
         code,
         codeVerifier:registered.codeVerifier,
         redirectUri:registered.redirectUri,
       },ownedFetch(fetch)));
+      stage='calendar_setup';
       if(runtime.kind==="legacy"){
         await connectOAuthCalendar(runtime.db,{
           provider:"google",
@@ -115,9 +118,9 @@ async function completeCallback(request:Request){
         "CALENDAR_UPSTREAM_ERROR",
         "Google Calendar could not be connected.",
       );
-    const status=e.code==="CALENDAR_AUTH_EXPIRED"?401:502;
-    emitOperationEvent(context,{code:e.code,result:"error",provider:"google",status});
-    if(registered.returnTo==='/onboarding')return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google',e.code);
-    return Response.json({code:e.code,message:e.message},{status});
+    emitOperationEvent(context,{code:e.code,result:"error",provider:"google",status:303});
+    // A browser has just returned from consent. Keep the one-time code out of
+    // the resulting address bar and carry only fixed application diagnostics.
+    return calendarCallbackDestination(registered.returnTo,registered.redirectUri,'google',e.code,stage);
   }
 }

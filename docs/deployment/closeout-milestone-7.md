@@ -2,9 +2,13 @@
 
 **Release acceptance is incomplete. The shared sign-in, returning-session, Gradescope and calendar recovery repairs are deployed; real-account confirmation and capacity/operational gates remain.** The approved [23 release criteria](../superpowers/specs/2026-10-06-public-beta-readiness-design.md#18-release-acceptance) include real hosted accounts, operational health, a production rollback and a final readiness go.
 
-## Automatic retry repair deployed, October 20
+## Calendar Free-plan split and reconnect follow-up, October 21
 
-The [October 21 calendar capacity investigation](calendar-capacity-2026-10-21.md) measured the complete expanded recovery workload: Google 29 external requests, Microsoft 31, combined initial sync 60 and repeat 36. An isolated Worker completed 120 D1 queries, so the earlier synthetic 50-statement threshold is not an observed account ceiling. Paid capacity with finite limits is proposed; both provider controls remain paused pending that decision and hosted recovery.
+The [Free-plan calendar split](free-calendar-invocations-2026-10-21.md) was deployed as `67ca0f4` / Worker `e2fdf405-e437-4938-9860-aa3b2b84c53a`, with both provider controls reopened after verification. Each destination now runs in its own HTTP invocation. No paid plan was enabled. The earlier [capacity investigation](calendar-capacity-2026-10-21.md) remains historical evidence; its paid-plan proposal was superseded.
+
+The user then reported an interrupted Microsoft operation and Google reconnect rejection. The [reconnect incident record](calendar-reconnect-2026-10-21.md) documents the evidence, exact-owner recovery, preserved 17 Microsoft mappings, lifetime regression and Google access-validation repair. Fresh Google/Microsoft consent and real-account sync confirmation are still required; operational receipts and the repair PR record the promoted version and release gates.
+
+## Automatic retry repair deployed, October 20
 
 Subsequent operator acceptance: the user reports “Sync All seems to work.” This confirms the repaired path in real use, not acceptance of paused Google/Microsoft calendar work. The health-check 403 was separately reproduced as a transient first-request Cloudflare challenge. A User-Agent-only change was insufficient; the checker with one bounded challenge recheck passes on three fresh runners. See the [monitoring repair record](monitoring.md#october-21-utc-transient-challenge-recovery).
 

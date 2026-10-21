@@ -150,7 +150,7 @@ describe("ownership SQL and settled work",()=>{
     });
     const route=await hostedCallback(test,provider,db);
     const response=await route.GET(new Request(`https://synthetic.invalid/api/calendars/${provider}/callback?state=${registered.state}&code=synthetic-code`));
-    const code=provider==="google"?(await response.json()).code:new URL(response.headers.get("location")!).searchParams.get("calendarError");
+    const code=new URL(response.headers.get("location")!).searchParams.get("calendarError");
     expect(transitioned).toBe(true);expect(code).toBe("CALENDAR_AUTH_REQUIRED");
     expect(tokenCalls).toBe(0);expect(calendarCalls).toBe(0);
   });
@@ -167,7 +167,7 @@ describe("ownership SQL and settled work",()=>{
     const registered=await registerOAuthRequest(test.db,scope,keyring,{provider,redirectUri:`https://synthetic.invalid/api/calendars/${provider}/callback`});
     let calls=0;vi.stubGlobal("fetch",async()=>{calls++;return Response.json({access_token:"synthetic-access",refresh_token:"synthetic-refresh",expires_in:3600});});
     const response=await (await hostedCallback(test,provider,db)).GET(new Request(`https://synthetic.invalid/api/calendars/${provider}/callback?state=${registered.state}&code=synthetic-code`));
-    const code=provider==="google"?(await response.json()).code:new URL(response.headers.get("location")!).searchParams.get("calendarError");
+    const code=new URL(response.headers.get("location")!).searchParams.get("calendarError");
     expect(code).toBe("CALENDAR_AUTH_REQUIRED");expect(calls).toBe(0);
     expect(test.sqlite.prepare("SELECT state FROM operation_locks").get()).toEqual({state:"idle"});
   });

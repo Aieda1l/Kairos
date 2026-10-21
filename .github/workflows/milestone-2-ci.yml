@@ -52,6 +52,8 @@ jobs:
       - run: npm run db:verify
       - name: Verify independent workerd admission and ownership
         run: npm run verify:workerd:abuse
+      - name: Verify calendar settlement survives request completion
+        run: node scripts/verify-workerd-calendar-lifetime.mjs
       - name: Verify Turnstile with native workerd fetch
         run: node scripts/verify-workerd-turnstile.mjs
       - run: npm run build:extension
