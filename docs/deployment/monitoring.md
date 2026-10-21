@@ -1,6 +1,6 @@
 # Production monitoring
 
-Current October 21 status: M7 source `5547ff1` is deployed; the [normal main health workflow](https://github.com/Aieda1l/Kairos/actions/runs/39645991114) passes with monitoring enabled. The [stored-log assessment](log-privacy-2026-10-21.md) found raw synthetic exception/D1 text and request paths in Cloudflare's persisted platform envelope; production persistence remains disabled. Calendar destinations run separately on Workers Free. Representative CPU headroom and delivery of the new workflow's failure notification remain open.
+Current October 21 status: M7 application source `f33c240` is deployed; the [normal main health workflow](https://github.com/Aieda1l/Kairos/actions/runs/39656590873) passes with monitoring enabled. The [stored-log assessment](log-privacy-2026-10-21.md) found raw synthetic exception/D1 text and request paths in Cloudflare's persisted platform envelope; production persistence remains disabled. Calendar destinations run separately on Workers Free. Representative CPU headroom and delivery of the new workflow's failure notification remain open.
 
 Kairos's public check is GET https://mykairos.me/api/health. It executes only `SELECT 1 AS ok`, without authentication, session, user, or credential queries. It returns200 `{"status":"ok"}` or503 `{"status":"unavailable"}`, always no-store. Its three-second deadline limits response time; it does not claim to cancel a D1 query. This checks basic storage availability, not provider credentials, user-table quota headroom, full application behavior, or launch readiness.
 
