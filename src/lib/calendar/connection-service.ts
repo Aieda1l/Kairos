@@ -48,12 +48,13 @@ async function requireWritableOAuthCalendar(input:OAuthConnectInput,calendarId:s
   let calendarListError:CalendarSyncError|undefined;
   try{
     response=await (ownedFetch(input.fetchImpl??fetch))(url,{method:"GET",headers:{authorization:`Bearer ${input.accessToken}`}});
-    if(input.provider==='google'&&response.status===403){
+    if(input.provider==='google'&&(response.status===401||response.status===403)){
       calendarListError=await googleCalendarHttpError(response);
       // CalendarList rejection alone does not establish the effective event
-      // role on this exact saved calendar. Verify it without requesting
-      // broader scopes or reading event details. A denied/read-only role fails.
-      if(calendarListError.code==='CALENDAR_PERMISSION_DENIED'){
+      // role on this exact calendar, even after token exchange/creation succeeds.
+      // Independently authenticate against Events with the same token and ID;
+      // an expired token or denied/read-only role still fails closed.
+      if(calendarListError.code==='CALENDAR_AUTH_EXPIRED'||calendarListError.code==='CALENDAR_PERMISSION_DENIED'){
         response=await ownedFetch(input.fetchImpl??fetch)(`https://www.googleapis.com/calendar/v3/calendars/${id}/events?maxResults=1&fields=accessRole`,{
           method:'GET',headers:{authorization:`Bearer ${input.accessToken}`},
         });

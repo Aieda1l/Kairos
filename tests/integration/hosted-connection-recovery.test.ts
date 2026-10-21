@@ -243,11 +243,11 @@ describe("atomic hosted Ed and Gradescope discovery and selection",()=>{
 });
 
 describe("failure-safe hosted calendar replacement",()=>{
-  it.each(['owner','writer','writerWithoutPrivateAccess'])('verifies %s event access on the exact saved Google calendar when CalendarList rejects the grant',async accessRole=>{
+  it.each([401,403].flatMap(status=>['owner','writer','writerWithoutPrivateAccess'].map(accessRole=>({status,accessRole}))))('verifies $accessRole event access on the exact saved Google calendar after CalendarList HTTP $status',async({status,accessRole})=>{
     const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite).calendar_event_links;
     const fetchImpl=vi.fn<typeof fetch>(async(input,init)=>{
       expect(init?.method).toBe('GET');const url=new URL(String(input));
-      if(url.pathname.includes('/calendarList/'))return Response.json({error:{errors:[{reason:'insufficientPermissions'}]}},{status:403});
+      if(url.pathname.includes('/calendarList/'))return Response.json({error:{errors:[{reason:'insufficientPermissions'}]}},{status});
       expect(url.pathname).toBe('/calendar/v3/calendars/old-remote/events');
       expect(url.searchParams.get('maxResults')).toBe('1');expect(url.searchParams.get('fields')).toBe('accessRole');
       return Response.json({accessRole});
@@ -256,11 +256,27 @@ describe("failure-safe hosted calendar replacement",()=>{
     expect(result).toMatchObject({id:old.id,remoteCalendarId:'old-remote',enabled:true});
     expect(fetchImpl).toHaveBeenCalledTimes(2);expect(state(sqlite).calendar_event_links).toEqual(before);
   });
-  it.each(['reader','freeBusyReader','none',null])('preserves the accepted Google connection when fallback event access is %s',async accessRole=>{
+  it.each([401,403].flatMap(status=>['reader','freeBusyReader','none',null].map(accessRole=>({status,accessRole}))))('preserves the accepted Google connection when HTTP $status fallback event access is $accessRole',async({status,accessRole})=>{
     const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
-    const fetchImpl:typeof fetch=async(input)=>String(input).includes('/calendarList/')?new Response(null,{status:403}):Response.json({accessRole});
+    const fetchImpl:typeof fetch=async(input)=>String(input).includes('/calendarList/')?new Response(null,{status}):Response.json({accessRole});
     await expect(connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code:accessRole===null?'CALENDAR_UPSTREAM_ERROR':'CALENDAR_PERMISSION_DENIED'});
     expect(state(sqlite)).toEqual(before);
+  });
+  it.each([
+    [401,'CALENDAR_AUTH_EXPIRED'],[403,'CALENDAR_PERMISSION_DENIED'],
+    [404,'CALENDAR_REMOTE_CALENDAR_MISSING'],[429,'CALENDAR_RATE_LIMITED'],
+    [500,'CALENDAR_UPSTREAM_ERROR'],
+  ] as const)('preserves the accepted Google connection when the independent event check also returns HTTP %s',async(status,code)=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
+    const fetchImpl=vi.fn<typeof fetch>(async input=>new Response(null,{status:String(input).includes('/calendarList/')?401:status}));
+    await expect(connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code});
+    expect(fetchImpl).toHaveBeenCalledTimes(2);expect(state(sqlite)).toEqual(before);
+  });
+  it('keeps Microsoft HTTP 401 rejected without a Google access probe',async()=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'microsoft'),before=state(sqlite);
+    const fetchImpl=vi.fn<typeof fetch>(async()=>new Response(null,{status:401}));
+    await expect(connectOAuthCalendar(db,scope,keyring,{provider:'microsoft',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code:'CALENDAR_AUTH_EXPIRED'});
+    expect(fetchImpl).toHaveBeenCalledTimes(1);expect(state(sqlite)).toEqual(before);
   });
   it('reports Google access rejection as permission denied and preserves the accepted connection',async()=>{
     const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
