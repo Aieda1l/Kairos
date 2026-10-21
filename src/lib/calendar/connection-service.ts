@@ -15,7 +15,7 @@ import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
 import {CalendarCredentialRepository} from "@/lib/db/repositories/calendar-credentials";
 import {CalendarEventLinkRepository} from "@/lib/db/repositories/calendar-event-links";
-import {CalendarSyncError} from "@/lib/calendar/errors";
+import {CalendarSyncError,type CalendarSyncErrorCode} from "@/lib/calendar/errors";
 import {GoogleCalendarClient} from "@/lib/calendar/google/client";
 import {GoogleCalendarAdapter} from "@/lib/calendar/google/adapter";
 import {MicrosoftCalendarClient} from "@/lib/calendar/microsoft/client";
@@ -34,6 +34,7 @@ function pending(provider:CalendarProvider,label:string):CalendarConnection{
 }
 
 const googleAccess=z.object({id:z.string(),accessRole:z.string()});
+const googleEventAccess=z.object({accessRole:z.string()});
 const microsoftAccess=z.object({id:z.string(),canEdit:z.boolean()});
 
 async function requireWritableOAuthCalendar(input:OAuthConnectInput,calendarId:string):Promise<void>{
@@ -42,16 +43,32 @@ async function requireWritableOAuthCalendar(input:OAuthConnectInput,calendarId:s
     ?`https://www.googleapis.com/calendar/v3/users/me/calendarList/${id}`
     :`https://graph.microsoft.com/v1.0/me/calendars/${id}`;
   let response:Response;
+  let eventAccess=false;
+  let calendarListError:CalendarSyncError|undefined;
   try{
     response=await (ownedFetch(input.fetchImpl??fetch))(url,{method:"GET",headers:{authorization:`Bearer ${input.accessToken}`}});
+    if(input.provider==='google'&&response.status===403){
+      calendarListError=await googleAccessError(response);
+      // CalendarList rejection alone does not establish the effective event
+      // role on this exact saved calendar. Verify it without requesting
+      // broader scopes or reading event details. A denied/read-only role fails.
+      if(calendarListError.code==='CALENDAR_PERMISSION_DENIED'){
+        response=await ownedFetch(input.fetchImpl??fetch)(`https://www.googleapis.com/calendar/v3/calendars/${id}/events?maxResults=1&fields=accessRole`,{
+          method:'GET',headers:{authorization:`Bearer ${input.accessToken}`},
+        });
+        eventAccess=true;
+      }
+    }
   }catch{
     throw new CalendarSyncError("CALENDAR_NETWORK_ERROR","The calendar provider could not be reached.");
   }
+  if(calendarListError&&!eventAccess)throw calendarListError;
+  if(eventAccess)return requireGoogleEventAccess(response);
   if(response.status===404){
     throw new CalendarSyncError("CALENDAR_REMOTE_CALENDAR_MISSING","The existing Kairos calendar is missing. Choose calendar recovery before recreating it.");
   }
   if(!response.ok){
-    const code=response.status===401||(input.provider==="google"&&response.status===403)
+    const code=response.status===401
       ?"CALENDAR_AUTH_EXPIRED":response.status===403?"CALENDAR_PERMISSION_DENIED"
         :response.status===429?"CALENDAR_RATE_LIMITED":"CALENDAR_UPSTREAM_ERROR";
     throw new CalendarSyncError(code,"Calendar authorization or access could not be verified.");
@@ -68,6 +85,29 @@ async function requireWritableOAuthCalendar(input:OAuthConnectInput,calendarId:s
     ?["owner","writer","writerWithoutPrivateAccess"].includes(parsed.data.accessRole)
     :parsed.data.canEdit;
   if(!writable)throw new CalendarSyncError("CALENDAR_PERMISSION_DENIED","The Kairos calendar is not writable with this authorization.");
+}
+
+async function requireGoogleEventAccess(response:Response):Promise<void>{
+  if(response.status===404)throw new CalendarSyncError('CALENDAR_REMOTE_CALENDAR_MISSING','The existing Kairos calendar is missing. Choose calendar recovery before recreating it.');
+  if(!response.ok){
+    throw await googleAccessError(response);
+  }
+  let body:unknown;try{body=await response.json();}catch{throw new CalendarSyncError('CALENDAR_UPSTREAM_ERROR','The calendar provider returned an unexpected response.');}
+  const parsed=googleEventAccess.safeParse(body);
+  if(!parsed.success)throw new CalendarSyncError('CALENDAR_UPSTREAM_ERROR','The calendar provider returned an unexpected calendar response.');
+  if(!['owner','writer','writerWithoutPrivateAccess'].includes(parsed.data.accessRole))throw new CalendarSyncError('CALENDAR_PERMISSION_DENIED','The Kairos calendar is not writable with this authorization.');
+}
+
+async function googleAccessError(response:Response):Promise<CalendarSyncError>{
+  let code:CalendarSyncErrorCode=response.status===401?'CALENDAR_AUTH_EXPIRED':response.status===403?'CALENDAR_PERMISSION_DENIED':response.status===429?'CALENDAR_RATE_LIMITED':'CALENDAR_UPSTREAM_ERROR';
+  if(response.status===403){
+    let body:unknown;try{body=await response.json();}catch{}
+    const parsed=z.object({error:z.object({errors:z.array(z.object({reason:z.string()})).optional(),details:z.array(z.object({reason:z.string().optional()})).optional()})}).safeParse(body);
+    const reasons=parsed.success?[...(parsed.data.error.errors??[]),...(parsed.data.error.details??[])].map(e=>e.reason):[];
+    if(reasons.some(reason=>['accessNotConfigured','SERVICE_DISABLED'].includes(reason??'')))code='CALENDAR_CONFIG_MISSING';
+    else if(reasons.some(reason=>['rateLimitExceeded','userRateLimitExceeded','quotaExceeded','dailyLimitExceeded'].includes(reason??'')))code='CALENDAR_RATE_LIMITED';
+  }
+  return new CalendarSyncError(code,'Calendar authorization or access could not be verified.');
 }
 
 async function acceptedOAuthRemote(input:OAuthConnectInput,adapter:CalendarDestinationAdapter,existing:CalendarConnection|null){

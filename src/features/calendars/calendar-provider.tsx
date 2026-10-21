@@ -28,7 +28,7 @@ const OAUTH_ERROR_MESSAGES:Record<string,string>={
 const GOOGLE_OAUTH_ERROR_MESSAGES:Record<string,string>={
   CALENDAR_CONFIG_MISSING:'Google Calendar is temporarily unavailable. Try again later.',
   CALENDAR_AUTH_EXPIRED:'Google Calendar rejected the authorization. Start a new connection.',
-  CALENDAR_PERMISSION_DENIED:'Google Calendar did not allow calendar access. Check permissions and connect again.',
+  CALENDAR_PERMISSION_DENIED:'Google did not grant write access to the saved Kairos calendar. Use its owning Google account and allow calendar access.',
   CALENDAR_AUTH_REQUIRED:'Google Calendar authorization was not completed.',
   CALENDAR_NETWORK_ERROR:'Kairos could not reach Google during calendar authorization. Try again.',
   CALENDAR_RATE_LIMITED:'Google is temporarily limiting requests. Try again later.',
@@ -324,7 +324,7 @@ export function CalendarSyncProvider({
     const startedVersion=completionVersion.current[id]??0;
     setLocal(id,{phase:"syncing",message:""});
     try{
-      const response=await fetch(`/api/calendars/${id}/sync`,{method:"POST"});
+      const response=await fetch(`/api/calendars/${id}/sync`,{method:"POST",keepalive:true});
       const body=await readJson(response);
       const recovery=recoveryFromResponse(body,response,id);
       if(recovery?.waitForCompletion&&(completionVersion.current[id]??0)!==startedVersion)return;
@@ -365,7 +365,7 @@ export function CalendarSyncProvider({
       const startedVersions=new Map(current.map(connection=>[connection.id,completionVersion.current[connection.id]??0]));
       try{
         const init=syncAllRequestInit({syncAllRunId:runId});
-        const response=await fetch("/api/calendars/sync-all",{method:"POST",headers:{...init.headers,'x-kairos-calendar-invocations':'separate'}});
+        const response=await fetch("/api/calendars/sync-all",{method:"POST",keepalive:true,headers:{...init.headers,'x-kairos-calendar-invocations':'separate'}});
         const body=await readJson(response);
         if(!response.ok){
           for(const connection of current){
@@ -398,7 +398,7 @@ export function CalendarSyncProvider({
             const connection=current.find(c=>c.id===invocation.connectionId)!;
             try{
               const resultResponse=await fetch(`/api/calendars/${encodeURIComponent(connection.id)}/sync`,{
-                method:'POST',headers:{'x-kairos-calendar-run':invocation.runId},
+                method:'POST',keepalive:true,headers:{'x-kairos-calendar-run':invocation.runId},
               });
               const row=await readJson(resultResponse);
               if(resultResponse.ok&&(row.connectionId!==connection.id||!resultStatus(row.status)))throw new Error('Invalid calendar result.');
@@ -474,7 +474,7 @@ export function CalendarSyncProvider({
     if(!connection||!canAttempt(id))return;
     setLocal(id,{phase:"syncing",message:""});
     try{
-      const response=await fetch(`/api/calendars/${id}/remove-events`,{method:"POST"});
+      const response=await fetch(`/api/calendars/${id}/remove-events`,{method:"POST",keepalive:true});
       const body=await readJson(response);
       if(!response.ok){
         requestFailure(body,response,id,"Generated calendar events could not be removed.");

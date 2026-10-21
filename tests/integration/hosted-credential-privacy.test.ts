@@ -10,6 +10,8 @@ import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 
 const {runtime,abuse}=vi.hoisted(()=>({runtime:vi.fn(),abuse:vi.fn()}));
+// Metadata/rendering fixtures have no Worker execution context.
+vi.mock('@/lib/platform/calendar-operation-lifetime',()=>({withCalendarOperationLifetime:(_key:string,work:()=>Promise<unknown>)=>work()}));
 vi.mock("@/lib/platform/source-api-runtime",()=>({resolveSourceApiRuntime:async()=>({ok:true,runtime:runtime()})}));
 vi.mock("@/lib/platform/calendar-runtime",()=>({getCalendarRouteRuntime:async()=>runtime()}));
 vi.mock("@/lib/platform/abuse-runtime",()=>({getAbuseRuntime:abuse}));

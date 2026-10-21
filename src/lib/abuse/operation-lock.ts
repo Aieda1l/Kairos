@@ -1,4 +1,5 @@
 import "server-only";
+import {withCalendarOperationLifetime} from '@/lib/platform/calendar-operation-lifetime';
 import {AsyncLocalStorage} from "node:async_hooks";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -138,8 +139,10 @@ export async function withOwnedOperation<T>(db:D1DatabaseLike,scope:UserScope,ke
     if(options.expectedControlVersion!==undefined&&operationControlVersion(currentOperation(db)!)!==options.expectedControlVersion)throw new OperationControlVersionChangedError();
     return work();
   }
-  const lock=await acquireFromDatabase(db,scope,key,options);
-  return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},async()=>{if(options.expectedControlVersion!==undefined)await assertOperationOwner(db,lock);return work();});
+  return withCalendarOperationLifetime(key,async()=>{
+    const lock=await acquireFromDatabase(db,scope,key,options);
+    return runOwner({db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false},async()=>{if(options.expectedControlVersion!==undefined)await assertOperationOwner(db,lock);return work();});
+  });
 }
 
 async function assertOperationOwner(db:D1DatabaseLike,lock:OperationLock):Promise<void>{
@@ -166,7 +169,7 @@ export async function runWithOperationOwnership<T>(lock:OperationLock,work:()=>P
   const owner:Owner={db,lock,held:false,uncertain:false,stopped:false,cooldown:0,claimed:false,executing:true,pending:new Set(),calendarWriteStarted:false,admissionFailed:false,authorizationChanged:false};
   // Reserve synchronously, before validation can yield to a competing entry.
   activeOwners.set(lock,owner);
-  return runOwner(owner,async()=>{await assertOperationOwner(db,lock);return work();});
+  return withCalendarOperationLifetime(lock.operationKey,()=>runOwner(owner,async()=>{await assertOperationOwner(db,lock);return work();}));
 }
 
 export async function withBridgeCompletion<T>(db:D1DatabaseLike,scope:UserScope,requestId:string,kind:string,now:Date,work:()=>Promise<T>):Promise<T>{

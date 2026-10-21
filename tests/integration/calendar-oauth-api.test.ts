@@ -245,6 +245,22 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     expect(JSON.stringify(events)).not.toContain("private");
   });
 
+  it('returns a Google access failure to Sources without retaining the OAuth code in the URL',async()=>{
+    const start=await googleStart(),started=await start.POST(post('http://127.0.0.1:3000/api/calendars/google/start'));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get('state')!;
+    vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{
+      if(String(input)==='https://oauth2.googleapis.com/token')return Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600});
+      if(String(input)==='https://www.googleapis.com/calendar/v3/calendars')return Response.json({id:'remote-google',summary:'Kairos'});
+      return Response.json({error:{message:'private upstream detail'}},{status:403});
+    });
+    const callback=await googleCallback(),response=await callback.GET(new Request(`http://127.0.0.1:3000/api/calendars/google/callback?state=${state}&code=private-authorization-code`));
+    expect(response.status).toBe(303);
+    const destination=new URL(response.headers.get('location')!);
+    expect(destination.pathname).toBe('/sources');expect(destination.searchParams.get('calendarError')).toBe('CALENDAR_PERMISSION_DENIED');
+    expect(destination.searchParams.get('calendarStage')).toBe('calendar_setup');
+    expect(destination.toString()).not.toMatch(/private|state=|code=/);
+  });
+
   it("rejects unknown or replayed Google state before any token request",async()=>{
     const fetchMock=vi.fn();
     vi.stubGlobal("fetch",fetchMock);

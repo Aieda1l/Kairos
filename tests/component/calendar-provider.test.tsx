@@ -78,7 +78,7 @@ it('runs destination tickets as separate requests and preserves another destinat
   await userEvent.setup().click(screen.getByRole('button',{name:'Split sync'}));
   await waitFor(()=>expect(requests).toHaveBeenCalledTimes(3));
   expect(requests.mock.calls.slice(1)).toEqual(tickets.map(ticket=>[
-    `/api/calendars/${ticket.connectionId}/sync`,{method:'POST',headers:{'x-kairos-calendar-run':ticket.runId}},
+    `/api/calendars/${ticket.connectionId}/sync`,{method:'POST',keepalive:true,headers:{'x-kairos-calendar-run':ticket.runId}},
   ]));
   expect(screen.getByTestId('split-google').textContent).toContain('could not be synchronized');
   expect(screen.getByTestId('split-microsoft').textContent).toContain('synchronized.');
@@ -110,7 +110,7 @@ it('an admitted final calendar pass waits for older work then starts its own cla
   expect(requests).toHaveBeenCalledTimes(1);
   await act(async()=>settle(Response.json({status:'success',results:[]})));
   await waitFor(()=>expect(requests).toHaveBeenCalledTimes(2));
-  expect(requests.mock.calls[1]).toEqual(['/api/calendars/sync-all',{method:'POST',headers:{'x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111','x-kairos-calendar-invocations':'separate'}}]);
+  expect(requests.mock.calls[1]).toEqual(['/api/calendars/sync-all',{method:'POST',keepalive:true,headers:{'x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111','x-kairos-calendar-invocations':'separate'}}]);
 });
 
 it.each([
@@ -370,7 +370,7 @@ it("auto-syncs a stale destination once and refreshes again only after another 1
   }]}><div>child</div></CalendarSyncProvider>);
 
   await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(fetchMock).toHaveBeenCalledWith("/api/calendars/sync-all",{method:"POST",headers:{'x-kairos-calendar-invocations':'separate'}});
+  expect(fetchMock).toHaveBeenCalledWith("/api/calendars/sync-all",{method:"POST",keepalive:true,headers:{'x-kairos-calendar-invocations':'separate'}});
 
   act(()=>document.dispatchEvent(new Event("visibilitychange")));
   await act(async()=>{await Promise.resolve();});

@@ -243,6 +243,40 @@ describe("atomic hosted Ed and Gradescope discovery and selection",()=>{
 });
 
 describe("failure-safe hosted calendar replacement",()=>{
+  it.each(['owner','writer','writerWithoutPrivateAccess'])('verifies %s event access on the exact saved Google calendar when CalendarList rejects the grant',async accessRole=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite).calendar_event_links;
+    const fetchImpl=vi.fn<typeof fetch>(async(input,init)=>{
+      expect(init?.method).toBe('GET');const url=new URL(String(input));
+      if(url.pathname.includes('/calendarList/'))return Response.json({error:{errors:[{reason:'insufficientPermissions'}]}},{status:403});
+      expect(url.pathname).toBe('/calendar/v3/calendars/old-remote/events');
+      expect(url.searchParams.get('maxResults')).toBe('1');expect(url.searchParams.get('fields')).toBe('accessRole');
+      return Response.json({accessRole});
+    });
+    const result=await connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl});
+    expect(result).toMatchObject({id:old.id,remoteCalendarId:'old-remote',enabled:true});
+    expect(fetchImpl).toHaveBeenCalledTimes(2);expect(state(sqlite).calendar_event_links).toEqual(before);
+  });
+  it.each(['reader','freeBusyReader','none',null])('preserves the accepted Google connection when fallback event access is %s',async accessRole=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
+    const fetchImpl:typeof fetch=async(input)=>String(input).includes('/calendarList/')?new Response(null,{status:403}):Response.json({accessRole});
+    await expect(connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code:accessRole===null?'CALENDAR_UPSTREAM_ERROR':'CALENDAR_PERMISSION_DENIED'});
+    expect(state(sqlite)).toEqual(before);
+  });
+  it('reports Google access rejection as permission denied and preserves the accepted connection',async()=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
+    const fetchImpl:typeof fetch=async()=>new Response(null,{status:403});
+    await expect(connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code:'CALENDAR_PERMISSION_DENIED'});
+    expect(state(sqlite)).toEqual(before);
+  });
+  it.each([
+    ['accessNotConfigured','CALENDAR_CONFIG_MISSING'],['SERVICE_DISABLED','CALENDAR_CONFIG_MISSING'],
+    ['rateLimitExceeded','CALENDAR_RATE_LIMITED'],['userRateLimitExceeded','CALENDAR_RATE_LIMITED'],
+  ])('keeps a Google %s failure distinct from expired consent',async(reason,code)=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db,'google'),before=state(sqlite);
+    const fetchImpl=vi.fn<typeof fetch>(async()=>Response.json({error:{errors:[{reason}]}},{status:403}));
+    await expect(connectOAuthCalendar(db,scope,keyring,{provider:'google',connectionId:old.id,accessToken:'synthetic-access',refreshToken:'synthetic-new-refresh',fetchImpl})).rejects.toMatchObject({code});
+    expect(fetchImpl).toHaveBeenCalledTimes(1);expect(state(sqlite)).toEqual(before);
+  });
   it('re-enables a recovered Google destination only after fresh consent and preserves its mappings',async()=>{
     const {db,sqlite}=open(),old=await seedCalendar(db,'google');
     sqlite.prepare('DELETE FROM calendar_credentials WHERE user_id=? AND calendar_connection_id=?').run(scope.userId,old.id);
