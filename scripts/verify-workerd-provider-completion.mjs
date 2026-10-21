@@ -62,7 +62,7 @@ const fixture=`let calendarWrites=0,sequence=0,capacityActive=false;const events
   if(request.method==='GET')return Response.json({id});
   if(request.method==='PATCH'){calendarWrites++;return Response.json({id});}
  }
- if(url.href==='https://www.googleapis.com/calendar/v3/users/me/calendarList/synthetic-existing-calendar'&&request.method==='GET')return Response.json({error:{errors:[{reason:'insufficientPermissions'}]}},{status:403});
+ if(url.href==='https://www.googleapis.com/calendar/v3/users/me/calendarList/synthetic-existing-calendar'&&request.method==='GET')return Response.json({error:{errors:[{reason:'authError'}]}},{status:401});
  if(url.href==='https://www.googleapis.com/calendar/v3/calendars/synthetic-existing-calendar/events?maxResults=1&fields=accessRole'&&request.method==='GET')return Response.json({accessRole:'owner'});
  if(url.hostname==='www.googleapis.com'&&request.method!=='GET')calendarWrites++;
  if(url.href==='https://challenges.cloudflare.com/turnstile/v0/siteverify'){

@@ -288,6 +288,34 @@ describe("calendar OAuth and CalDAV connection routes",()=>{
     expect(new CalendarConnectionRepository(db).list()).toHaveLength(0);
   });
 
+  it.each([true,false])('accepts a newly created Google calendar after a CalendarList 401 only if its independent event check is writable: %s',async writable=>{
+    const start=await googleStart(),started=await start.POST(post('http://127.0.0.1:3000/api/calendars/google/start'));
+    const state=new URL((await started.json()).authorizationUrl).searchParams.get('state')!;
+    const transport=vi.fn<typeof fetch>(async(input,init)=>{
+      const url=String(input);
+      if(url==='https://oauth2.googleapis.com/token')return Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600});
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer synthetic-access');
+      if(url==='https://www.googleapis.com/calendar/v3/calendars')return Response.json({id:'new-calendar',summary:'Kairos'});
+      if(url==='https://www.googleapis.com/calendar/v3/users/me/calendarList/new-calendar')return Response.json({error:{message:'private-provider-detail'}},{status:401});
+      expect(url).toBe('https://www.googleapis.com/calendar/v3/calendars/new-calendar/events?maxResults=1&fields=accessRole');
+      expect(init?.method).toBe('GET');return Response.json({accessRole:writable?'owner':'reader'});
+    });
+    vi.stubGlobal('fetch',transport);
+    const callback=await googleCallback(),request=new Request(`http://127.0.0.1:3000/api/calendars/google/callback?state=${state}&code=private-code`);
+    const response=await callback.GET(request),destination=new URL(response.headers.get('location')!);
+    expect(response.status).toBe(writable?307:303);
+    expect(destination.pathname).toBe('/sources');expect(destination.href).not.toMatch(/private|state=|code=/);
+    expect(destination.searchParams.get('calendarError')).toBe(writable?null:'CALENDAR_PERMISSION_DENIED');
+    expect(transport).toHaveBeenCalledTimes(4);
+    const db=getDatabase();migrate(db);const connections=new CalendarConnectionRepository(db).list();
+    expect(connections).toHaveLength(writable?1:0);
+    if(writable){
+      expect(connections[0]).toMatchObject({provider:'google',remoteCalendarId:'new-calendar'});
+      expect(new CalendarCredentialRepository(db).getOAuthRefreshToken(connections[0]!.id)).toBe('synthetic-refresh');
+    }
+    transport.mockClear();expect((await callback.GET(request)).status).toBe(400);expect(transport).not.toHaveBeenCalled();
+  });
+
   it("rejects unknown or replayed Google state before any token request",async()=>{
     const fetchMock=vi.fn();
     vi.stubGlobal("fetch",fetchMock);
