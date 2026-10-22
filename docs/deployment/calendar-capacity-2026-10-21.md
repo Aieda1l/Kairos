@@ -12,6 +12,24 @@ A sealed local profile of the actual compiled application ran an initial conditi
 
 Ignored receipts and profiles are in `artifacts/icloud-connect-incident/`: `success-metrics.json`, `metric-units.json`, `profile-dense/summary.json`, `profile-matrix.json` and the sealed fixture reports. No production writes, stored request logs, credentials or private coursework were used in the profile.
 
+## Bounded iCloud read batching, October 22
+
+The operator approved replacing individual managed-event checks with bounded CalDAV `calendar-multiget` reads. The candidate requests only ETags for saved, eligible resources in the same calendar, at most 32 per REPORT. A single remaining resource keeps its ordinary GET because XML adds work without reducing calls. Batches start lazily during reconciliation; their results and failures are shared only within that invocation. Individual PUTs, DELETEs, deterministic IDs, conditional-write confirmation and fresh transport/database ownership fences remain in place.
+
+The parser validates DAV namespaces, exact requested URLs, unique and complete responses, resource/property status and ETags. Request and streamed response bodies are limited to 64 KiB; entity declarations and malformed XML are rejected. Only an explicit resource-level 404 means absence. A property-level 404, omitted response or foreign resource cannot cause a replacement create. Resource-level authentication and throttling errors retain their existing meaning, including stopping later batches. Only explicit HTTP 405/501 responses permit the existing GET fallback, remembered for this client invocation.
+
+A paired sealed replay of the archived deployed build and candidate uses 79 synthetic assignments and ten warm repeats for each shape:
+
+| Eligible mapped events | Before: external / SQL | Candidate: external / SQL |
+| --- | ---: | ---: |
+| 0 | 1 / 19 | 1 / 19 |
+| 1 | 2 / 20 | 2 / 20 |
+| 16 | 17 / 35 | 2 / 20 |
+
+Every repeat made zero calendar writes, retained 19 unmapped synthetic events and settled its owner idle. The compiled conditional-write fixture also completes an 18-event repeat with two external calls and 20 SQL statements, while accepted/absent write confirmation and persistent uncertainty retain their expected outcomes. These are measured request counts and diagnostic local profiles, not hosted CPU savings or proof of reliable Free headroom. Thirty-six new unit/integration cases cover batching, malformed/partial responses, resource boundaries, throttling, provider pause, concurrent edits and singleton reads. Full local verification passes 1,646 tests with 46 platform skips. Exact-head/main CI and hosted confirmation are still required before treating this candidate as deployed or capacity acceptance as complete.
+
+Ignored paired replay/profile receipts are under `artifacts/icloud-read-batching/`. All traffic is sealed to synthetic provider fixtures; there are zero real provider requests and production database writes.
+
 ## Findings
 
 The old 50-SQL-statement probe is a conservative optimization regression bound, not the observed account limit. A temporary isolated Worker bound only to `kairos-preview` completed 5, 25, 51 and 120 sequential `SELECT 1 AS ok` queries in separate invocations. The Worker was deleted afterward. No production bindings, user data or provider credentials were used. Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/#subrequests) distinguish 50 external requests from 1,000 internal-service requests on Free; the [D1 limits table](https://developers.cloudflare.com/d1/platform/limits/) still states 50 queries and links back to Workers limits. The live measurement, rather than the conflicting SQL table alone, informs this decision.

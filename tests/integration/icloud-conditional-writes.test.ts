@@ -36,6 +36,11 @@ async function setup(mode:Mode,options:{update?:boolean;weakEtag?:boolean;count?
   const method=init?.method??'GET',id=new URL(String(input)).pathname.split('/').at(-1)!;calls.push({method,id});
   if(method==='PROPFIND')return new Response('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>'+calendar+'</d:href><d:propstat><d:prop><d:displayname>Kairos</d:displayname><d:resourcetype><c:calendar/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>',{status:207});
   if(method==='GET'){const event=events.get(id);return event?new Response(event.body,{headers:{etag:event.etag}}):new Response(null,{status:404});}
+  if(method==='REPORT'){
+   const ids=[...String(init?.body).matchAll(/<d:href>([^<]+)<\/d:href>/g)].map(match=>match[1]!.split('/').at(-1)!);
+   const rows=ids.map(eventId=>'<d:response><d:href>'+calendar+eventId+'</d:href>'+(events.has(eventId)?'<d:propstat><d:prop><d:getetag>'+events.get(eventId)!.etag+'</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>':'<d:status>HTTP/1.1 404 Not Found</d:status>')+'</d:response>');
+   return new Response('<d:multistatus xmlns:d="DAV:">'+rows.join('')+'</d:multistatus>',{status:207});
+  }
   if(method!=='PUT')throw new Error('Unexpected synthetic transport');
   puts++;active++;maxActive=Math.max(active,maxActive);
   try{

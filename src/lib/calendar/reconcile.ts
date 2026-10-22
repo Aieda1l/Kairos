@@ -21,6 +21,7 @@ import type {CalendarAdapterFactory} from "@/lib/calendar/adapter";
 import {CalendarSyncError,type CalendarSyncErrorCode} from "@/lib/calendar/errors";
 import {createCalendarSyncKey} from "@/lib/calendar/sync-key";
 import {hashCalendarProjection,projectAssignment} from "@/lib/calendar/projection";
+import {CALDAV_READ_BATCH_SIZE} from '@/lib/calendar/caldav/multiget';
 
 type CompletedCalendarSyncStatus=Exclude<CalendarSyncStatus,"never">;
 
@@ -197,6 +198,40 @@ async function reconcileWithRepositories(
   // The calendar owner excludes competing link mutations for this destination.
   // Read its tenant-scoped mappings once, retaining each SQL/transport fence.
   const savedLinks=new Map((await repositories.links.listByConnection(connection.id)).map(link=>[link.assignmentId,link]));
+  const projections=assignments.map(assignment=>projectAssignment(assignment,{hideSubmitted}));
+  // Read only saved, eligible resource IDs. Each batch is started lazily and its
+  // result (including failure) is shared only within this reconciliation. PUT
+  // confirmation and conflict readback still use their independent fresh GET.
+  const readBatches=new Map<string,string[]>();
+  const reads=new Map<string[],ReturnType<NonNullable<typeof adapter.getEvents>>>();
+  if(adapter.getEvents){
+    const ids=[...new Set(assignments.flatMap((assignment,index)=>{
+      const id=savedLinks.get(assignment.id)?.remoteEventId;return projections[index]&&id?[id]:[];
+    }))];
+    for(let offset=0;offset<ids.length;offset+=CALDAV_READ_BATCH_SIZE){
+      const batch=ids.slice(offset,offset+CALDAV_READ_BATCH_SIZE);
+      if(batch.length===1)continue; // XML adds work without saving a request.
+      for(const id of batch)readBatches.set(id,batch);
+    }
+  }
+  const getRemoteEvent=async(id:string)=>{
+    const batch=readBatches.get(id);
+    if(!batch)return adapter.getEvent(connection.remoteCalendarId!,id);
+    let pending=reads.get(batch);
+    if(!pending){
+      pending=adapter.getEvents!(connection.remoteCalendarId!,batch).then(result=>{
+        if(result.size!==batch.length||batch.some(key=>!result.has(key)
+          ||result.get(key)!==null&&result.get(key)?.remoteEventId!==key)){
+          throw new CalendarSyncError('CALENDAR_UPSTREAM_ERROR','Calendar event metadata is incomplete.');
+        }
+        return result;
+      });
+      reads.set(batch,pending);
+    }
+    const remote=(await pending).get(id);
+    if(remote===undefined)throw new CalendarSyncError('CALENDAR_UPSTREAM_ERROR','Calendar event metadata is incomplete.');
+    return remote;
+  };
   let cursor=0;
   let halted=false;
   const failure=(error:unknown,wrote:boolean)=>{
@@ -209,7 +244,7 @@ async function reconcileWithRepositories(
   const reconcileOne=async(index:number):Promise<Outcome>=>{
     let wrote=false;
     const assignment=assignments[index]!;
-    const projection=projectAssignment(assignment,{hideSubmitted});
+    const projection=projections[index]!;
     let link=savedLinks.get(assignment.id)??null;
 
     if(!projection){
@@ -276,7 +311,7 @@ async function reconcileWithRepositories(
         return {kind:"created"};
       }
 
-      const remote=await adapter.getEvent(connection.remoteCalendarId!,link.remoteEventId);
+      const remote=await getRemoteEvent(link.remoteEventId);
       if(!remote){
         if(adapter.findEventByAssignment){
           const existing=await adapter.findEventByAssignment(

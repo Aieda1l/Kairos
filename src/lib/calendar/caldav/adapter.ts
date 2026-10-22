@@ -41,6 +41,10 @@ export class CalDavCalendarAdapter implements CalendarDestinationAdapter{
     return this.client.getEvent(remoteCalendarId,remoteEventId);
   }
 
+  getEvents(remoteCalendarId:string,remoteEventIds:readonly string[]):Promise<ReadonlyMap<string,RemoteCalendarEvent|null>>{
+    return this.client.getEvents(remoteCalendarId,remoteEventIds);
+  }
+
   createEvent(
     remoteCalendarId:string,
     projection:CalendarEventProjection,
