@@ -3,6 +3,9 @@ import type {RemoteCalendarEvent} from "@/lib/calendar/adapter";
 import type {CalendarEventProjection} from "@/lib/calendar/projection";
 import {CalendarSyncError} from "@/lib/calendar/errors";
 import {calendarTransportError} from '@/lib/calendar/transport-error';
+import {withCaldavPutConfirmation} from '@/lib/abuse/operation-lock';
+import {conditionalCaldavPut} from './conditional-put';
+import ICAL from 'ical.js';
 import {
   parseCalendarCollections,
   parseCalendarHomeSet,
@@ -70,6 +73,53 @@ export class CalDavClient{
       return response;
     }
     throw new CalendarSyncError("CALDAV_DISCOVERY_FAILED","Apple Calendar returned too many redirects.");
+  }
+
+  private async confirmEvent(target:URL,body:string):Promise<RemoteCalendarEvent|null>{
+    const response=await this.request(target,{method:'GET'},{allowNotFound:true});
+    if(!response)return null;
+    if(!response.body)throw new Error('Calendar confirmation unavailable.');
+    const reader=response.body.getReader(),chunks:Uint8Array[]=[];let size=0;
+    try{
+      for(;;){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>65536)throw new Error('Calendar confirmation exceeded its bound.');chunks.push(next.value);}
+    }finally{void reader.cancel().catch(()=>{});}
+    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+    const expected=new ICAL.Component(ICAL.parse(body)),actual=new ICAL.Component(ICAL.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)));
+    const a=actual.getAllSubcomponents('vevent'),e=expected.getFirstSubcomponent('vevent');
+    if(a.length!==1||!e||actual.getFirstPropertyValue('prodid')!==expected.getFirstPropertyValue('prodid')
+      ||['rrule','rdate','recurrence-id'].some(name=>a[0]!.hasProperty(name)))return null;
+    const event=new ICAL.Event(a[0]!),wanted=new ICAL.Event(e);
+    if(event.uid!==wanted.uid||event.summary!==wanted.summary||event.description!==wanted.description
+      ||event.startDate.isDate||event.endDate.isDate
+      ||event.startDate.zone.tzid!=='UTC'||event.endDate.zone.tzid!=='UTC'
+      ||event.startDate.toJSDate().toISOString()!==wanted.startDate.toJSDate().toISOString()
+      ||event.endDate.toJSDate().toISOString()!==wanted.endDate.toJSDate().toISOString())return null;
+    return {remoteEventId:target.pathname.split('/').at(-1)!,etag:response.headers.get('etag')};
+  }
+
+  private async putEvent(target:URL,init:RequestInit):Promise<Response|null|RemoteCalendarEvent>{
+    return withCaldavPutConfirmation(target,init,async confirm=>{
+      let ambiguity:CalendarSyncError;
+      try{return await this.request(target,init,{allowPrecondition:true});}
+      catch(error){
+        if(!conditionalCaldavPut(target,init)||!(error instanceof CalendarSyncError)||!['CALENDAR_NETWORK_ERROR','CALENDAR_UPSTREAM_ERROR'].includes(error.code))throw error;
+        ambiguity=error;
+      }
+      // No second write until readback has checked the exact deterministic URL.
+      // One retry reuses its original body and If-None-Match/strong If-Match.
+      for(let attempt=0;attempt<2;attempt++){
+        try{const existing=await this.confirmEvent(target,init.body as string);if(existing){confirm();return existing;}}
+        catch{throw ambiguity;}
+        if(attempt===1)break;
+        try{
+          const response=await this.request(target,init,{allowPrecondition:true});
+          if(response?.status!==412){confirm();return response;}
+        }catch(error){
+          if(!(error instanceof CalendarSyncError)||!['CALENDAR_NETWORK_ERROR','CALENDAR_UPSTREAM_ERROR'].includes(error.code))throw ambiguity;
+        }
+      }
+      throw ambiguity;
+    });
   }
 
   private async discoveryContext():Promise<{
@@ -153,11 +203,12 @@ export class CalDavClient{
     const calendar=resolveAppleDavUrl(new URL(ICLOUD_CALDAV_ORIGIN),calendarId);
     const eventId=caldavResourceName(syncKey);
     const target=resolveAppleDavUrl(calendar,eventId);
-    const response=await this.request(target,{
+    const response=await this.putEvent(target,{
       method:"PUT",
       headers:{"content-type":"text/calendar; charset=utf-8","if-none-match":"*"},
       body:serializeCalendarEvent(projection,syncKey),
-    },{allowPrecondition:true});
+    });
+    if(response&&'remoteEventId' in response)return response;
     if(response?.status===412){
       const existing=await this.getEvent(calendar.href,eventId);
       if(existing)return existing;
@@ -176,7 +227,7 @@ export class CalDavClient{
     const target=resolveAppleDavUrl(calendar,eventId);
     const headers:Record<string,string>={"content-type":"text/calendar; charset=utf-8"};
     if(etag)headers["if-match"]=etag;
-    const response=await this.request(target,{
+    const response=await this.putEvent(target,{
       method:"PUT",
       headers,
       body:serializeCalendarEvent(
@@ -185,6 +236,8 @@ export class CalDavClient{
         eventId.replace(/\.ics$/,""),
       ),
     });
+    if(response&&'remoteEventId' in response)return response;
+    if(response?.status===412)throw new CalendarSyncError('CALENDAR_EVENT_INVALID','The iCloud event changed before this update. Refresh synchronization before retrying.');
     return {remoteEventId:eventId,etag:response?.headers.get("etag")??null};
   }
 

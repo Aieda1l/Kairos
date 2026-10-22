@@ -348,7 +348,9 @@ async function reconcileWithRepositories(
   };
 
   const workerCount=Math.min(
-    clampConcurrency(options.concurrency),
+    // Product routes use the serial iCloud default. Explicit concurrency remains
+    // available to internal callers and the transport-race regression harness.
+    clampConcurrency(options.concurrency??(connection.provider==='caldav'?1:undefined)),
     Math.max(assignments.length,1),
   );
   const settled=await Promise.allSettled(Array.from({length:workerCount},()=>worker()));
