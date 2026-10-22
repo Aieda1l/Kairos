@@ -25,6 +25,22 @@ const microsoft:CalendarConnection={
   lastSyncStartedAt:null,lastSyncCompletedAt:null,lastSyncStatus:"never",lastErrorCode:null,
 };
 
+it('explains the missing writable iCloud calendar and retries Connect with the entered credentials',async()=>{
+  const requests=vi.fn<typeof fetch>(async()=>Response.json({code:'CALDAV_NOT_WRITABLE',message:'synthetic-private-Apple-response'},{status:502}));
+  vi.stubGlobal('fetch',requests);
+  render(<CalendarSyncProvider initialConnections={[]}><IcloudCalendarCard connection={null}/></CalendarSyncProvider>);
+  const user=userEvent.setup();
+  await user.type(screen.getByLabelText('Apple Account email'),'synthetic@example.invalid');
+  await user.type(screen.getByLabelText('Apple app-specific password'),'private-memory-only');
+  await user.click(screen.getByRole('button',{name:'Connect iCloud'}));
+  expect(await screen.findByText(/writable.*Kairos.*same Apple account/i)).toBeVisible();
+  expect(screen.queryByText(/temporarily unavailable|synthetic-private-Apple-response/)).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'Retry'}));
+  expect(requests).toHaveBeenCalledTimes(2);
+  for(const [,init] of requests.mock.calls as Array<[RequestInfo|URL,RequestInit]>){expect(JSON.parse(init.body as string)).toEqual({username:'synthetic@example.invalid',secret:'private-memory-only'});}
+  expect(requests.mock.calls.map(call=>call[0])).toEqual(['/api/calendars/caldav/connect','/api/calendars/caldav/connect']);
+});
+
 function AdmittedHarness(){
   const calendar=useCalendarSync();
   return <>
