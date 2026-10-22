@@ -277,7 +277,7 @@ async function connectCaldavHosted(
     input.username,input.secret,ownedFetch(input.fetchImpl??getCalendarRouteFetch()),
   );
   const remote=await acceptedCaldavRemote(client,existing);
-  const updated={...base,accountLabel:input.username,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
+  const updated={...base,enabled:true,accountLabel:input.username,remoteCalendarId:remote.remoteCalendarId,remoteCalendarName:remote.name};
   await db.batch([connections.prepareAcceptedConnection(updated,new Date().toISOString()),credential,drafts.prepareAcceptedCleanup("caldav",candidate)]);
   return updated;
 }
