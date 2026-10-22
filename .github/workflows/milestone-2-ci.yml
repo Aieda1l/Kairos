@@ -57,6 +57,14 @@ jobs:
       - name: Verify Turnstile with native workerd fetch
         run: node scripts/verify-workerd-turnstile.mjs
       - run: npm run build:extension
+      - name: Use standard Ubuntu mirror for browser dependencies
+        shell: bash
+        run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e
       - name: Upload Playwright failure artifacts
