@@ -15,6 +15,9 @@ export interface CalendarDestinationAdapter{
   testConnection():Promise<void>;
   ensureCalendar():Promise<{remoteCalendarId:string;name:string}>;
   getEvent(remoteCalendarId:string,remoteEventId:string):Promise<RemoteCalendarEvent|null>;
+  /** A complete result for these exact saved IDs; null means confirmed absence.
+   * Omitted or failed resources must reject, never silently become a create. */
+  getEvents?(remoteCalendarId:string,remoteEventIds:readonly string[]):Promise<ReadonlyMap<string,RemoteCalendarEvent|null>>;
   findEventByAssignment?(
     remoteCalendarId:string,
     assignmentId:string,
@@ -60,6 +63,7 @@ export function guardCalendarAdapter(adapter:CalendarDestinationAdapter):Calenda
     testConnection:()=>call(()=>adapter.testConnection()),
     ensureCalendar:()=>call(()=>adapter.ensureCalendar()),
     getEvent:(calendar,id)=>call(()=>adapter.getEvent(calendar,id)),
+    ...(adapter.getEvents?{getEvents:(calendar:string,ids:readonly string[])=>call(()=>adapter.getEvents!(calendar,ids))}:{}),
     ...(adapter.findEventByAssignment?{findEventByAssignment:(calendar:string,id:string)=>call(()=>adapter.findEventByAssignment!(calendar,id))}:{}),
     createEvent:(calendar,projection,key)=>call(()=>adapter.createEvent(calendar,projection,key)),
     updateEvent:(calendar,id,projection,etag)=>call(()=>adapter.updateEvent(calendar,id,projection,etag)),

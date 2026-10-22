@@ -22,11 +22,11 @@ const probeFetch=${name}.fetch;${name}.fetch=async(request,env,ctx)=>{
 };
 `+script.slice(exportAt);
 const calendar='https://p12-caldav.icloud.com/synthetic/kairos/';
-const fixture=`const calendar=${JSON.stringify(calendar)};let events=new Map(),attempts=new Map(),mode='',target='',active=0,maxActive=0,sequence=0;
+const fixture=`const calendar=${JSON.stringify(calendar)};let events=new Map(),attempts=new Map(),mode='',target='',active=0,maxActive=0,sequence=0,reports=0;
 export default {async fetch(request){
  const url=new URL(request.url),id=url.pathname.split('/').at(-1);
- if(url.pathname==='/reset'){const input=await request.json();events=new Map(input.events);attempts=new Map();mode=input.mode;target=input.target;active=0;maxActive=0;sequence=0;return Response.json({ok:true});}
- if(url.pathname==='/summary')return Response.json({events:events.size,originals:[...events.keys()].filter(id=>id.startsWith('unmapped-')).length,targetAttempts:attempts.get(target)??0,maxActive});
+ if(url.pathname==='/reset'){const input=await request.json();events=new Map(input.events);attempts=new Map();mode=input.mode;target=input.target;active=0;maxActive=0;sequence=0;reports=0;return Response.json({ok:true});}
+ if(url.pathname==='/summary')return Response.json({events:events.size,originals:[...events.keys()].filter(id=>id.startsWith('unmapped-')).length,targetAttempts:attempts.get(target)??0,maxActive,reports});
  if(!/^(?:p\\d+-)?caldav\\.icloud\\.com$/.test(url.hostname))return new Response(null,{status:502});
  if(request.method==='PROPFIND'){
   let prop;if(url.hostname==='caldav.icloud.com')prop='<d:current-user-principal><d:href>https://p12-caldav.icloud.com/principal/</d:href></d:current-user-principal>';
@@ -35,6 +35,12 @@ export default {async fetch(request){
   return new Response('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>'+calendar+'</d:href><d:propstat><d:prop>'+prop+'</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>',{status:207});
  }
  if(request.method==='GET'){const e=events.get(id);return e?new Response(e.body,{headers:{etag:e.etag}}):new Response(null,{status:404});}
+ if(request.method==='REPORT'){
+  reports++;const body=await request.text(),ids=[...body.matchAll(/<d:href>([^<]+)<\\/d:href>/g)].map(match=>match[1].split('/').at(-1));
+  if(ids.length<1||ids.length>32||body.includes('calendar-data'))return new Response(null,{status:400});
+  const rows=ids.map(eventId=>'<d:response><d:href>'+calendar+eventId+'</d:href>'+(events.has(eventId)?'<d:propstat><d:prop><d:getetag>'+events.get(eventId).etag+'</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>':'<d:status>HTTP/1.1 404 Not Found</d:status>')+'</d:response>');
+  return new Response('<d:multistatus xmlns:d="DAV:">'+rows.reverse().join('')+'</d:multistatus>',{status:207});
+ }
  if(request.method!=='PUT')return new Response(null,{status:405});
  active++;maxActive=Math.max(maxActive,active);try{
   await new Promise(resolve=>setTimeout(resolve,1));const body=await request.text(),old=events.get(id),count=(attempts.get(id)??0)+1;attempts.set(id,count);
@@ -78,7 +84,7 @@ try{
    const owner=await db.prepare("SELECT state FROM operation_locks WHERE user_id='synthetic-user' AND operation_key='calendar:caldav'").first(),summary=await (await remote.fetch('http://fixture.invalid/summary')).json();
    const calls=Number(response.headers.get('x-probe-external')),statements=Number(response.headers.get('x-probe-statements'));
    const ok=mode==='persistent'?response.status===409&&owner.state==='uncertain'&&summary.targetAttempts===2:response.status===200&&result.status==='success'&&owner.state==='idle'&&summary.events===37&&summary.originals===19&&summary.maxActive===1&&(pass===0?result.createdCount===6&&result.updatedCount===2&&result.unchangedCount===10:result.createdCount===0&&result.updatedCount===0&&result.unchangedCount===18);
-   results.push({mode,pass,status:response.status,result,owner:owner.state,external:calls,statements,summary,ok:ok&&calls<=50});
+   results.push({mode,pass,status:response.status,result,owner:owner.state,external:calls,statements,summary,ok:ok&&calls<=50&&(pass===0||calls===2&&statements===20&&summary.reports===2)});
    if(!ok)break;
   }
  }

@@ -5,6 +5,7 @@ import {CalendarSyncError} from "@/lib/calendar/errors";
 import {calendarTransportError} from '@/lib/calendar/transport-error';
 import {withCaldavPutConfirmation} from '@/lib/abuse/operation-lock';
 import {conditionalCaldavPut} from './conditional-put';
+import {invalidMultiget,multigetTargets,multigetBody,readMultigetBody,parseMultiget} from './multiget';
 import ICAL from 'ical.js';
 import {
   parseCalendarCollections,
@@ -37,6 +38,7 @@ function mapHttp(status:number):CalendarSyncError{
 
 export class CalDavClient{
   private readonly authorization:string;
+  private multigetUnsupported=false;
   constructor(
     private readonly username:string,
     private readonly secret:string,
@@ -48,7 +50,7 @@ export class CalDavClient{
   private async request(
     input:URL|string,
     init:RequestInit={},
-    options:{allowNotFound?:boolean;allowPrecondition?:boolean}={},
+    options:{allowNotFound?:boolean;allowPrecondition?:boolean;allowUnsupportedReport?:boolean}={},
   ):Promise<Response|null>{
     let url=resolveAppleDavUrl(new URL(ICLOUD_CALDAV_ORIGIN),String(input));
     const fetchImpl=this.fetchImpl;
@@ -74,6 +76,7 @@ export class CalDavClient{
       }
       if(options.allowNotFound&&response.status===404)return null;
       if(options.allowPrecondition&&response.status===412)return response;
+      if(options.allowUnsupportedReport&&[405,501].includes(response.status))return response;
       if(!response.ok)throw mapHttp(response.status);
       return response;
     }
@@ -198,6 +201,27 @@ export class CalDavClient{
     const response=await this.request(target,{method:"GET"},{allowNotFound:true});
     if(!response)return null;
     return {remoteEventId:eventId,etag:response.headers.get("etag")};
+  }
+
+  async getEvents(calendarId:string,eventIds:readonly string[]):Promise<ReadonlyMap<string,RemoteCalendarEvent|null>>{
+    const calendar=resolveAppleDavUrl(new URL(ICLOUD_CALDAV_ORIGIN),calendarId);
+    const targets=multigetTargets(calendar,eventIds);
+    if(!targets.size)return new Map();
+    if(!this.multigetUnsupported){
+      const response=await this.request(calendar,{
+        method:'REPORT',headers:{'content-type':'application/xml; charset=utf-8'},body:multigetBody(targets),
+      },{allowUnsupportedReport:true});
+      if(response&&[405,501].includes(response.status)){
+        await response.body?.cancel().catch(()=>{});
+        this.multigetUnsupported=true;
+      }else{
+        if(response?.status!==207)throw invalidMultiget();
+        return parseMultiget(await readMultigetBody(response),calendar,targets,mapHttp);
+      }
+    }
+    const result=new Map<string,RemoteCalendarEvent|null>();
+    for(const id of targets.keys())result.set(id,await this.getEvent(calendar.href,id));
+    return result;
   }
 
   async createEvent(
