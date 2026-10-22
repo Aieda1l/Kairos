@@ -1,6 +1,16 @@
 # Calendar capacity decision — October 21, 2026 UTC
 
-Status: the user selected a Free-plan solution. Separate per-destination invocations are implemented and under verification; hosted recovery remains pending. The paid-plan proposal below is retained as the initial alternative, superseded by [the Free-plan design](free-calendar-invocations-2026-10-21.md).
+Status: the user selected Workers Free. Separate per-destination invocations are deployed; Google, Microsoft and iCloud syncs are succeeding. Reliable CPU headroom remains unestablished. The paid-plan proposal below is historical and is superseded by [the Free-plan design](free-calendar-invocations-2026-10-21.md). No billing change is authorized or enabled by this record.
+
+## October 22 measurements
+
+On source `caa736d` / Worker `7c208a5e-e6c4-4004-8494-9fb23cb120cf`, the new iCloud calendar initial-sync window (07:16:55–07:17:10 UTC) and repeat-sync window (14:36:31–14:36:40 UTC) each contain one successful invocation, zero errors and 17 reported subrequests. CPU P50/P99 were 141.991 ms and 77.704 ms respectively. The authenticated GraphQL schema identifies `cpuTimeP50`/`cpuTimeP99` as microseconds; these values are converted to milliseconds. Narrow aggregate windows align with the recorded sync times but are not route-level traces. The operator confirms successful repeat sync without extra copies, and live metadata retains 16 distinct iCloud mappings with an idle owner.
+
+These successful requests exceed the documented [10 ms Free CPU allowance](https://developers.cloudflare.com/workers/platform/limits/#cpu-time). Cloudflare describes limited isolate flexibility for occasional overruns, so success does not establish sustainable headroom. No plan change follows from these samples.
+
+A sealed local profile of the actual compiled application ran an initial conditional-write confirmation case and ten warm repeat syncs with synthetic D1/session/Apple data and zero real provider requests. Every warm pass returned 18 unchanged events, no creates or updates, and an idle owner; 19 unmapped synthetic legacy events remained intact. Across 224 active samples, event reads and guarded database/transport work are useful targets; the profile does not establish hosted CPU savings. A further shape comparison ran ten warm repeats each with zero, one and sixteen eligible events. Those unchanged passes used 1/2/17 external calls and 19/20/35 SQL statements respectively, created or updated no events, retained all 19 unmapped synthetic events and settled every owner. The fixed request overhead is material, so smaller chunks alone are not yet a demonstrated solution. The existing repeat path still performs one calendar validation plus one GET for each managed event. Evaluate bounded read batching and smaller resumable work units while retaining tenant scope, exact resource identity, admission and owner fences, conditional writes and uncertainty settlement. Measure any change on the hosted runtime before claiming reliable Free capacity.
+
+Ignored receipts and profiles are in `artifacts/icloud-connect-incident/`: `success-metrics.json`, `metric-units.json`, `profile-dense/summary.json`, `profile-matrix.json` and the sealed fixture reports. No production writes, stored request logs, credentials or private coursework were used in the profile.
 
 ## Findings
 
