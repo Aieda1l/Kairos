@@ -32,6 +32,7 @@ export function ConnectedSourceSyncControls({
   const [running,setRunning]=useState(false);
   const [canvasError,setCanvasError]=useState("");
   const [stepErrors,setStepErrors]=useState<Partial<Record<SyncAllStep,string>>>({});
+  const [finishedSteps,setFinishedSteps]=useState<SyncAllStep[]>([]);
   const [admissionError,setAdmissionError]=useState<RecoveryNotice|null>(null);
   const retryUntil=useRef(0);
   const [retryWaiting,setRetryWaiting]=useState(false);
@@ -41,7 +42,7 @@ export function ConnectedSourceSyncControls({
     setAdmissionError(notice);
   }
   async function runStep(step:SyncAllStep,work:()=>Promise<void>){
-    try{await work();}catch{
+    try{await work();setFinishedSteps(previous=>[...previous,step]);}catch{
       const message=getRecoveryNotice('SERVICE_UNAVAILABLE')?.message??'Synchronization could not be completed. Retry later.';
       setStepErrors(previous=>({...previous,[step]:message}));
     }
@@ -91,6 +92,7 @@ export function ConnectedSourceSyncControls({
     setRunning(true);
     setCanvasError("");
     setStepErrors({});
+    setFinishedSteps([]);
     const releaseCalendarHold=calendars.holdAutomaticSync?.();
 
     try{
@@ -156,6 +158,9 @@ export function ConnectedSourceSyncControls({
       {syncing?"Syncing…":"Sync All"}
     </Button>
     {admissionError&&<Alert className="basis-full">{admissionError.message}</Alert>}
+    {finishedSteps.includes('ed')&&ed.phase==='success'&&(
+      <p role="status" className="basis-full text-sm text-[var(--muted)]">Ed sync complete.</p>
+    )}
     {sourceWarnings.length>0&&(
       <Alert className="basis-full">
         {sourceWarnings.join(" · ")}

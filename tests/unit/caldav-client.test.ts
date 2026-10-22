@@ -265,6 +265,13 @@ describe("Apple iCloud CalDAV client",()=>{
     });
   });
 
+  it.each([400,404,409,413])('does not retry a definitively rejected conditional PUT (%s)',async status=>{
+    const transport=vi.fn(async()=>new Response(null,{status}));
+    const client=new CalDavClient('synthetic-user','synthetic-secret',transport);
+    await expect(client.createEvent('https://p12-caldav.icloud.com/synthetic/',projection,'synthetic-key')).rejects.toMatchObject({code:'CALENDAR_UPSTREAM_ERROR'});
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [403,"CALDAV_NOT_WRITABLE"],
     [429,"CALENDAR_RATE_LIMITED"],
