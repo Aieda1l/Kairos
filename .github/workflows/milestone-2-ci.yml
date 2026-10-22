@@ -78,6 +78,8 @@ jobs:
         run: npm run build:vinext
       - name: Verify compiled provider completion and recovery
         run: node scripts/verify-workerd-provider-completion.mjs
+      - name: Verify compiled iCloud conditional write confirmation
+        run: node scripts/verify-workerd-icloud.mjs
       - run: node scripts/verify-dynamic-dashboard-build.mjs
       - run: npm run verify:hosted
       - name: Review prohibited credential/permission patterns

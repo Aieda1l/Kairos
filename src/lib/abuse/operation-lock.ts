@@ -1,5 +1,6 @@
 import "server-only";
 import {withProviderOperationLifetime} from '@/lib/platform/provider-operation-lifetime';
+import {conditionalCaldavPut} from '@/lib/calendar/caldav/conditional-put';
 import {AsyncLocalStorage} from "node:async_hooks";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
@@ -28,6 +29,25 @@ export function operationControlVersion(lock:OperationLock):number|undefined{ret
 type Owner={db:D1DatabaseLike;lock:OperationLock;held:boolean;uncertain:boolean;stopped:boolean;cooldown:number;claimed:boolean;executing:boolean;pending:Set<Promise<unknown>>;calendarWriteStarted:boolean;admissionFailed:boolean;authorizationChanged:boolean};
 const owners=new AsyncLocalStorage<Owner>();
 const activeOwners=new WeakMap<OperationLock,Owner>();
+type CaldavConfirmation={owner:Owner;request:NonNullable<ReturnType<typeof conditionalCaldavPut>>;active:boolean;ambiguous:boolean;confirmed:boolean};
+const caldavConfirmations=new AsyncLocalStorage<CaldavConfirmation>();
+
+/** A confirmation can settle only this exact conditional PUT, never another
+ * ambiguous write. The whole readback stays retained if its caller disconnects. */
+export function withCaldavPutConfirmation<T>(input:RequestInfo|URL,init:RequestInit,work:(confirm:()=>void)=>Promise<T>):Promise<T>{
+  const owner=owners.getStore(),request=conditionalCaldavPut(input,init);
+  if(!owner||owner.lock.operationKey!=='calendar:caldav'||!request)return work(()=>{});
+  const confirmation:CaldavConfirmation={owner,request,active:true,ambiguous:false,confirmed:false};
+  const pending=caldavConfirmations.run(confirmation,async()=>{
+    try{return await work(()=>{if(confirmation.active&&confirmation.ambiguous&&owners.getStore()===owner)confirmation.confirmed=true;});}
+    finally{
+      confirmation.active=false;
+      if(confirmation.ambiguous&&!confirmation.confirmed){owner.uncertain=true;owner.stopped=true;}
+    }
+  });
+  owner.pending.add(pending);void pending.then(()=>owner.pending.delete(pending),()=>owner.pending.delete(pending));
+  return pending;
+}
 
 function stoppedTransportError(owner:Owner):OperationOwnershipError|RateLimitedError{
   // No transport has started at these checks. Keep a known throttle distinct
@@ -227,13 +247,19 @@ export function ownedFetch(fetchImpl:typeof fetch):typeof fetch{
       }
       const method=(init?.method??(input instanceof Request?input.method:"GET")).toUpperCase();
       const write=owner?.lock.operationKey.startsWith("calendar:")&&!['GET','HEAD','PROPFIND','REPORT','OPTIONS'].includes(method);
+      const confirmation=caldavConfirmations.getStore(),conditional=confirmation?.active&&confirmation.owner===owner?conditionalCaldavPut(input,init):null;
+      const covered=conditional&&confirmation&&conditional.url===confirmation.request.url&&conditional.body===confirmation.request.body&&conditional.condition===confirmation.request.condition;
+      const ambiguous=()=>{
+        if(covered){confirmation.ambiguous=true;confirmation.confirmed=false;}
+        else uncertainOwnedWork();
+      };
       try{
         if(write&&owner)owner.calendarWriteStarted=true;
         const response=await fetchImpl(input,init);
         if(response.status===429){const value=response.headers.get("retry-after");const seconds=value===null?60:/^\d+$/.test(value)?Number(value):(Date.parse(value)-Date.now())/1000;throttleOwnedWork(seconds);}
-        else if(write&&response.status>=500)uncertainOwnedWork();
+        else if(write&&response.status>=500)ambiguous();
         return response;
-      }catch(error){if(write)uncertainOwnedWork();throw error;}
+      }catch(error){if(write)ambiguous();throw error;}
     };
     const pending=perform();
     if(owner){owner.pending.add(pending);void pending.then(()=>owner.pending.delete(pending),()=>owner.pending.delete(pending));}
