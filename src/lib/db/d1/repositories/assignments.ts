@@ -3,7 +3,7 @@ import "server-only";
 import type {Assignment} from "@/lib/assignments/types";
 import type {NormalizedAssignment} from "@/lib/assignments/normalize";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike,D1PreparedStatementLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1PreparedStatementLike,D1Read} from "@/lib/db/d1/types";
 import type {SourceKind} from "@/lib/sources/types";
 import type {SubmissionState} from "@/lib/submission-status/types";
 import {normalizeSavedGradescopeAssignment} from '@/lib/gradescope/status';
@@ -159,9 +159,19 @@ export class D1AssignmentRepository{
     return {inserted,updated};
   }
 
-  async list(filters:D1AssignmentFilters={}):Promise<Assignment[]>{
+  private prepareList(filters:D1AssignmentFilters={},calendarConnectionId?:string):D1PreparedStatementLike{
     const where=["a.user_id = ?"];
     const params:unknown[]=[this.scope.userId];
+
+    if(calendarConnectionId!==undefined){
+      // Undated mapped assignments must remain available for event removal.
+      where.push(`(a.due_at IS NOT NULL OR EXISTS (
+        SELECT 1 FROM calendar_event_links link
+        WHERE link.user_id=a.user_id AND link.assignment_id=a.id
+          AND link.calendar_connection_id=?
+      ))`);
+      params.push(calendarConnectionId);
+    }
 
     if(filters.course){
       where.push("a.course_name = ?");
@@ -177,7 +187,7 @@ export class D1AssignmentRepository{
       params.push(q,q);
     }
 
-    const result=await prepareOwned(this.db,this.scope,`
+    return prepareOwned(this.db,this.scope,`
       SELECT
         a.id,a.source_kind,a.external_id,a.course_id,a.course_name,a.title,
         a.release_at,a.due_at,a.late_due_at,a.status,a.source_status_text,
@@ -195,8 +205,18 @@ export class D1AssignmentRepository{
       WHERE ${where.join(" AND ")}
       ORDER BY CASE WHEN a.due_at IS NULL THEN 1 ELSE 0 END,
         a.due_at ASC,a.title COLLATE NOCASE ASC
-    `).bind(...params).all<Row>();
+    `).bind(...params);
+  }
 
+  async list(filters:D1AssignmentFilters={}):Promise<Assignment[]>{
+    const result=await this.prepareList(filters).all<Row>();
     return result.results.map(map);
+  }
+
+  prepareCalendarList(connectionId:string):D1Read<Assignment[]>{
+    return {
+      statement:this.prepareList({},connectionId),
+      read:result=>(result.results as Row[]).map(map),
+    };
   }
 }

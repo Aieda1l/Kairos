@@ -1,6 +1,6 @@
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1Read} from "@/lib/db/d1/types";
 import {DEFAULT_TIME_ZONE} from "@/lib/dates/format";
 import {validateTimeZone} from "@/lib/dates/validate-timezone";
 
@@ -10,10 +10,14 @@ export class D1SettingsRepository{
     private readonly scope:UserScope,
   ){}
 
-  private async get(key:string):Promise<string|null>{
-    const row=await this.db.prepare(
+  private prepareGet(key:string){
+    return this.db.prepare(
       "SELECT value FROM app_settings WHERE user_id=? AND key=?",
-    ).bind(this.scope.userId,key).first<{value:string}>();
+    ).bind(this.scope.userId,key);
+  }
+
+  private async get(key:string):Promise<string|null>{
+    const row=await this.prepareGet(key).first<{value:string}>();
     return row?.value??null;
   }
 
@@ -45,6 +49,13 @@ export class D1SettingsRepository{
 
   async getCalendarHideSubmitted():Promise<boolean>{
     return (await this.get("calendar_hide_submitted"))!=="0";
+  }
+
+  prepareCalendarHideSubmitted():D1Read<boolean>{
+    return {
+      statement:this.prepareGet("calendar_hide_submitted"),
+      read:result=>result.results[0]?.value!=="0",
+    };
   }
 
   setCalendarHideSubmitted(hideSubmitted:boolean):Promise<void>{

@@ -12,12 +12,13 @@ const exportAt=script.lastIndexOf('\nexport {'),name=script.slice(exportAt).matc
 if(exportAt<0||!name)throw new Error('Compiled export missing');
 script=script.slice(0,exportAt)+`
 const probeFetch=${name}.fetch;${name}.fetch=async(request,env,ctx)=>{
- const db=env.DB,prepare=db.prepare,batch=db.batch,rawFetch=globalThis.fetch;let statements=0,external=0;
+ const db=env.DB,prepare=db.prepare,batch=db.batch,rawFetch=globalThis.fetch;let statements=0,external=0,databaseCalls=0;const assignmentRows=[],sqlByStatement=new WeakMap();
  const tick=(n=1)=>{statements+=n;if(statements>1000)throw new Error('Synthetic D1 bound exceeded');};
- const wrap=s=>{const bind=s.bind.bind(s);s.bind=(...values)=>wrap(bind(...values));for(const key of ['first','all','run']){const call=s[key].bind(s);s[key]=(...args)=>{tick();return call(...args);};}return s;};
- db.prepare=sql=>wrap(prepare.call(db,sql));db.batch=rows=>{tick(rows.length);return batch.call(db,rows);};
+ const recordRows=(sql,result)=>{if(sql?.includes('FROM assignments a'))assignmentRows.push(result.results.length);};
+ const wrap=(s,sql)=>{sqlByStatement.set(s,sql);const bind=s.bind.bind(s);s.bind=(...values)=>wrap(bind(...values),sql);for(const key of ['first','all','run']){const call=s[key].bind(s);s[key]=async(...args)=>{tick();databaseCalls++;const result=await call(...args);if(key==='all')recordRows(sql,result);return result;};}return s;};
+ db.prepare=sql=>wrap(prepare.call(db,sql),sql);db.batch=async rows=>{tick(rows.length);databaseCalls++;const results=await batch.call(db,rows);rows.forEach((row,index)=>recordRows(sqlByStatement.get(row),results[index]));return results;};
  globalThis.fetch=(...args)=>{if(++external>50)throw new Error('Synthetic external request bound exceeded');return rawFetch(...args);};
- try{const r=await probeFetch.call(${name},request,env,ctx),h=new Headers(r.headers);h.set('x-probe-statements',String(statements));h.set('x-probe-external',String(external));return new Response(r.body,{status:r.status,headers:h});}
+ try{const r=await probeFetch.call(${name},request,env,ctx),h=new Headers(r.headers);h.set('x-probe-statements',String(statements));h.set('x-probe-external',String(external));h.set('x-probe-database-calls',String(databaseCalls));h.set('x-probe-assignment-rows',JSON.stringify(assignmentRows));return new Response(r.body,{status:r.status,headers:h});}
  finally{db.prepare=prepare;db.batch=batch;globalThis.fetch=rawFetch;}
 };
 `+script.slice(exportAt);
@@ -84,7 +85,8 @@ try{
    const owner=await db.prepare("SELECT state FROM operation_locks WHERE user_id='synthetic-user' AND operation_key='calendar:caldav'").first(),summary=await (await remote.fetch('http://fixture.invalid/summary')).json();
    const calls=Number(response.headers.get('x-probe-external')),statements=Number(response.headers.get('x-probe-statements'));
    const ok=mode==='persistent'?response.status===409&&owner.state==='uncertain'&&summary.targetAttempts===2:response.status===200&&result.status==='success'&&owner.state==='idle'&&summary.events===37&&summary.originals===19&&summary.maxActive===1&&(pass===0?result.createdCount===6&&result.updatedCount===2&&result.unchangedCount===10:result.createdCount===0&&result.updatedCount===0&&result.unchangedCount===18);
-   results.push({mode,pass,status:response.status,result,owner:owner.state,external:calls,statements,summary,ok:ok&&calls<=50&&(pass===0||calls===2&&statements===20&&summary.reports===2)});
+   const databaseCalls=Number(response.headers.get('x-probe-database-calls')),assignmentRows=JSON.parse(response.headers.get('x-probe-assignment-rows'));
+   results.push({mode,pass,status:response.status,result,owner:owner.state,external:calls,statements,databaseCalls,assignmentRows,summary,ok:ok&&calls<=50&&(pass===0||calls===2&&statements===20&&databaseCalls===18&&assignmentRows.length===1&&assignmentRows[0]===18&&summary.reports===2)});
    if(!ok)break;
   }
  }
