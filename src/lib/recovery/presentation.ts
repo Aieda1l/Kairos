@@ -50,6 +50,8 @@ export function getRecoveryNotice(code:unknown,options:{key?:string;retryAfterSe
       return notice('Provider authorization changed during this attempt. Saved data is retained. Review the connection and start a fresh attempt.','retry','/sources');
     case 'CALENDAR_PERMISSION_DENIED':case 'CALENDAR_CONFIG_MISSING':
       return notice('Calendar access is unavailable. Review calendar consent and mailbox access; contact support if access remains unavailable. Saved data is retained.','retry','/support');
+    case 'CALDAV_NOT_WRITABLE':
+      return notice('iCloud needs a writable calendar named Kairos in the same Apple account. Check that it exists in iCloud Calendar and allows changes, then retry. Saved Kairos data is retained.','retry');
     case 'ED_COURSE_UNAVAILABLE':case 'GRADESCOPE_COURSE_UNAVAILABLE':
       return notice('A selected course is unavailable. Review your course selection. Previously saved data was kept.','retry','/sources');
     default:return null;

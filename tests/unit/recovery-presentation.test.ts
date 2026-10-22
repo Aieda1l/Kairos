@@ -17,6 +17,12 @@ it('explains missing calendars and requires a deliberate recreation choice',()=>
   expect(getRecoveryNotice('CALENDAR_REMOTE_CALENDAR_MISSING')).toMatchObject({action:'recreate',href:'/sources',message:expect.stringMatching(/missing.*recreat/i)});
   expect(getRecoveryNotice('CALENDAR_REMOTE_CALENDAR_MISSING')?.message).toMatch(/reconnecting does not recreate/i);
 });
+it('shows iCloud calendar setup guidance for a rejected connection without exposing provider text',()=>{
+  const notice=recoveryFromResponse({code:'CALDAV_NOT_WRITABLE',message:'synthetic-private-Apple-response'},new Response(null,{status:502}),'caldav');
+  expect(notice).toMatchObject({key:'caldav',action:'retry',message:expect.stringMatching(/writable.*Kairos.*same Apple account/i)});
+  expect(notice?.message).toMatch(/retained/i);
+  expect(notice?.message).not.toMatch(/temporarily unavailable|synthetic-private/);
+});
 it.each(['GRADESCOPE_PARSE_ERROR','ED_PARSE_ERROR','INVALID_ICAL','UNRECOGNIZED_STATUS','INVALID_RESULT','PARTIAL_SYNC','PARTIAL_PARSE'])(
   '%s explains retained data',code=>expect(getRecoveryNotice(code)?.message).toMatch(/previously.*(kept|retained)/i),
 );
