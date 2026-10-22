@@ -9,6 +9,7 @@ import {D1AssignmentRepository} from "@/lib/db/d1/repositories/assignments";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
 import {D1CalendarEventLinkRepository} from "@/lib/db/d1/repositories/calendar-event-links";
 import {D1SettingsRepository} from "@/lib/db/d1/repositories/settings";
+import {loadCalendarInputs,type CalendarInputs} from '@/lib/db/d1/repositories/calendar-inputs';
 import type {D1DatabaseLike} from "@/lib/db/d1/types";
 import {AssignmentRepository} from "@/lib/db/repositories/assignments";
 import {CalendarConnectionRepository} from "@/lib/db/repositories/calendar-connections";
@@ -54,6 +55,7 @@ type Outcome=
   |{kind:"failed";errorCode:CalendarSyncErrorCode};
 
 type CalendarRepositories={
+  loadInputs?:(connectionId:string)=>Promise<CalendarInputs>;
   connections:{
     list():Promise<CalendarConnection[]>;
     getById(id:string):Promise<CalendarConnection|null>;
@@ -108,6 +110,7 @@ function hostedRepositories(db:D1DatabaseLike,scope:UserScope):CalendarRepositor
   const settings=new D1SettingsRepository(db,scope);
   const links=new D1CalendarEventLinkRepository(db,scope);
   return {
+    loadInputs:connectionId=>loadCalendarInputs(db,scope,connectionId),
     connections:{
       list:()=>connections.list(),
       getById:id=>connections.getById(id),
@@ -193,11 +196,12 @@ async function reconcileWithRepositories(
     return result;
   }
 
-  const assignments=await repositories.assignments.list();
-  const hideSubmitted=await repositories.settings.getCalendarHideSubmitted();
+  const {assignments,hideSubmitted,links}=repositories.loadInputs
+    ?await repositories.loadInputs(connection.id)
+    :{assignments:await repositories.assignments.list(),hideSubmitted:await repositories.settings.getCalendarHideSubmitted(),links:await repositories.links.listByConnection(connection.id)};
   // The calendar owner excludes competing link mutations for this destination.
   // Read its tenant-scoped mappings once, retaining each SQL/transport fence.
-  const savedLinks=new Map((await repositories.links.listByConnection(connection.id)).map(link=>[link.assignmentId,link]));
+  const savedLinks=new Map(links.map(link=>[link.assignmentId,link]));
   const projections=assignments.map(assignment=>projectAssignment(assignment,{hideSubmitted}));
   // Read only saved, eligible resource IDs. Each batch is started lazily and its
   // result (including failure) is shared only within this reconciliation. PUT

@@ -11,6 +11,12 @@ export interface D1PreparedStatementLike{
   run<T=Record<string,unknown>>():Promise<D1ResultLike<T>>;
 }
 
+/** Keep each batched read paired with its repository's normal decoding. */
+export type D1Read<T>={
+  statement:D1PreparedStatementLike;
+  read:(result:D1ResultLike)=>T;
+};
+
 export interface D1DatabaseLike{
   prepare(sql:string):D1PreparedStatementLike;
   batch(statements:D1PreparedStatementLike[]):Promise<D1ResultLike[]>;

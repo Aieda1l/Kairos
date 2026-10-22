@@ -2,7 +2,7 @@ import {prepareOwned} from "@/lib/db/d1/owned-mutation";
 import "server-only";
 import type {UserScope} from "@/lib/auth/user-scope";
 import type {CalendarEventLink,CalendarLinkSyncWrite} from "@/lib/calendar/types";
-import type {D1DatabaseLike} from "@/lib/db/d1/types";
+import type {D1DatabaseLike,D1Read} from "@/lib/db/d1/types";
 
 type Row={
   id:string;
@@ -49,12 +49,16 @@ export class D1CalendarEventLinkRepository{
   }
 
   async listByConnection(connectionId:string):Promise<CalendarEventLink[]>{
-    const result=await prepareOwned(this.db,this.scope,`
+    const prepared=this.prepareListByConnection(connectionId);
+    return prepared.read(await prepared.statement.all());
+  }
+
+  prepareListByConnection(connectionId:string):D1Read<CalendarEventLink[]>{
+    return {statement:prepareOwned(this.db,this.scope,`
       ${this.select}
       WHERE user_id=? AND calendar_connection_id=?
       ORDER BY created_at ASC,id ASC
-    `).bind(this.scope.userId,connectionId).all<Row>();
-    return result.results.map(map);
+    `).bind(this.scope.userId,connectionId),read:result=>(result.results as Row[]).map(map)};
   }
 
   async ensure(
