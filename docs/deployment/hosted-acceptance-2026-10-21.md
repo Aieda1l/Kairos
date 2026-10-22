@@ -41,6 +41,8 @@ Private metadata-only receipts are retained under ignored `artifacts/m7-hosted-a
 
 ## Deployment and source recovery
 
+The [October 22 UTC iCloud continuation](icloud-recovery-2026-10-22.md) records the completed Apple read-only inventory, the calendar-metadata parsing cause and the next preservation/reconnect repair. It does not claim completed iCloud recovery or authorize remote deletion.
+
 [PR #32](https://github.com/Aieda1l/Kairos/pull/32) merged as `342773cac2936eceb83ea7a2d526c8e99374a724`. Its [exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39693176390) passed 1,619 tests and 63 browser cases. A clean archive passed all 12 compiled-provider fixtures and the expanded native lifetime probe. Worker `cd45739a-7356-4634-b4d3-3ae20a83d659` was staged, checked and promoted to 100% at 23:32 UTC, deployment `7cb5c590-2c49-4307-a27d-9361074e3b03`. Configuration, seven migrations, required binding names, log-persistence-off, preview isolation, canonical health, 11 public smokes and served-client hashes passed. The [post-release health run](https://github.com/Aieda1l/Kairos/actions/runs/39694062760) passed. There was no schema, encryption-key or billing change.
 
 The first source recovery attempt stopped before mutation because the operator had disconnected iCloud while investigating. Live inventory had changed from three calendars/47 mappings to two calendars/34 mappings. The revised read-only plan checked the same account, exact unchanged source-owner and control fingerprints, all 78 assignments/statuses and the empty second account. Only the intended iCloud connection, credential and 13 mappings were absent. The original plan is retained.

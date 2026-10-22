@@ -304,6 +304,29 @@ describe("failure-safe hosted calendar replacement",()=>{
     expect(await new D1CalendarConnectionRepository(db,scope).getById(old.id)).toMatchObject({enabled:true});
     expect(state(sqlite).calendar_event_links).toEqual(links);
   });
+  it('re-enables a recovered iCloud destination after accepting fresh credentials without changing its event mappings',async()=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db);
+    sqlite.prepare('DELETE FROM calendar_credentials WHERE user_id=? AND calendar_connection_id=?').run(scope.userId,old.id);
+    sqlite.prepare('UPDATE calendar_connections SET enabled=0,last_error_code=? WHERE user_id=? AND id=?').run('CALENDAR_AUTH_REQUIRED',scope.userId,old.id);
+    const links=state(sqlite).calendar_event_links;
+    const fetchImpl=vi.fn(caldavFetch());
+    const result=await connectCaldavCalendar(db,scope,keyring,{connectionId:old.id,username:'candidate@example.invalid',secret:'synthetic-candidate',fetchImpl});
+    expect(result).toMatchObject({id:old.id,remoteCalendarId:calendarId,enabled:true});
+    expect(await new D1CalendarConnectionRepository(db,scope).getById(old.id)).toMatchObject({enabled:true});
+    expect(await new D1CalendarCredentialRepository(db,scope,keyring).getCaldavCredentials(old.id)).toEqual({username:'candidate@example.invalid',secret:'synthetic-candidate'});
+    expect(state(sqlite).calendar_event_links).toEqual(links);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sqlite.prepare('SELECT state FROM operation_locks').get()).toEqual({state:'idle'});
+  });
+  it('keeps a recovered iCloud destination inactive when fresh authorization is rejected',async()=>{
+    const {db,sqlite}=open(),old=await seedCalendar(db);
+    sqlite.prepare('DELETE FROM calendar_credentials WHERE user_id=? AND calendar_connection_id=?').run(scope.userId,old.id);
+    sqlite.prepare('UPDATE calendar_connections SET enabled=0,last_error_code=? WHERE user_id=? AND id=?').run('CALENDAR_AUTH_REQUIRED',scope.userId,old.id);
+    const before=state(sqlite),fetchImpl=vi.fn<typeof fetch>(async()=>new Response(null,{status:401}));
+    await expect(connectCaldavCalendar(db,scope,keyring,{connectionId:old.id,username:'candidate@example.invalid',secret:'synthetic-candidate',fetchImpl})).rejects.toMatchObject({code:'CALENDAR_AUTH_REQUIRED'});
+    expect(state(sqlite)).toEqual(before);expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sqlite.prepare('SELECT state FROM operation_locks').get()).toEqual({state:'idle'});
+  });
   it.each(["authorization","read-only","missing","encryption","D1"])("retains credentials, remote IDs, links and freshness on iCloud %s failure",async failure=>{
     const {db,sqlite}=open();const old=await seedCalendar(db);const before=state(sqlite);
     if(failure==="D1")sqlite.exec("CREATE TRIGGER fail_credential BEFORE INSERT ON calendar_credentials BEGIN SELECT RAISE(ABORT,'synthetic credential failure'); END");
