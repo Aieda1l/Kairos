@@ -20,6 +20,10 @@ const PRINCIPAL_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d=
 const HOME_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`;
 const CALENDARS_BODY=`<?xml version="1.0" encoding="UTF-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><d:current-user-privilege-set/></d:prop></d:propfind>`;
 
+class CalDavServerError extends CalendarSyncError{}
+function ambiguousResponse(error:unknown):error is CalendarSyncError{
+  return error instanceof CalDavServerError||error instanceof CalendarSyncError&&error.code==='CALENDAR_NETWORK_ERROR';
+}
 function mapHttp(status:number):CalendarSyncError{
   if(status===401)return new CalendarSyncError(
     "CALENDAR_AUTH_REQUIRED",
@@ -27,6 +31,7 @@ function mapHttp(status:number):CalendarSyncError{
   );
   if(status===403)return new CalendarSyncError("CALDAV_NOT_WRITABLE","Apple Calendar is not writable with this credential.");
   if(status===429)return new CalendarSyncError("CALENDAR_RATE_LIMITED","Apple Calendar is rate limiting requests.");
+  if(status>=500)return new CalDavServerError("CALENDAR_UPSTREAM_ERROR","Apple Calendar request failed.");
   return new CalendarSyncError("CALENDAR_UPSTREAM_ERROR","Apple Calendar request failed.");
 }
 
@@ -102,7 +107,7 @@ export class CalDavClient{
       let ambiguity:CalendarSyncError;
       try{return await this.request(target,init,{allowPrecondition:true});}
       catch(error){
-        if(!conditionalCaldavPut(target,init)||!(error instanceof CalendarSyncError)||!['CALENDAR_NETWORK_ERROR','CALENDAR_UPSTREAM_ERROR'].includes(error.code))throw error;
+        if(!conditionalCaldavPut(target,init)||!ambiguousResponse(error))throw error;
         ambiguity=error;
       }
       // No second write until readback has checked the exact deterministic URL.
@@ -115,7 +120,7 @@ export class CalDavClient{
           const response=await this.request(target,init,{allowPrecondition:true});
           if(response?.status!==412){confirm();return response;}
         }catch(error){
-          if(!(error instanceof CalendarSyncError)||!['CALENDAR_NETWORK_ERROR','CALENDAR_UPSTREAM_ERROR'].includes(error.code))throw ambiguity;
+          if(!ambiguousResponse(error))throw ambiguity;
         }
       }
       throw ambiguity;
