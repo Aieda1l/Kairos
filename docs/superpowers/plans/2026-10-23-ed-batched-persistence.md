@@ -32,3 +32,7 @@
 ## Result
 
 See [Ed persistence batching](../../deployment/ed-batched-persistence-2026-10-23.md). The 42-assignment authenticated service path reduced binding calls from 232 to 22 and median hosted CPU from 124.638 to 19.625 ms, with ten attributed successful samples per version. Median synthetic response time fell from 7.940 to 1.077 seconds. Data/fences were preserved, all four temporary resources removed and production unchanged. This is a latency candidate, not demonstrated 10 ms Free capacity or a production deployment.
+
+## Authorized deployment continuation
+
+The operator subsequently approved merging and deploying despite the remaining Free CPU limit. PR #46 merged as `6e05463428869b08481dc577c7b8d3915d468018`; exact-main CI, clean archive/runtime gates, staged checks and promotion passed. Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9` is active at 100%, with protected counts/controls retained and public/client/health checks passing. No migration or billing/key/logging change occurred. The operator confirms faster successful Ed sync; fresh read-only verification records 43 updated statuses, zero failed courses and idle ownership. This closes basic live Ed confirmation, not quantified live latency or Free-capacity acceptance.
