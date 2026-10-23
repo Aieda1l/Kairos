@@ -2,7 +2,7 @@
 
 STATUS: INCOMPLETE
 
-Current production is source `6e05463428869b08481dc577c7b8d3915d468018`, Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9` at 100%, with Ed persistence batching deployed October 23 at 21:55 UTC. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39975212286) passed 1,733 tests and 63 browser cases; staged/promoted schema/configuration/health and protected-count checks passed. The [Ed release record](ed-batched-persistence-2026-10-23.md) distinguishes isolated performance improvement from still-pending live Ed confirmation and Free CPU headroom. No paid plan, schema/key change or telemetry activation occurred.
+Current production is source `6e05463428869b08481dc577c7b8d3915d468018`, Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9` at 100%, with Ed persistence batching deployed October 23 at 21:55 UTC. [Exact-main CI](https://github.com/Aieda1l/Kairos/actions/runs/39975212286) passed 1,733 tests and 63 browser cases; staged/promoted schema/configuration/health and protected-count checks passed. The operator confirms faster successful Ed sync, and read-only verification records 43 updated statuses, zero failed courses and idle ownership. The [Ed release record](ed-batched-persistence-2026-10-23.md) separates that basic live confirmation from still-open quantified live latency and Free CPU headroom. No paid plan, schema/key change or telemetry activation occurred.
 
 ## Earlier rollout record
 

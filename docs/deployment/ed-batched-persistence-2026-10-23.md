@@ -1,6 +1,6 @@
 # Ed persistence batching — October 23, 2026 UTC
 
-STATUS: DEPLOYED; LIVE ED CONFIRMATION PENDING
+STATUS: DEPLOYED; BASIC LIVE ED SYNC CONFIRMED
 
 The operator approved batching Ed's database writes and an isolated comparison, then explicitly approved continuing with deployment despite the remaining Free CPU limit. [PR #46](https://github.com/Aieda1l/Kairos/pull/46) merged as `6e05463428869b08481dc577c7b8d3915d468018`. That source is deployed as Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9` at 100%, deployment `f16b29a0-ebfc-4da7-a2ee-627d317b8924`, promoted at 21:55:06.783 UTC. The separate calendar-input candidate `ae65f68` is not included.
 
@@ -56,7 +56,9 @@ Fresh pre/post release checks retained scoped record counts and provider-control
 
 Eleven anonymous auth/origin/fixture/public checks passed, as did five public pages/listing checks and four served-client hashes against the archive. The [normal production-health run](https://github.com/Aieda1l/Kairos/actions/runs/40030392152) passed. Logging, tracing and Logpush remain off; schema, keys, billing and provider controls are unchanged. The compatible schema-7 fallback is the preceding source `95b03ec951717154995dedd2ccccdb5e47d77f3c` / Worker `837d0679-90e3-46e8-9575-c78453b57902`; no live rollback is claimed for this release.
 
-At 21:56 UTC, the new-release Ed baseline retained three enabled courses, 42 assignments/statuses and idle ownership. Its successful source timestamp was still historical, so it is not a new-code sync confirmation. A read-only observer is waiting for the operator's requested fresh Ed attempt. Live completion/latency and reliable Free CPU headroom remain open. Ed's sequential upstream course fetching and separate client recovery-state behavior are outside this persistence change.
+At 21:56 UTC, the new-release Ed baseline retained three enabled courses, 42 assignments/statuses and idle ownership. The first observation window contained no fresh attempt; that timeout was not treated as a failed sync or settlement evidence. The operator subsequently confirmed the requested Ed sync succeeded and felt faster. Read-only verification at 22:10:44 UTC found a fresh successful source/submission timestamp of 22:10:13.759 UTC, 43 updated statuses, zero failed courses, 43 Ed assignments/statuses and idle ownership on this exact release. The additional record arrived through the legitimate manual sync after the retention comparison.
+
+This closes basic live Ed completion and ownership settlement. Live elapsed time was not quantified: stored start/completion timestamps are equal because the service captures them at entry. The synthetic timing comparison remains separate. Reliable Free CPU headroom, whole Sync All latency, sequential upstream course fetching and the separate client recovery-state behavior remain outside this confirmation.
 
 Private detailed evidence remains in ignored `artifacts/ed-batched-persistence/`: source/dependency and bundle manifests, RED/GREEN/full-suite logs, native receipt `local-958bcff679.json`, hosted run `db3f819ef59b`, immutable API/journal receipts, exact-version CPU metrics, client wall analysis, cleanup and final verification.
 
