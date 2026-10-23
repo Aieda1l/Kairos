@@ -10,7 +10,7 @@ import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-cred
 import {D1SourceCourseRepository} from "@/lib/db/d1/repositories/source-courses";
 import {D1SubmissionStatusRepository} from "@/lib/db/d1/repositories/submission-status";
 import type {CredentialKeyring} from "@/lib/security/credential-cipher";
-import type { SubmissionStatusWrite } from "@/lib/submission-status/types";
+import type { AssignmentSubmissionStatus, SubmissionStatusWrite } from "@/lib/submission-status/types";
 import { normalizeSourceAssignment } from "@/lib/assignments/normalize";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
 import { SourceConnectionRepository } from "@/lib/db/repositories/source-connections";
@@ -116,31 +116,52 @@ async function syncHostedEdConnection(
   const normalized=successful.flatMap(result=>
     result.assignments.map(assignment=>normalizeSourceAssignment("ed",assignment)),
   );
-  const upserted=await assignmentRepo.upsertMany(connection.id,normalized,completedAt);
+  const chunks=[];
+  const encoder=new TextEncoder();
+  for(let offset=0;offset<normalized.length;offset+=100){
+    const assignments=normalized.slice(offset,offset+100);
+    const statuses:Array<AssignmentSubmissionStatus&{externalId:string}>=assignments.map(assignment=>({
+      externalId:assignment.externalId,
+      state:assignment.status==="submitted"?"submitted":"unknown",
+      isLate:false,
+      isMissing:false,
+      submittedAt:null,
+      checkedAt:completedAt,
+      extractorVersion:"ed-api-v1",
+    }));
+    // Validate every chunk before writing assignment data. Leave room for the
+    // generated IDs and ownership metadata below D1's string size limit.
+    if([assignments,statuses].some(rows=>encoder.encode(JSON.stringify(rows)).byteLength>1_000_000)){
+      throw new EdSourceError("ED_PARSE_ERROR","Ed returned an assignment result that is too large to save.");
+    }
+    chunks.push({assignments,statuses});
+  }
 
-  const localByExternalId=new Map(
-    (await assignmentRepo.list({source:"ed"}))
-      .map(assignment=>[assignment.externalId,assignment]),
-  );
-  const writes:SubmissionStatusWrite[]=successful.flatMap(result=>
-    result.assignments.flatMap(assignment=>{
-      const local=localByExternalId.get(assignment.externalId);
-      if(!local)return [];
-      return [{
-        assignmentLocalId:local.id,
-        state:assignment.status==="submitted"?"submitted":"unknown",
-        isLate:false,
-        isMissing:false,
-        submittedAt:null,
-        checkedAt:completedAt,
-        extractorVersion:"ed-api-v1",
-      }];
-    }),
-  );
+  const upserted={inserted:0,updated:0};
+  let statusUpdatedCount=0;
+  for(const chunk of chunks){
+    // Preserve input order: duplicate metadata is last-wins, while equal-time
+    // statuses remain first-wins. Each chunk commits both together.
+    const result=await db.batch([
+      assignmentRepo.prepareCountNew(connection.id,chunk.assignments),
+      assignmentRepo.prepareUpsertMany(connection.id,chunk.assignments,completedAt),
+      statusRepo.prepareExternalCompletion(connection.id,chunk.statuses,completedAt),
+    ]);
+    const inserted=result[0]?.results?.[0]?.inserted,updated=result[2]?.meta?.changes;
+    if(result.length!==3||result.some(row=>row?.success!==true)
+      ||!Number.isSafeInteger(inserted)||Number(inserted)<0||Number(inserted)>chunk.assignments.length
+      ||result[1]?.meta?.changes!==chunk.assignments.length
+      ||!Number.isSafeInteger(updated)||Number(updated)<0||Number(updated)>chunk.statuses.length){
+      throw new Error("The Ed result could not be committed.");
+    }
+    upserted.inserted+=Number(inserted);
+    upserted.updated+=chunk.assignments.length-Number(inserted);
+    statusUpdatedCount+=Number(updated);
+  }
 
-  const applied=await statusRepo.applyCompletion(
+  await statusRepo.recordCompletion(
     connection.id,
-    writes,
+    statusUpdatedCount,
     failedCourseCount,
     lastErrorCode,
     completedAt,
@@ -161,7 +182,7 @@ async function syncHostedEdConnection(
   return {
     insertedCount:upserted.inserted,
     updatedCount:upserted.updated,
-    statusUpdatedCount:applied.updated,
+    statusUpdatedCount,
     failedCourseCount,
     lastAttemptedAt:state.lastAttemptedAt,
     lastSuccessfulAt:state.lastSuccessfulAt,
