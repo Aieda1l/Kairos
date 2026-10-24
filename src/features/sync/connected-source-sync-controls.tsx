@@ -9,7 +9,7 @@ import {Button} from "@/components/ui/button";
 import {Alert} from "@/components/ui/alert";
 import {useSubmissionStatusSync} from "@/features/submission-status/submission-status-provider";
 import {useGradescope} from "@/features/gradescope/gradescope-provider";
-import {useEd} from "@/features/ed/ed-provider";
+import {useEd,type EdSyncAttemptResult} from "@/features/ed/ed-provider";
 import {useCalendarSync} from "@/features/calendars/calendar-provider";
 
 async function responseMessage(response:Response,fallback:string):Promise<string>{
@@ -32,7 +32,7 @@ export function ConnectedSourceSyncControls({
   const [running,setRunning]=useState(false);
   const [canvasError,setCanvasError]=useState("");
   const [stepErrors,setStepErrors]=useState<Partial<Record<SyncAllStep,string>>>({});
-  const [finishedSteps,setFinishedSteps]=useState<SyncAllStep[]>([]);
+  const [edAttempt,setEdAttempt]=useState<EdSyncAttemptResult|null>(null);
   const [admissionError,setAdmissionError]=useState<RecoveryNotice|null>(null);
   const retryUntil=useRef(0);
   const [retryWaiting,setRetryWaiting]=useState(false);
@@ -42,7 +42,8 @@ export function ConnectedSourceSyncControls({
     setAdmissionError(notice);
   }
   async function runStep(step:SyncAllStep,work:()=>Promise<void>){
-    try{await work();setFinishedSteps(previous=>[...previous,step]);}catch{
+    // These providers still report handled failures through their phase/message state.
+    try{await work();}catch{
       const message=getRecoveryNotice('SERVICE_UNAVAILABLE')?.message??'Synchronization could not be completed. Retry later.';
       setStepErrors(previous=>({...previous,[step]:message}));
     }
@@ -73,7 +74,9 @@ export function ConnectedSourceSyncControls({
     gradescope.connection&&["error","partial"].includes(gradescope.phase)&&gradescope.message
       ?"Gradescope: "+gradescope.message
       :"",
-    ed.connection&&["error","partial"].includes(ed.phase)&&ed.message
+    edAttempt&&edAttempt.status!=='completed'
+      ?'Ed: '+edAttempt.message
+      :!edAttempt&&ed.connection&&["error","partial"].includes(ed.phase)&&ed.message
       ?"Ed: "+ed.message
       :"",
   ].filter(Boolean) as string[];
@@ -92,7 +95,7 @@ export function ConnectedSourceSyncControls({
     setRunning(true);
     setCanvasError("");
     setStepErrors({});
-    setFinishedSteps([]);
+    setEdAttempt(null);
     const releaseCalendarHold=calendars.holdAutomaticSync?.();
 
     try{
@@ -135,7 +138,13 @@ export function ConnectedSourceSyncControls({
         await runStep('gradescope',()=>gradescope.syncNow(options));
       }
       if(steps.includes('ed')){
-        await runStep('ed',()=>ed.syncNow(options));
+        try{
+          const result=await ed.syncNow(options);
+          // A missing result is not evidence that this attempt completed.
+          setEdAttempt(result??{status:'failed',message:getRecoveryNotice('INVALID_RESULT')!.message,recovery:null});
+        }catch{
+          setEdAttempt({status:'failed',message:getRecoveryNotice('SERVICE_UNAVAILABLE')!.message,recovery:null});
+        }
       }
 
       if(steps.includes('calendars'))await runStep('calendars',()=>calendars.syncAll(runId));
@@ -158,7 +167,7 @@ export function ConnectedSourceSyncControls({
       {syncing?"Syncing…":"Sync All"}
     </Button>
     {admissionError&&<Alert className="basis-full">{admissionError.message}</Alert>}
-    {finishedSteps.includes('ed')&&ed.phase==='success'&&(
+    {edAttempt?.status==='completed'&&(
       <p role="status" className="basis-full text-sm text-[var(--muted)]">Ed sync complete.</p>
     )}
     {sourceWarnings.length>0&&(

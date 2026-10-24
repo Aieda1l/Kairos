@@ -110,7 +110,7 @@ beforeEach(()=>{
   order.length=0;
   for(const fn of [gradescopeSync,edSync,submissionSync,calendarSync,refresh])fn.mockReset();
   gradescopeSync.mockImplementation(async()=>{order.push("gradescope");});
-  edSync.mockImplementation(async()=>{order.push("ed");});
+  edSync.mockImplementation(async()=>{order.push("ed");return {status:'completed',message:'Ed sync complete.',recovery:null};});
   submissionSync.mockImplementation(async()=>{order.push("submission");});
   calendarSync.mockImplementation(async()=>{order.push("calendar");});
   refresh.mockImplementation(()=>{order.push("refresh");});
@@ -219,4 +219,16 @@ it("renders nothing when no source is connected",()=>{
   state.edConnected=false;
   render(<ConnectedSourceSyncControls canvasConnected={false}/>);
   expect(screen.queryByRole("button",{name:"Sync All"})).not.toBeInTheDocument();
+});
+
+it.each(['blocked','failed','partial','skipped','legacy-void'] as const)('does not reuse an earlier Ed success for a current %s attempt',async status=>{
+  state.edPhase='success';state.edMessage='Ed sync complete.';
+  if(status==='legacy-void')edSync.mockResolvedValueOnce(undefined);
+  else edSync.mockResolvedValueOnce({status,message:'Prior provider work has an uncertain outcome.',recovery:null});
+  vi.stubGlobal('fetch',async()=>admitted(status==='skipped'?['calendars']:['ed','calendars']));
+  render(<ConnectedSourceSyncControls canvasConnected/>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Sync All'}));
+  await waitFor(()=>expect(calendarSync).toHaveBeenCalledOnce());
+  expect(screen.queryByText('Ed sync complete.')).not.toBeInTheDocument();
+  if(status!=='skipped')expect(screen.getByText(/Ed:/)).toBeVisible();
 });

@@ -161,6 +161,9 @@ const fixtureFetch:typeof fetch=async(input,init)=>{
   if(method==="PROPFIND"&&url.href===CALENDAR){
     return store.calendarExists?xml(calendarCollectionXml()):empty(404);
   }
+  // This fixture implements individual GETs, not calendar-multiget. Declare
+  // the unsupported method so the real CalDAV client can use its GET fallback.
+  if(method==="REPORT"&&url.href===CALENDAR)return empty(405);
 
   if(url.href.startsWith(CALENDAR)&&url.pathname.endsWith(".ics")){
     if(!store.calendarExists)return empty(404);

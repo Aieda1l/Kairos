@@ -32,6 +32,7 @@ import {
 } from "./extension-bridge";
 
 const STALE_AFTER_MS = 15 * 60 * 1000;
+const CANVAS_ACCESS_GUIDANCE = "Canvas access could not be verified. Check that you are signed in and can open the assignment in Canvas, then retry.";
 
 const startResponseSchema = z
   .object({
@@ -119,6 +120,50 @@ function messageForFailureDiagnostic(code: z.infer<typeof submissionFailureDiagn
   }
 }
 
+function partialFailureNotice(
+  completed: z.infer<typeof completeResponseSchema>,
+  results: SubmissionStatusResultV1[],
+  batchErrorCode: SubmissionSyncErrorCode | null,
+): RecoveryNotice {
+  const generic = getRecoveryNotice("PARTIAL_SYNC", { key: "submission" })!;
+  const diagnostic = completed.failureDiagnostics.find(item => item.code === "HTTP_429")?.code
+    ?? completed.failureDiagnostics[0]?.code;
+  const httpStatus = completed.failureHttpStatuses.find(item => item.status === 429)?.status
+    ?? completed.failureHttpStatuses[0]?.status;
+
+  if (diagnostic === "HTTP_429" || httpStatus === 429) {
+    return getRecoveryNotice("HTTP_429", { key: "submission" })!;
+  }
+  if (diagnostic === "HTTP_OTHER" || (!diagnostic && httpStatus)) {
+    return { ...generic, message: messageForPartialHttpStatus(httpStatus) };
+  }
+  if (diagnostic) {
+    return { ...generic, message: messageForFailureDiagnostic(diagnostic, httpStatus) };
+  }
+
+  // Results have passed the protocol schema; validate the batch fallback too.
+  // Only recognized codes choose fixed copy. Extension/server messages stay private.
+  const resultError = results.find(result => result.errorCode && result.errorCode !== "PARTIAL_SYNC")?.errorCode;
+  const parsedCode = submissionSyncErrorCodeSchema.safeParse(resultError ?? batchErrorCode);
+  if (!parsedCode.success) return generic;
+  if (parsedCode.data === "CANVAS_SIGNED_OUT") {
+    return {
+      ...getRecoveryNotice(parsedCode.data, { key: "submission" })!,
+      message: CANVAS_ACCESS_GUIDANCE + " Previously saved data was kept.",
+    };
+  }
+  return getRecoveryNotice(parsedCode.data, { key: "submission" }) ?? generic;
+}
+
+function messageForPartialHttpStatus(status?: number): string {
+  if (status === 401 || status === 403) {
+    return CANVAS_ACCESS_GUIDANCE;
+  }
+  if (status && status >= 500) return messageForFailureDiagnostic("HTTP_5XX");
+  const cause = status ? `Canvas returned HTTP ${status}.` : "Canvas returned an unexpected HTTP response.";
+  return cause + " Open the assignment in Canvas to check access, then retry.";
+}
+
 async function readJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -201,7 +246,7 @@ export function SubmissionStatusProvider({
         setExtensionVersion(null);
         setCanvasTabDetected(null);
         if (error instanceof ExtensionBridgeError) {
-          setMessage(error.message);
+          setMessage(messageForError(error.code) || "Firefox extension could not be reached. Verify the extension and retry.");
           throw error;
         }
         const unavailable = new ExtensionBridgeError(
@@ -281,7 +326,9 @@ export function SubmissionStatusProvider({
       };
       setSyncState(nextState);
       const diagnostic=completed.failureDiagnostics[0]?.code;
-      const notice=getRecoveryNotice(diagnostic==="HTTP_429"?diagnostic:completed.lastErrorCode,{key:"submission"});
+      const notice=completed.lastErrorCode === "PARTIAL_SYNC"
+        ? partialFailureNotice(completed, results, batchErrorCode)
+        : getRecoveryNotice(diagnostic==="HTTP_429"?diagnostic:completed.lastErrorCode,{key:"submission"});
       setRecovery(notice);
       if(notice?.retryAfterSeconds)blockedUntil.current=Date.now()+notice.retryAfterSeconds*1000;
 
@@ -290,7 +337,7 @@ export function SubmissionStatusProvider({
         setMessage(
           completed.updatedCount + " of " +
             (completed.updatedCount + completed.failedCount) +
-            " submission statuses updated",
+            " submission statuses updated. " + (notice?.message ?? messageForError("PARTIAL_SYNC")),
         );
       } else if (completed.lastErrorCode) {
         setPhase("error");
