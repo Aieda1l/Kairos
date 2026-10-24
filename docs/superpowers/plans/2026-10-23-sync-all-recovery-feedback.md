@@ -27,6 +27,7 @@
 - [x] Finish integrated tests, types, lint and Workers/static safety checks on the final file set.
 - [x] Publish the reviewable change and complete exact-source repository CI (PRs #48/#49; resulting-main run 40061552619).
 - [x] Use existing rollout gates, verify the deployed build and preserve accepted data and all server protections.
+- [x] Investigate the later Canvas busy report and recover the exact stopped bridge owner with existing fences; preserve all 89 assignments/statuses and 230 bridge requests.
 - [ ] Verify one normal live Sync All outcome, preserving the known Canvas access partial; the authenticated operator check is pending.
 
 ## Evidence locations
@@ -36,3 +37,5 @@ Ignored `artifacts/sync-all-reliability/` contains RED/GREEN logs, preserved fir
 The [release record](../../deployment/sync-all-reliability-2026-10-24.md) records the operator's assignment-specific Canvas 401 and the limits of that diagnosis. The expected access partial is retained; no unsupported status is fabricated.
 
 The release record also documents the deterministic RED/GREEN repair for a pre-existing UUID-substring privacy-test flake. Exact-source CI, archive/runtime, staged/promoted configuration and health, data retention and public/client receipts are in ignored `artifacts/sync-all-feedback-release-v2/`.
+
+The latest Canvas partial is 9 of 10. Later source and calendar successes span multiple admissions and must not be combined into one passing run. The reviewed Canvas recovery receipt and post-check are retained under ignored `artifacts/canvas-autosync-incident-2026-10-24/` and the release evidence directory; a fresh post-recovery observer baseline preserves the remaining live-verification boundary.
