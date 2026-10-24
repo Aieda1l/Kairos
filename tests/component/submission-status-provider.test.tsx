@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CanvasBatchResultV1 } from "@/lib/extension-protocol/submission-status";
+import type { CanvasBatchResultV1, SubmissionFailureDiagnostic, SubmissionSyncErrorCode } from "@/lib/extension-protocol/submission-status";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 
 const {refresh,pingKairosExtension,syncExtensionBatch}=vi.hoisted(()=>({
@@ -41,6 +41,7 @@ function Consumer(){
     <span data-testid="detected">{String(sync.extensionDetected)}</span>
     <span data-testid="last-success">{sync.lastSuccessfulAt??"never"}</span>
     <span data-testid="message">{sync.message}</span>
+    <span data-testid="retry-after">{sync.recovery?.retryAfterSeconds??"none"}</span>
     <button onClick={()=>void sync.syncNow()}>Manual status sync</button>
   </div>;
 }
@@ -86,6 +87,9 @@ function installFetch(count:number,complete:{
   failedCount?:number;
   lastSuccessfulAt?:string|null;
   lastErrorCode?:string|null;
+  ignoredStale?:number;
+  failureDiagnostics?:{code:SubmissionFailureDiagnostic;count:number}[];
+  failureHttpStatuses?:{status:number;count:number}[];
 }={}){
   const started=startPayload(count);
   const calls:{start:number;complete:number;completeBody:unknown[]}={start:0,complete:0,completeBody:[]};
@@ -102,10 +106,12 @@ function installFetch(count:number,complete:{
         requestId:started.requestId,
         updatedCount:complete.updatedCount??count,
         failedCount:complete.failedCount??0,
-        ignoredStale:0,
+        ignoredStale:complete.ignoredStale??0,
         lastAttemptedAt:"2026-10-04T06:00:00.000Z",
         lastSuccessfulAt:complete.lastSuccessfulAt===undefined?"2026-10-04T06:00:01.000Z":complete.lastSuccessfulAt,
         lastErrorCode:complete.lastErrorCode??null,
+        ...(complete.failureDiagnostics===undefined?{}:{failureDiagnostics:complete.failureDiagnostics}),
+        ...(complete.failureHttpStatuses===undefined?{}:{failureHttpStatuses:complete.failureHttpStatuses}),
       }),{status:200,headers:{"content-type":"application/json"}});
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -138,6 +144,13 @@ describe("SubmissionStatusProvider",()=>{
     await waitFor(()=>expect(pingKairosExtension).toHaveBeenCalledTimes(1));
     await waitFor(()=>expect(screen.getByTestId("detected")).toHaveTextContent("true"));
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses fixed guidance rather than raw extension error messages when detection fails",async()=>{
+    pingKairosExtension.mockRejectedValue(new ExtensionBridgeError("EXTENSION_UNAVAILABLE","private-assignment-url-token"));
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await waitFor(()=>expect(screen.getByTestId("message")).toHaveTextContent(/Firefox extension not detected/i));
+    expect(screen.getByTestId("message")).not.toHaveTextContent("private-assignment-url-token");
   });
 
   it("starts automatic refresh only once per mounted page even under StrictMode effect replay",async()=>{
@@ -267,5 +280,109 @@ describe("SubmissionStatusProvider",()=>{
     await user.click(screen.getByRole("button",{name:"Manual status sync"}));
     await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["HTTP_429",/limited.*retry|limited.*try again/i],
+    ["HTTP_5XX",/Canvas.*server error.*try again/i],
+    ["FETCH_EXCEPTION",/Firefox.*Canvas request.*reload.*try again/i],
+    ["HTTP_OTHER",/unexpected HTTP response.*retry/i],
+  ] as const)("explains partial %s failures while retaining the completed count",async(code,cause)=>{
+    const user=userEvent.setup();
+    const {started}=installFetch(9,{
+      updatedCount:8,failedCount:1,ignoredStale:7,lastErrorCode:"PARTIAL_SYNC",
+      failureDiagnostics:[{code,count:1}],
+    });
+    syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId("message")).toHaveTextContent(/^8 of 9 submission statuses updated[.]/);
+    expect(screen.getByTestId("message")).toHaveTextContent(cause);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["diagnostic","status"] as const)("blocks immediate partial retries for a 429 in any %s entry, then allows retry after the bounded cooldown",async(source)=>{
+    const user=userEvent.setup();
+    const now=vi.spyOn(Date,"now").mockReturnValue(Date.now());
+    try{
+      const {started,calls}=installFetch(3,{
+        updatedCount:1,failedCount:2,lastErrorCode:"PARTIAL_SYNC",
+        failureDiagnostics:source==="diagnostic"?[{code:"FETCH_EXCEPTION",count:1},{code:"HTTP_429",count:1}]:[],
+        failureHttpStatuses:source==="status"?[{status:500,count:1},{status:429,count:1}]:[],
+      });
+      syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+      render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+      await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+      await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+      const seconds=Number(screen.getByTestId("retry-after").textContent);
+      expect(seconds).toBeGreaterThan(0);
+      expect(seconds).toBeLessThanOrEqual(3600);
+      expect(screen.getByTestId("message")).toHaveTextContent(/limited/i);
+      await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+      expect(calls.start).toBe(1);
+      now.mockReturnValue(Date.now()+seconds*1000+1);
+      await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+      await waitFor(()=>expect(calls.start).toBe(2));
+    }finally{now.mockRestore();}
+  });
+
+  it.each([
+    [404,/HTTP 404.*Canvas.*access.*retry/i],
+    [503,/Canvas.*server error.*try again/i],
+    [403,/check.*sign.*access|check.*sign.*open/i],
+  ] as const)("explains partial HTTP %s when diagnostics are absent",async(status,cause)=>{
+    const user=userEvent.setup();
+    const {started}=installFetch(2,{updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC",failureHttpStatuses:[{status,count:1}]});
+    syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId("message")).toHaveTextContent(cause);
+  });
+
+  it.each([
+    ["CANVAS_NETWORK_ERROR",/temporarily unavailable.*retry/i],
+    ["CANVAS_SIGNED_OUT",/check.*sign.*access|check.*sign.*open/i],
+    ["UNRECOGNIZED_STATUS",/not be recognized.*retry/i],
+  ] as const)("uses validated result %s when the completion has no diagnostic details",async(code,cause)=>{
+    const user=userEvent.setup();
+    const {started}=installFetch(2,{updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC"});
+    const batch=batchResult(started.assignments);
+    batch.results[1]={...batch.results[1],state:"unknown",errorCode:code};
+    syncExtensionBatch.mockResolvedValue(batch);
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId("message")).toHaveTextContent(cause);
+  });
+
+  it("uses the batch failure after retaining an earlier successful batch and prior success",async()=>{
+    const user=userEvent.setup();
+    const previousSuccess="2026-10-04T05:00:00.000Z";
+    const {started,calls}=installFetch(101,{updatedCount:100,failedCount:1,lastErrorCode:"PARTIAL_SYNC",lastSuccessfulAt:previousSuccess});
+    syncExtensionBatch.mockResolvedValueOnce(batchResult(started.assignments.slice(0,100)))
+      .mockRejectedValueOnce(new ExtensionBridgeError("EXTENSION_TIMEOUT","private-assignment-url-token"));
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={{...initialState,lastSuccessfulAt:previousSuccess}}><Consumer/></SubmissionStatusProvider>);
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId("message")).toHaveTextContent(/100 of 101.*extension timed out.*retry/i);
+    expect(screen.getByTestId("message")).not.toHaveTextContent("private-assignment-url-token");
+    expect(calls.completeBody[0]).toMatchObject({batchErrorCode:"EXTENSION_TIMEOUT",results:expect.any(Array)});
+    expect((calls.completeBody[0] as {results:unknown[]}).results).toHaveLength(100);
+    expect(screen.getByTestId("last-success")).toHaveTextContent(previousSuccess);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it.each([false,true])("keeps generic safe partial guidance when no known cause exists (unknown code: %s)",async(unknownCode)=>{
+    const user=userEvent.setup();
+    const {started}=installFetch(2,{updatedCount:1,failedCount:1,lastErrorCode:"PARTIAL_SYNC",failureDiagnostics:[],failureHttpStatuses:[]});
+    if(unknownCode)syncExtensionBatch.mockRejectedValue(new ExtensionBridgeError("private-url-token" as SubmissionSyncErrorCode,"private-assignment-title"));
+    else syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await user.click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId("message")).toHaveTextContent(/1 of 2.*previously saved data.*retry/i);
+    expect(screen.getByTestId("message")).not.toHaveTextContent(/private-url-token|private-assignment-title|local-1|4242|2026-/);
   });
 });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {useState} from 'react';
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
@@ -46,7 +47,12 @@ const emptyState:SubmissionStatusSyncState<string>={
 
 function Consumer(){
   const ed=useEd();
+  const [outcome,setOutcome]=useState('');
+  async function sync(options?:Parameters<typeof ed.syncNow>[0]){setOutcome(JSON.stringify(await ed.syncNow(options)));}
   return <div>
+    <output data-testid="outcome">{outcome}</output>
+    <output data-testid="recovery">{JSON.stringify({notice:ed.recovery,operation:ed.recoveryOperation})}</output>
+    <output data-testid="sync-state">{JSON.stringify({lastAttemptedAt:ed.lastAttemptedAt,lastSuccessfulAt:ed.lastSuccessfulAt,lastErrorCode:ed.lastErrorCode,updatedCount:ed.updatedCount,failedCount:ed.failedCount})}</output>
     <span data-testid="phase">{ed.phase}</span>
     <span data-testid="message">{ed.message}</span>
     <span data-testid="courses">{ed.courses.map(c=>`${c.externalCourseId}:${c.enabled}`).join(",")}</span>
@@ -54,8 +60,10 @@ function Consumer(){
     <button onClick={()=>void ed.connect("fixture-ed-token-never-echo")}>Connect</button>
     <button onClick={()=>void ed.refreshCourses()}>Refresh</button>
     <button onClick={()=>void ed.saveEnabledCourses(["123"])}>Save</button>
-    <button onClick={()=>void ed.syncNow()}>Sync</button>
-    <button onClick={()=>void ed.syncNow({deferCalendarSync:true,syncAllRunId:'11111111-1111-4111-8111-111111111111'})}>Sync admitted</button>
+    <button onClick={()=>void sync()}>Sync</button>
+    <button onClick={()=>void sync({deferCalendarSync:true,syncAllRunId:'11111111-1111-4111-8111-111111111111'})}>Sync admitted</button>
+    <button onClick={()=>void sync({deferCalendarSync:true,syncAllRunId:'22222222-2222-4222-8222-222222222222'})}>Sync fresh admitted</button>
+    <button onClick={()=>void ed.refreshAccepted()}>Read accepted</button>
   </div>;
 }
 
@@ -64,13 +72,155 @@ function json(body:unknown,status=200){
 }
 
 it('forwards the admitted run only as an HTTP header for Ed sync',async()=>{
-  const requests=vi.fn(async()=>json({...emptyState,statusUpdatedCount:0,insertedCount:0,updatedCount:0}));
+  const requests=vi.fn(async()=>json({...validSync,insertedCount:0,updatedCount:0}));
   vi.stubGlobal('fetch',requests);
   render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
   await userEvent.setup().click(screen.getByRole('button',{name:'Sync admitted'}));
   await waitFor(()=>expect(requests).toHaveBeenCalledWith('/api/sources/ed/sync',{
     method:'POST',headers:{'x-kairos-calendar-sync':'defer','x-kairos-sync-all-run':'11111111-1111-4111-8111-111111111111'},
   }));
+});
+
+const validSync={lastAttemptedAt:'2026-10-22T06:11:06Z',lastSuccessfulAt:'2026-10-22T06:11:06Z',lastErrorCode:null,statusUpdatedCount:1,failedCourseCount:0};
+
+it.each([false,true])('only a fresh admitted run rechecks Ed recovery ownership (still uncertain: %s)',async stillUncertain=>{
+  const user=userEvent.setup();let syncRequests=0;
+  const requests=vi.fn(async(input:RequestInfo|URL)=>{
+    if(String(input).endsWith('/courses'))return json({connection,courses:[course]});
+    syncRequests++;
+    return syncRequests===1||stillUncertain?json({code:'SYNC_RECOVERY_REQUIRED',message:'synthetic-private-detail'},409):json(validSync);
+  });
+  vi.stubGlobal('fetch',requests);
+  const view=render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  await waitFor(()=>expect(screen.getByTestId('message')).toHaveTextContent(/uncertain outcome/));
+  await user.click(screen.getByRole('button',{name:'Read accepted'}));
+  view.rerender(<EdProvider connection={{...connection,lastSyncStatus:'success'}} initialCourses={[course]} initialSyncState={validSyncState}><Consumer/></EdProvider>);
+  await user.click(screen.getByRole('button',{name:'Sync'}));
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  expect(syncRequests).toBe(1);
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"blocked"');
+  await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+  await waitFor(()=>expect(syncRequests).toBe(2));
+  expect(screen.getByTestId('outcome')).toHaveTextContent(`"status":"${stillUncertain?'blocked':'completed'}"`);
+  expect(screen.getByTestId('phase')).toHaveTextContent(stillUncertain?'error':'success');
+  expect(document.body).not.toHaveTextContent('synthetic-private-detail');
+  if(stillUncertain){
+    await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+    expect(syncRequests).toBe(2);
+  }else{
+    await user.click(screen.getByRole('button',{name:'Sync'}));
+    expect(syncRequests).toBe(3);
+  }
+});
+
+it('keeps uncertain work blocked after time passes and a fresh admission returns an invalid result',async()=>{
+  let syncRequests=0;
+  vi.stubGlobal('fetch',async()=>++syncRequests===1?json({code:'SYNC_RECOVERY_REQUIRED'},409):json({}));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  const later=Date.now()+24*60*60*1000;
+  const now=vi.spyOn(Date,'now').mockReturnValue(later);
+  try{
+    await user.click(screen.getByRole('button',{name:'Sync'}));
+    expect(syncRequests).toBe(1);
+    await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+    expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"failed"');
+    await user.click(screen.getByRole('button',{name:'Sync'}));
+    expect(syncRequests).toBe(2);
+    expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"blocked"');
+  }finally{now.mockRestore();}
+});
+const validSyncState={lastAttemptedAt:validSync.lastAttemptedAt,lastSuccessfulAt:validSync.lastSuccessfulAt,lastErrorCode:null,updatedCount:1,failedCount:0};
+
+it('keeps finite Ed cooldowns blocked even with a fresh admitted run',async()=>{
+  const requests=vi.fn(async()=>json({code:'RATE_LIMITED',retryAfterSeconds:120},429));
+  vi.stubGlobal('fetch',requests);
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+  expect(requests).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"blocked"');
+  expect(screen.getByTestId('message')).toHaveTextContent('120 seconds');
+});
+
+it('retains uncertain ownership when a fresh recovery check is rate limited',async()=>{
+  let syncRequests=0;
+  vi.stubGlobal('fetch',async()=>++syncRequests===1?json({code:'SYNC_RECOVERY_REQUIRED'},409):json({code:'RATE_LIMITED',retryAfterSeconds:120},429));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+  await user.click(screen.getByRole('button',{name:'Sync'}));
+  expect(syncRequests).toBe(2);
+  expect(screen.getByTestId('outcome')).toHaveTextContent('120 seconds');
+  const now=vi.spyOn(Date,'now').mockReturnValue(Date.now()+121000);
+  try{
+    await user.click(screen.getByRole('button',{name:'Sync'}));
+    expect(syncRequests).toBe(2);
+    expect(screen.getByTestId('outcome')).toHaveTextContent('uncertain outcome');
+    expect(screen.getByTestId('message')).toHaveTextContent('uncertain outcome');
+    expect(screen.getByTestId('recovery')).toHaveTextContent('"requiresSettlement":true');
+    expect(screen.getByTestId('recovery')).toHaveTextContent('"operation":"sync"');
+    expect(screen.getByTestId('phase')).toHaveTextContent('error');
+  }finally{now.mockRestore();}
+});
+
+it.each([{},null,{...validSync,lastErrorCode:'UNKNOWN_PRIVATE_CODE'}, {...validSync,statusUpdatedCount:-1}])('rejects a malformed successful Ed sync payload (%j)',async body=>{
+  vi.stubGlobal('fetch',async()=>json(body));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Sync'}));
+  await waitFor(()=>expect(screen.getByTestId('phase')).toHaveTextContent('error'));
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"failed"');
+  expect(screen.getByTestId('message')).not.toHaveTextContent('Ed sync complete.');
+});
+
+it.each([
+  {...validSync,failedCourseCount:1},
+  {...validSync,lastSuccessfulAt:null},
+  {...validSync,lastSuccessfulAt:'2026-10-21T06:11:06Z'},
+  {...validSync,lastErrorCode:'PARTIAL_SYNC',failedCourseCount:0},
+  {...validSync,lastErrorCode:'PARTIAL_SYNC',failedCourseCount:1,lastSuccessfulAt:null},
+  {...validSync,lastErrorCode:'PARTIAL_SYNC',failedCourseCount:1,lastSuccessfulAt:'2026-10-21T06:11:06Z'},
+])('a contradictory Ed result cannot complete or clear uncertain ownership (%j)',async body=>{
+  let requests=0;
+  vi.stubGlobal('fetch',async()=>++requests===1?json({code:'SYNC_RECOVERY_REQUIRED'},409):json(body));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"failed"');
+  expect(screen.getByTestId('sync-state')).toHaveTextContent(JSON.stringify(emptyState));
+  await user.click(screen.getByRole('button',{name:'Sync'}));
+  expect(requests).toBe(2);
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"blocked"');
+});
+
+it.each([
+  ['ED_AUTH_INVALID',401,'2026-10-21T06:11:06Z'],
+  ['ED_UPSTREAM_ERROR',502,null],
+] as const)('retains accepted Ed sync metadata from a valid failed result (%s)',async(code,status,lastSuccessfulAt)=>{
+  const priorState={...emptyState,lastSuccessfulAt:'2026-10-21T06:11:06Z'};
+  vi.stubGlobal('fetch',async()=>json({...validSync,lastErrorCode:code,lastSuccessfulAt,statusUpdatedCount:0,failedCourseCount:2},status));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={priorState}><Consumer/></EdProvider>);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Sync'}));
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"failed"');
+  expect(screen.getByTestId('sync-state')).toHaveTextContent(JSON.stringify({lastAttemptedAt:validSync.lastAttemptedAt,lastSuccessfulAt:priorState.lastSuccessfulAt,lastErrorCode:code,updatedCount:0,failedCount:2}));
+});
+
+it('ignores malformed or unknown failed-result metadata without clearing Ed recovery',async()=>{
+  let requests=0;
+  vi.stubGlobal('fetch',async()=>++requests===1?json({code:'SYNC_RECOVERY_REQUIRED'},409):json({...validSync,lastErrorCode:'UNKNOWN_PRIVATE_CODE',failedCourseCount:2},502));
+  render(<EdProvider connection={connection} initialCourses={[course]} initialSyncState={emptyState}><Consumer/></EdProvider>);
+  const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Sync admitted'}));
+  await user.click(screen.getByRole('button',{name:'Sync fresh admitted'}));
+  expect(screen.getByTestId('sync-state')).toHaveTextContent(JSON.stringify(emptyState));
+  await user.click(screen.getByRole('button',{name:'Sync'}));
+  expect(requests).toBe(2);
+  expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"blocked"');
 });
 
 it.each([
@@ -156,6 +306,7 @@ describe("EdProvider",()=>{
     render(<EdProvider connection={connection} initialCourses={[{...course,enabled:true}]} initialSyncState={emptyState}><Consumer/></EdProvider>);
     await user.click(screen.getByRole("button",{name:"Sync"}));
     await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("partial"));
+    expect(screen.getByTestId('outcome')).toHaveTextContent('"status":"partial"');
     expect(screen.getByTestId("message")).toHaveTextContent(/some Ed courses/i);
     expect(screen.getByTestId("courses")).toHaveTextContent("123:true");
   });

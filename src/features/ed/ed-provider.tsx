@@ -1,7 +1,7 @@
 "use client";
 import {syncAllRequestInit} from '@/lib/sync-all/client';
 import type {SyncAllOptions} from '@/lib/sync-all/types';
-import {recoveryFromResponse,type RecoveryNotice} from "@/lib/recovery/presentation";
+import {getRecoveryNotice,recoveryFromResponse,type RecoveryNotice} from "@/lib/recovery/presentation";
 
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,11 @@ import type { SourceCourse } from "@/lib/sources/types";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
 
 export type EdPhase="idle"|"testing"|"connecting"|"refreshing"|"syncing"|"success"|"partial"|"error";
+export type EdSyncAttemptResult={
+  status:'completed'|'partial'|'failed'|'blocked';
+  message:string;
+  recovery:RecoveryNotice|null;
+};
 
 type EdRecoveryOperation='test'|'connect'|'refresh'|'selection'|'sync';
 type EdContextValue=SubmissionStatusSyncState<string>&{
@@ -24,7 +29,7 @@ type EdContextValue=SubmissionStatusSyncState<string>&{
   refreshCourses():Promise<void>;
   refreshAccepted():Promise<void>;
   saveEnabledCourses(ids:string[]):Promise<void>;
-  syncNow(options?:SyncAllOptions):Promise<void>;
+  syncNow(options?:SyncAllOptions):Promise<EdSyncAttemptResult>;
 };
 
 const Context=createContext<EdContextValue|null>(null);
@@ -39,6 +44,27 @@ async function readJson(response:Response):Promise<Record<string,unknown>>{
 
 function courseCountMessage(count:number):string{
   return `Ed token is valid · ${count} ${count===1?"course":"courses"} found.`;
+}
+
+const ED_SYNC_ERROR_CODES=['ED_AUTH_INVALID','ED_NETWORK_ERROR','ED_RATE_LIMITED','ED_UPSTREAM_ERROR','ED_PARSE_ERROR','ED_COURSE_UNAVAILABLE','PARTIAL_SYNC','ED_NOT_CONNECTED','ED_NO_COURSES_ENABLED'] as const;
+type EdResultState=SubmissionStatusSyncState<typeof ED_SYNC_ERROR_CODES[number]>;
+function projectSyncState(body:Record<string,unknown>):EdResultState|null{
+  const timestamp=(value:unknown):value is string=>typeof value==='string'&&Number.isFinite(Date.parse(value));
+  const count=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
+  const errorCode=ED_SYNC_ERROR_CODES.find(code=>code===body.lastErrorCode);
+  if(!timestamp(body.lastAttemptedAt)
+    ||(body.lastSuccessfulAt!==null&&!timestamp(body.lastSuccessfulAt))
+    ||(body.lastErrorCode!==null&&!errorCode)
+    ||!count(body.statusUpdatedCount)||!count(body.failedCourseCount))return null;
+  const lastErrorCode=errorCode??null;
+  if(lastErrorCode===null||lastErrorCode==='PARTIAL_SYNC'){
+    if(body.lastSuccessfulAt===null||Date.parse(body.lastSuccessfulAt)<Date.parse(body.lastAttemptedAt))return null;
+    if(lastErrorCode===null?body.failedCourseCount!==0:body.failedCourseCount===0)return null;
+  }
+  return {
+    lastAttemptedAt:body.lastAttemptedAt,lastSuccessfulAt:body.lastSuccessfulAt,lastErrorCode,
+    updatedCount:body.statusUpdatedCount,failedCount:body.failedCourseCount,
+  };
 }
 
 export function EdProvider({
@@ -60,11 +86,16 @@ export function EdProvider({
   const [message,setMessage]=useState("");
   const [recovery,setRecovery]=useState<RecoveryNotice|null>(null);
   const blockedUntil=useRef(0);
+  const cooldownUntil=useRef(0);
+  const attemptedSyncAllRuns=useRef(new Set<string>());
   const [recoveryOperation,setRecoveryOperation]=useState<EdRecoveryOperation|null>(null);
   function errorMessage(body:Record<string,unknown>,fallback:string,response:Response|undefined,operation:EdRecoveryOperation):string{
     setRecoveryOperation(operation);
     const notice=recoveryFromResponse(body,response,'ed');setRecovery(notice);
-    if(notice?.retryAfterSeconds)blockedUntil.current=Date.now()+notice.retryAfterSeconds*1000;
+    if(notice?.retryAfterSeconds){
+      cooldownUntil.current=Date.now()+notice.retryAfterSeconds*1000;
+      if(blockedUntil.current!==Infinity)blockedUntil.current=cooldownUntil.current;
+    }
     if(body.code==='SYNC_RECOVERY_REQUIRED')blockedUntil.current=Infinity;
     return notice?.message??fallback;
   }
@@ -174,8 +205,19 @@ export function EdProvider({
     }
   }
 
-  async function syncNow(options?:SyncAllOptions):Promise<void>{
-    if(Date.now()<blockedUntil.current)return ;
+  async function syncNow(options?:SyncAllOptions):Promise<EdSyncAttemptResult>{
+    // A fresh manual admission may ask the guarded endpoint to recheck ownership.
+    // Accepted connection reads and elapsed time cannot settle uncertain provider work.
+    const freshAdmission=Boolean(options?.syncAllRunId&&!attemptedSyncAllRuns.current.has(options.syncAllRunId));
+    if(Date.now()<cooldownUntil.current||(Date.now()<blockedUntil.current&&!(blockedUntil.current===Infinity&&freshAdmission))){
+      const notice=Date.now()>=cooldownUntil.current&&blockedUntil.current===Infinity
+        ?getRecoveryNotice('SYNC_RECOVERY_REQUIRED',{key:'ed'})
+        :recovery??getRecoveryNotice('RATE_LIMITED',{key:'ed'});
+      const blockedMessage=notice?.message??'Ed sync is unavailable. Retry later.';
+      setPhase('error');setMessage(blockedMessage);setRecovery(notice);setRecoveryOperation('sync');
+      return {status:'blocked',message:blockedMessage,recovery:notice};
+    }
+    if(options?.syncAllRunId)attemptedSyncAllRuns.current.add(options.syncAllRunId);
     setRecovery(null);setRecoveryOperation(null);
     setPhase("syncing"); setMessage("");
     try{
@@ -184,28 +226,37 @@ export function EdProvider({
         ...syncAllRequestInit(options),
       });
       const body=await readJson(response);
-      if(typeof body.lastAttemptedAt==="string"||body.lastAttemptedAt===null){
-        setSyncState({
-          lastAttemptedAt:body.lastAttemptedAt as string|null,
-          lastSuccessfulAt:(typeof body.lastSuccessfulAt==="string"||body.lastSuccessfulAt===null)?body.lastSuccessfulAt as string|null:null,
-          lastErrorCode:(typeof body.lastErrorCode==="string"||body.lastErrorCode===null)?body.lastErrorCode as string|null:null,
-          updatedCount:typeof body.statusUpdatedCount==="number"?body.statusUpdatedCount:0,
-          failedCount:typeof body.failedCourseCount==="number"?body.failedCourseCount:0,
-        });
+      const resultState=projectSyncState(body);
+      const completedResult=response.ok&&resultState&&(resultState.lastErrorCode===null||resultState.lastErrorCode==='PARTIAL_SYNC');
+      if(resultState&&(completedResult||(resultState.lastErrorCode!==null&&resultState.lastErrorCode!=='PARTIAL_SYNC'))){
+        setSyncState(previous=>({...resultState,lastSuccessfulAt:completedResult?resultState.lastSuccessfulAt:previous.lastSuccessfulAt??resultState.lastSuccessfulAt}));
+      }
+      if(!completedResult){
+        const failureBody=response.ok?{code:resultState?.lastErrorCode??'INVALID_RESULT'}:body;
+        const failureMessage=errorMessage(failureBody,'Ed sync could not be completed.',response,'sync');
+        const notice=recoveryFromResponse(failureBody,response,'ed');
+        setPhase('error');setMessage(failureMessage);
+        router.refresh();
+        return {status:notice?.requiresSettlement||notice?.retryAfterSeconds?'blocked':'failed',message:failureMessage,recovery:notice};
       }
       if(body.lastErrorCode==="PARTIAL_SYNC"){
+        blockedUntil.current=0;cooldownUntil.current=0;
         setPhase("partial");
-        setMessage('Some Ed courses could not be refreshed. '+errorMessage(body,"Previously saved data was kept.",response,"sync"));
-      }else if(!response.ok){
-        setPhase("error");
-        setMessage(errorMessage(body,"Ed sync could not be completed.",response,"sync"));
+        const partialMessage='Some Ed courses could not be refreshed. '+errorMessage(body,"Previously saved data was kept.",response,"sync");
+        setMessage(partialMessage);
+        router.refresh();
+        return {status:'partial',message:partialMessage,recovery:recoveryFromResponse(body,response,'ed')};
       }else{
+        blockedUntil.current=0;cooldownUntil.current=0;
         setPhase("success");
         setMessage("Ed sync complete.");
       }
       router.refresh();
+      return {status:'completed',message:'Ed sync complete.',recovery:null};
     }catch{
-      setPhase("error"); setMessage(errorMessage({code:"SERVICE_UNAVAILABLE"},"Ed sync could not be completed.",undefined,"sync"));
+      const failureMessage=errorMessage({code:"SERVICE_UNAVAILABLE"},"Ed sync could not be completed.",undefined,"sync");
+      setPhase("error");setMessage(failureMessage);
+      return {status:'failed',message:failureMessage,recovery:getRecoveryNotice('SERVICE_UNAVAILABLE',{key:'ed'})};
     }
   }
 
