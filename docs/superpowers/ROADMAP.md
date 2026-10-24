@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-10
+**Updated:** 2026-10-24
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -147,6 +147,8 @@ Hosted acceptance:
 
 ## Milestone 7 — Public beta readiness — Engineering complete; release acceptance open
 
+Current runtime `316e2c9` is deployed, and normal Sync All is verified with Canvas partial. Remaining hosted lifecycle, operational and Free-capacity assertions are tracked in [current readiness](../deployment/readiness-milestone-7.md) and the [latest Sync All record](../deployment/sync-all-reliability-2026-10-24.md). The implementation checkpoints below are historical; their earlier deployment/approval statements do not replace those current records.
+
 Scope:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
 - UW-first product positioning and continued `canvas.uw.edu` browser integration rather than arbitrary Canvas institutions;
@@ -171,11 +173,11 @@ Implementation plan:
 - A compatible recovery candidate is built/native-verified and representative cleanup costs are measured. Exact hosted/two-account/provider acceptance, actual operational/privacy/token/capacity evidence and live rollback remain release gates. Support/security delivery is operator-confirmed; new workflow activation remains separate.
 - No production upload, remote migration, traffic change, export or restore was performed. Explicit production approval is still required. See `docs/deployment/closeout-milestone-7.md` and the readiness/security/acceptance records.
 
-## Local guest mode — Planned after Milestone 7, not yet numbered
+## Local guest mode — Hybrid design in progress, not yet numbered
 
-User selected this follow-up on October 14, 2026. People should be able to use Kairos without creating or signing into a Kairos account, with assignments and preferences stored on their device. This changes storage and integration boundaries and needs an architectural design before implementation; it is outside Milestone 7's launch acceptance.
+User selected this follow-up on October 14, 2026. On October 24 the user confirmed live Canvas, Gradescope and Ed syncing in its first release and chose a hybrid architecture so people can use Kairos without creating or signing into a Kairos account. Assignments/preferences are stored locally; Canvas feed and Ed credentials/responses may pass transiently through the server. Canvas statuses and Gradescope retain their existing Firefox/provider-session requirements.
 
-The proposed starting scope is a browser guest experience with local persistence, import/export and backup controls, clear behavior when browser data is cleared, and an optional later move to an account. Live source connections, calendar authorization, credential storage, offline support, and the Firefox bridge must be assessed during that design. A Kairos account and a provider account are separate concerns; guest mode must not imply access to provider data without its required authorization. The exact feature set and migration behavior remain to be agreed.
+The [hybrid guest design](specs/2026-10-24-hybrid-local-guest-mode-design.md) is a draft pending approval. It proposes browser persistence, separate bounded anonymous source reads/admission, direct local bridge ingestion, credential lifetime controls, backup/reset and guest/account separation. Calendar writes, cold-start offline support and account transfer are explicitly proposed later scopes rather than implemented features. Product implementation follows design approval and a detailed plan. Guest development is separate from still-open Milestone 7 hosted release acceptance; no guest production activation is implied.
 
 ## Later extension follow-ups — Planned, not yet numbered
 
