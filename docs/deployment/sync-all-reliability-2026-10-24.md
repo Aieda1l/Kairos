@@ -1,6 +1,6 @@
 # Sync All client recovery and Canvas partial feedback
 
-STATUS: DEPLOYED; NORMAL LIVE SYNC ALL VERIFICATION PENDING
+STATUS: DEPLOYED; NORMAL LIVE SYNC ALL VERIFIED WITH CANVAS PARTIAL
 
 This October 23–24 UTC continuation follows the deployed Ed persistence change, source `6e05463428869b08481dc577c7b8d3915d468018` / Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9`. It changes client feedback and manual Ed recovery rechecks, not durable ownership or provider access policy.
 
@@ -56,12 +56,24 @@ After the operator freshly confirmed all earlier server and browser-extension at
 
 Full before/after metadata comparison preserved all 89 assignments and submission statuses, three source connections, three calendar connections and their credentials, 51 mappings and 230 bridge-request rows. Accepted source/calendar/submission metadata, the owner nonce and cooldown, all other owners and all other controls were preserved. The unfinished request remains evidence. Recovery made no provider requests or accepted-data deletions and did not deploy an application change. The historical SQL verifier reports twelve cases plus a separate owner/cooldown preservation assertion; syntax, inert-import/SQL equality checks and independent tool review passed. An independent read at `09:02:26.037Z` verified all six owners idle and Canvas enabled at version 8.
 
-## Live verification boundary
+## Verified live Sync All and remaining limits
 
-A fresh post-recovery baseline at `2026-10-24T09:02:56.235Z` records all three source connections and calendar destinations enabled with idle owners. The operator has been asked to open signed-in Canvas, open Kairos, let automatic checking finish, then run Sync All once while keeping the page open. A single identified root with all five claims, matching source/calendar completion times and idle owners remains pending. The latest observed Canvas partial is 9 of 10; the earlier 8-of-9 result is historical. Neither prior success nor an elapsed deadline establishes the new run's outcome.
+A fresh post-recovery baseline at `2026-10-24T09:02:56.235Z` recorded all three source connections and calendar destinations enabled with idle owners. The operator then reported Ed complete and the expected Canvas 9-of-10 partial, without the earlier busy messages. Read-only verification at `09:28:25.122Z` confirms the normal Sync All issued at `09:27:33.824Z`: all five eligible steps were claimed, each provider's fresh timestamps follow its own claim, source completions precede the calendar claim, and all six owners are idle.
+
+| Step | Claim time (UTC) | Fresh recorded outcome (UTC) |
+| --- | --- | --- |
+| Canvas deadlines | 09:27:33.920 | 09:27:34.169–34.755; successful |
+| Canvas submissions | 09:27:35.418 | 09:27:35.616–36.746; 9 updated, 1 failed, `PARTIAL_SYNC` |
+| Gradescope | 09:27:37.635 | 09:27:37.881–38.353; 32 updated, no failures |
+| Ed | 09:27:38.669 | 09:27:38.968; 47 updated, no failures |
+| Calendar destinations | 09:27:39.778 | Microsoft 09:27:40.350, Google 09:27:42.416, CalDAV 09:27:44.006; each successful with 17 mappings |
+
+There are two retained root admissions, at `09:27:00.770Z` and `09:27:33.824Z`. This conclusion uses the later root's complete claim group and ensuing provider timestamps, not mixed results from the two runs. Independent review confirmed the private/public claim grouping and chronology. A local verifier uniquely matches the later root within its time window and rejects the earlier mixed-run inventory plus missing-claim, running-calendar and stale-source counterfactuals. Raw timestamp projections are retained separately from the observer's assessment summaries.
+
+This closes the planned normal Sync All live-verification step **with Canvas partial**. It is not full success for every provider item: the remaining Canvas access-verification failure retains accepted saved data, and neither the failed assignment's identity nor a new HTTP status is established. The earlier 8-of-9/HTTP 401 observation remains historical. Stored equal start/end timestamps do not measure elapsed runtime or CPU. Calendar update/removal/recreation, other beta acceptance assertions and reliable Workers Free headroom remain open. No application deployment or provider mutation was performed by this read-only verification.
 
 Evidence is retained under ignored `artifacts/sync-all-reliability/`: original/follow-up RED logs, component/full-suite verification, failed browser traces, test-fixture diagnosis and passing browser logs. All provider fixtures and credentials used by automated checks are synthetic. Live normal Sync All verification after rollout must distinguish the expected Canvas access partial from other source/calendar outcomes; it must not weaken or recover a durable owner automatically.
 
 Exact-source archive, CI, staged/promotion, retention, public/client checks and read-only observation receipts are retained in ignored `artifacts/sync-all-feedback-release-v2/`. The earlier local archive, never sealed or uploaded, remains in `artifacts/sync-all-feedback-release/`; it is not release evidence for the new source.
 
-The source/browser follow-up is retained in ignored `artifacts/sync-all-reliability/2026-10-24-live-feedback-followup.md`. Exact-owner recovery anchors, reviewed tool, immutable plan and confirmed mutation receipt are retained in ignored `artifacts/canvas-autosync-incident-2026-10-24/`. Private identifiers, nonces and encrypted payloads must not be copied into public records.
+The source/browser follow-up is retained in ignored `artifacts/sync-all-reliability/2026-10-24-live-feedback-followup.md`. Exact-owner recovery anchors, reviewed tool, immutable plan, confirmed mutation receipt and the final temporal-attribution verifier are retained in ignored `artifacts/canvas-autosync-incident-2026-10-24/`. The final raw inventory is `artifacts/sync-all-feedback-release-v2/post-recovery-reported-inventory-1792834105122.json` with its private claim-group companion and a `normal-sync-all-confirmed-*` receipt. Private identifiers, nonces and encrypted payloads must not be copied into public records.
