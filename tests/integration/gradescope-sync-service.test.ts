@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import crypto from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
 import { openDatabase } from "../helpers/legacy-db";
 import { migrate } from "../helpers/legacy-db";
 import { AssignmentRepository } from "@/lib/db/repositories/assignments";
@@ -121,7 +122,15 @@ describe("Gradescope sync service",()=>{
 
   it("returns anonymous error-code and page-structure diagnostics for failed courses",()=>{
     const {db}=setup();
-    const started=startGradescopeSync(db,new Date("2026-10-05T05:00:00.000Z"));
+    const requestId="f06ce91b-6c28-456f-8a01-0123456789ab";
+    const started=(()=>{
+      const randomUUID=vi.spyOn(crypto,"randomUUID").mockReturnValueOnce(requestId);
+      try{
+        return startGradescopeSync(db,new Date("2026-10-05T05:00:00.000Z"));
+      }finally{
+        randomUUID.mockRestore();
+      }
+    })();
     const result=completeGradescopeSync(db,{
       requestId:started.requestId,
       batches:[{
@@ -149,19 +158,32 @@ describe("Gradescope sync service",()=>{
       }],
     },new Date("2026-10-05T05:05:01.000Z"));
 
-    expect(result.failureErrorCodes).toEqual([{code:"GRADESCOPE_PARSE_ERROR",count:1}]);
-    expect(result.failureStructures).toEqual([{
-      errorCode:"GRADESCOPE_PARSE_ERROR",
-      diagnostics:{
-        courseRootDetected:true,
-        tableCount:0,
-        roleRowCount:0,
-        assignmentLinkCount:0,
-        submitButtonCount:0,
-        assignmentTableDetected:false,
-      },
-    }]);
-    expect(JSON.stringify(result)).not.toContain("456");
+    // A correlation UUID may contain a course ID; diagnostics must stay anonymous.
+    expect(result).toEqual({
+      requestId,
+      insertedCount:1,
+      updatedCount:0,
+      statusUpdatedCount:1,
+      failedCourseCount:1,
+      ignoredStale:0,
+      lastAttemptedAt:"2026-10-05T05:00:00.000Z",
+      lastSuccessfulAt:"2026-10-05T05:05:01.000Z",
+      lastErrorCode:"PARTIAL_SYNC",
+      failureDiagnostics:[],
+      failureHttpStatuses:[],
+      failureErrorCodes:[{code:"GRADESCOPE_PARSE_ERROR",count:1}],
+      failureStructures:[{
+        errorCode:"GRADESCOPE_PARSE_ERROR",
+        diagnostics:{
+          courseRootDetected:true,
+          tableCount:0,
+          roleRowCount:0,
+          assignmentLinkCount:0,
+          submitButtonCount:0,
+          assignmentTableDetected:false,
+        },
+      }],
+    });
     db.close();
   });
 
