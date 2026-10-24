@@ -25,11 +25,14 @@
 - [x] Independently review source/component changes; fix invalid-result and lost-failure-metadata findings.
 - [x] Add all-three-destination composite coverage and real browser pipeline regression; correct only the test fixture's unsupported REPORT status.
 - [x] Finish integrated tests, types, lint and Workers/static safety checks on the final file set.
-- [ ] Publish the reviewable change and complete exact-source repository CI.
-- [ ] Use existing rollout gates and verify the normal live Sync All outcome, preserving the known Canvas access partial and all server protections.
+- [x] Publish the reviewable change and complete exact-source repository CI (PRs #48/#49; resulting-main run 40061552619).
+- [x] Use existing rollout gates, verify the deployed build and preserve accepted data and all server protections.
+- [ ] Verify one normal live Sync All outcome, preserving the known Canvas access partial; the authenticated operator check is pending.
 
 ## Evidence locations
 
 Ignored `artifacts/sync-all-reliability/` contains RED/GREEN logs, preserved first browser failures, fixture diagnosis and the passing Chromium/Firefox run. The browser case uses one actual fixture CalDAV destination; composite/component/backend tests cover three-provider fan-out. No real provider credentials or private assignment details belong in these records.
 
-The [candidate record](../../deployment/sync-all-reliability-2026-10-24.md) records the operator's assignment-specific Canvas 401 and the limits of that diagnosis. The expected access partial is retained; no unsupported status is fabricated.
+The [release record](../../deployment/sync-all-reliability-2026-10-24.md) records the operator's assignment-specific Canvas 401 and the limits of that diagnosis. The expected access partial is retained; no unsupported status is fabricated.
+
+The release record also documents the deterministic RED/GREEN repair for a pre-existing UUID-substring privacy-test flake. Exact-source CI, archive/runtime, staged/promoted configuration and health, data retention and public/client receipts are in ignored `artifacts/sync-all-feedback-release-v2/`.
