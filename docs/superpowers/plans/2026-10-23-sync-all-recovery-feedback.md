@@ -28,7 +28,7 @@
 - [x] Publish the reviewable change and complete exact-source repository CI (PRs #48/#49; resulting-main run 40061552619).
 - [x] Use existing rollout gates, verify the deployed build and preserve accepted data and all server protections.
 - [x] Investigate the later Canvas busy report and recover the exact stopped bridge owner with existing fences; preserve all 89 assignments/statuses and 230 bridge requests.
-- [ ] Verify one normal live Sync All outcome, preserving the known Canvas access partial; the authenticated operator check is pending.
+- [x] Verify one normal live Sync All outcome, preserving the known Canvas access partial; the 09:27:33.824 UTC run has all five claims, matching fresh provider timestamps and all six owners idle.
 
 ## Evidence locations
 
@@ -38,4 +38,4 @@ The [release record](../../deployment/sync-all-reliability-2026-10-24.md) record
 
 The release record also documents the deterministic RED/GREEN repair for a pre-existing UUID-substring privacy-test flake. Exact-source CI, archive/runtime, staged/promoted configuration and health, data retention and public/client receipts are in ignored `artifacts/sync-all-feedback-release-v2/`.
 
-The latest Canvas partial is 9 of 10. Later source and calendar successes span multiple admissions and must not be combined into one passing run. The reviewed Canvas recovery receipt and post-check are retained under ignored `artifacts/canvas-autosync-incident-2026-10-24/` and the release evidence directory; a fresh post-recovery observer baseline preserves the remaining live-verification boundary.
+The latest Canvas partial is 9 of 10. Earlier source/calendar outcomes spanned different admissions and were rejected as single-run evidence. The post-recovery run issued at 09:27:33.824 UTC is uniquely matched to all five claims and ensuing source/calendar completions; independent review and local missing-claim/running-owner/stale-source checks passed. This completes this plan's live sequence check with Canvas partial, while the unresolved access item, remaining calendar lifecycle assertions and Workers Free headroom stay open. Recovery and final attribution receipts are retained under ignored `artifacts/canvas-autosync-incident-2026-10-24/` and `artifacts/sync-all-feedback-release-v2/`.
