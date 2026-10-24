@@ -2,7 +2,7 @@
 
 Date: 2026-10-24
 
-Status: **DRAFT — pending user design approval.** This document proposes product and engineering choices; it does not authorize deployment or claim implementation exists.
+Status: **APPROVED by the user on 2026-10-24.** Approval covers this design and its proposed first-release boundaries. It does not authorize production activation or claim implementation exists. The next checkpoint is review of the detailed implementation plan and execution method.
 
 ## 1. Intent and decisions
 
@@ -10,7 +10,7 @@ People should be able to use Kairos without creating or signing into a Kairos ac
 
 Provider access is separate from a Kairos account. Canvas submission statuses and Gradescope still require the existing Firefox extension and signed-in provider tabs. Canvas feed and Ed requests use the user's private feed URL/personal API token and do not require Firefox.
 
-The following are engineering proposals for approval, rather than additional requirements already selected by the user:
+The following engineering defaults were accepted through design approval; the explicit no-account, three-source and hybrid decisions above came directly from the user's earlier choices:
 
 - Guest views and data live at `/guest`; the hosted account application remains a separate mode.
 - IndexedDB stores guest coursework and source configuration. Credentials are memory-only by default, with explicit optional remembering on this device.
@@ -205,4 +205,4 @@ Primary browser/platform references consulted on 2026-10-24:
 - [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Mozilla content-script and background boundaries](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts)
 
-These references support platform constraints, not evidence that this guest implementation or its native transports already work. The source choice is approved; this full design remains subject to user approval before product implementation.
+These references support platform constraints, not evidence that this guest implementation or its native transports already work. The user approved the full design before implementation planning. [The implementation plan](../plans/2026-10-24-hybrid-local-guest-mode.md) records the next review/execution checkpoint.
