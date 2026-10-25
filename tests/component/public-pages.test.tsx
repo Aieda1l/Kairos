@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import {render,screen} from "@testing-library/react";
-import {expect,it} from "vitest";
+import {expect,it,vi} from "vitest";
+vi.mock("@/lib/guest/server/feature",()=>({getGuestEnabled:async()=>false}));
 import HomePage from "@/app/page";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 
-it("renders the public homepage without requiring a session",()=>{
-  render(<HomePage/>);
+it("renders the public homepage without requiring a session",async()=>{
+  render(await HomePage());
   expect(screen.getByRole("heading",{name:"Kairos"})).toBeInTheDocument();
   expect(screen.getByText(/not affiliated with or endorsed by the University of Washington/i)).toBeInTheDocument();
   expect(screen.getAllByRole("link",{name:/sign in|open kairos/i})).toHaveLength(2);

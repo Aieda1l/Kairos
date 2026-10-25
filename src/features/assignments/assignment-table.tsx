@@ -10,9 +10,13 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[];timeZone:string}){
-  const [filters,setFilters]=useState<FilterState>({course:"",source:"",search:""});
-  const [sort,setSort]=useState<"due"|"status">("due");
+export function AssignmentTable({assignments,timeZone,filters:controlledFilters,onFiltersChange,sort:controlledSort,onSortChange}:{assignments:Assignment[];timeZone:string;filters?:FilterState;onFiltersChange?:(value:FilterState)=>void;sort?:"due"|"status";onSortChange?:(value:"due"|"status")=>void}){
+  const [localFilters,setLocalFilters]=useState<FilterState>({course:"",source:"",search:""});
+  const [localSort,setLocalSort]=useState<"due"|"status">("due");
+  const filters=controlledFilters??localFilters;
+  const sort=controlledSort??localSort;
+  const setFilters=(value:FilterState)=>{if(controlledFilters===undefined)setLocalFilters(value);onFiltersChange?.(value);};
+  const setSort=(value:"due"|"status")=>{if(controlledSort===undefined)setLocalSort(value);onSortChange?.(value);};
   const [selected,setSelected]=useState<Assignment|null>(null);
   const courses=[...new Set(assignments.map(a=>a.courseName))].sort();
 
