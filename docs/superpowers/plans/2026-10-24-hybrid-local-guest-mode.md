@@ -68,7 +68,7 @@ type GuestPreferences = {
 type GuestSyncState = {
   sourceConnectionId:string;stage:GuestStage;lastAttemptedAt:string|null;
   lastSuccessfulAt:string|null;lastErrorCode:GuestSafeCode|null;
-  updatedCount:number;failedCount:number;resumeKeys:string[];
+  updatedCount:number;failedCount:number;resumeKeys:string[];hasSuccessfulCheck:boolean;
 };
 type GuestSnapshot = {
   schemaVersion:1;datasetId:string;revision:number;
@@ -118,6 +118,7 @@ F3 implements this `GuestStore` port; methods run synchronously within their IDB
 
 ```ts
 interface GuestStore {
+  getIdentity():Promise<{datasetId:string;revision:number}>;
   read():Promise<GuestSnapshot>;
   subscribe(listener:()=>void):()=>void;
   savePreferences(patch:Partial<GuestPreferences>,datasetId:string):Promise<GuestSnapshot>;
@@ -143,6 +144,8 @@ F1 defines `GuestBackupV1={schemaVersion:1,exportedAt:string,data:{connections,c
 Shared portable limits live in `src/lib/guest/limits.ts` from F1. Later tasks import those constants rather than creating a second set under source transport modules.
 
 The coordinator uses `GuestClock`, a fresh UUID factory and the store; current run outcomes separately report pending, failed and ignored members. Never count unprocessed queue members as successful or silently omit them from the visible result.
+
+`hasSuccessfulCheck` is the current-attempt success marker, including legitimate empty/stale-only success; reset it in `markStageAttempt`. Do not infer it from counts or timestamp inequalities. `getIdentity` reads valid metadata independently of coursework graph parsing so a confirmed reset remains fenced when a data record is corrupt. If metadata itself cannot be read safely, show browser-storage recovery instructions rather than silently erasing it.
 
 Credential re-entry after a memory-only reload is not source replacement: the user explicitly selects use for the same source, a bounded read validates the new value, and a `credential` commit preserves coursework/course selection while advancing connection generation and changing only secret/setup metadata. Switching provider identity still requires the approved disconnect/replacement flow. Forgetting a secret clears memory/remembered storage and advances generation without deleting coursework.
 

@@ -47,7 +47,7 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
 
 **Interfaces:** Consume F1. Produce `mergeGuestCourseResult(snapshot:GuestSnapshot,result:GuestCourseResult,at:string,uuid:()=>string):GuestSnapshot`, `serializeGuestBackup(snapshot:GuestSnapshot,exportedAt:string):string`, `parseGuestBackup(text:string):GuestBackupV1`. `GuestCourseResult` contains connection ID/generation, stage, external course ID/null, checkedAt, normalized assignments, validated status writes, success/error and failed count. Backup is an explicit allowlisted noncredential projection.
 
-- [ ] **Step 1 — Write RED merge/backup tests.** Pin:
+- [x] **Step 1 — Write RED merge/backup tests.** Pin:
   ```ts
   expect(second.assignments[0].id).toBe(first.assignments[0].id);
   expect(second.assignments[0].firstSeenAt).toBe(first.assignments[0].firstSeenAt);
@@ -56,14 +56,14 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
   expect(parseGuestBackup(serializeGuestBackup(first,at)).schemaVersion).toBe(1);
   ```
   Also assert omitted rows retained, successful empty course freshness, failed siblings retained, Gradescope metadata first-wins, foreign/duplicate members rejected, credential/internal fields excluded structurally, unsupported versions/references/oversized imports rejected.
-- [ ] **Step 2 — Verify RED.** Run `npm test -- tests/unit/guest-merge.test.ts tests/unit/guest-backup.test.ts`; expect the new semantics to fail before implementation.
-- [ ] **Step 3 — Implement pure functions.** Generate IDs only for new identities; retain all normalized fields. Separate attemptedAt from successfulAt. Import is replacement input, not a title/date/source-kind merge. Preserve source-specific Ed progress and Canvas date-only values by reusing normalized inputs.
-- [ ] **Step 4 — Verify GREEN.** Run the same tests, `npm test -- tests/integration/assignment-repository.test.ts tests/integration/gradescope-sync-service.test.ts` and `npm run typecheck`; do not change hosted merge behavior.
-- [ ] **Step 5 — Commit.** Stage only F2 files and commit `feat: add guest merge and backup rules`.
+- [x] **Step 2 — Verify RED.** Run `npm test -- tests/unit/guest-merge.test.ts tests/unit/guest-backup.test.ts`; expect the new semantics to fail before implementation.
+- [x] **Step 3 — Implement pure functions.** Generate IDs only for new identities; retain all normalized fields. Separate attemptedAt from successfulAt. Import is replacement input, not a title/date/source-kind merge. Preserve source-specific Ed progress and Canvas date-only values by reusing normalized inputs.
+- [x] **Step 4 — Verify GREEN.** Run the same tests, `npm test -- tests/integration/assignment-repository.test.ts tests/integration/gradescope-sync-service.test.ts` and `npm run typecheck`; do not change hosted merge behavior.
+- [x] **Step 5 — Commit.** Stage only F2 files and commit `feat: add guest merge and backup rules`.
 
 ### F3: Implement transactional IndexedDB storage and local lease/request fences
 
-**Files:** Create `src/lib/guest/{store,indexeddb,store-data,store-runs}.ts`; test `tests/e2e/guest-storage.spec.ts`, `guest-concurrency.spec.ts`, browser-only `tests/e2e/fixtures/guest-store-harness.ts`; modify `playwright.config.ts`, `vite.config.ts` for explicit guest test selection and loopback-only test flag.
+**Files:** Create `src/lib/guest/{store,indexeddb,store-data,store-runs}.ts`; extend `src/lib/guest/types.ts` only for the approved metadata-only getIdentity method; test `tests/e2e/guest-storage.spec.ts`, `guest-concurrency.spec.ts`, browser-only `tests/e2e/fixtures/guest-store-harness.ts`; modify `playwright.config.ts`, `vite.config.ts` for explicit guest test selection and loopback-only test flag.
 
 **Interfaces:** `openGuestStore(options?:{name?:string;uuid?:()=>string}):Promise<GuestStore>` implements the parent port. Version-1 stores: metadata, connections, courses, assignments, statuses, syncStates, preferences, credentials, requests. Unique indexes enforce connection kind and connection+external identity. `requests` stores bounded registration membership/consume-once state; it is internal and excluded from snapshots/backup.
 
