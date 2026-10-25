@@ -72,3 +72,10 @@ export const GUEST_SAFE_MESSAGES:Readonly<Record<GuestSafeCode,string>> = Object
 export function guestSafeMessage(code:GuestSafeCode):string {
   return GUEST_SAFE_MESSAGES[code];
 }
+
+export class GuestDataError extends Error {
+  constructor(readonly code:GuestSafeCode) {
+    super(guestSafeMessage(code));
+    this.name="GuestDataError";
+  }
+}
