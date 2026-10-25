@@ -157,10 +157,14 @@ Credential re-entry after a memory-only reload is not source replacement: the us
 
 Run each task's focused checks once after its changes. Broaden to the existing suite/build/native/browser gates at integration points or for a new failure, not repeatedly without a new reason. Store RED/GREEN logs and capacity receipts in ignored `artifacts/guest-mode-implementation/`; no real secrets/coursework enter fixtures.
 
-- [ ] F1–F4 complete and independently testable.
+- [x] F1–F4 complete and independently testable; F4 compatibility evidence records its local dependency-layout qualification, with unchanged-root CI still required.
 - [ ] S1–S4 complete and independently testable.
 - [ ] U1–U4 complete with all agreed live sources.
 - [ ] A1–A3 complete; source/hosted regressions and readiness limits recorded.
 - [x] Execution method and plan review recorded before product code: subagent-driven, user confirmed 2026-10-24.
 
 Self-review coverage: spec §§1–4 → F4/U3; §§5–6 → F1–F3/U4; §7 → F1/S1–S3; §8 → S2–S4/A3; §9 → F3/U1–U3/A1; §10 → F2/U4/A2; §§11–13 → S4/A1–A3. All five Review Focus items have owning tests below. Interface names/status literals are fixed above and referenced by all parts.
+
+### Implementation-discovered dependency maintenance
+
+Before S1, a narrow SEC1 maintenance task updates the existing locked Next 16.4.0 dependency to the vendor-patched 16.4.1 and verifies the existing suite/default build. The advisory was independently confirmed; CLI-printed upgrade instructions are not treated as authorization. This adds no package, production action or guest scope. The shared external dependency junction must remain unmodified; any local layout replacement preserves the junction as a reversible worktree-owned entry and installs locked dependencies only inside this worktree. Source/runtime applicability and production remediation are distinct from this branch-local patch. SEC1's brief, filesystem journal and review are recorded in the same SDD ledger.

@@ -86,7 +86,7 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
 
 **Interfaces:** `isGuestEnabled(env:Record<string,unknown>):boolean` accepts only string `true`. `GuestProvider({children,storeFactory?})` hydrates/subscribes to the F3 store with loading/error/ready states; `useGuest()` exposes snapshot and typed actions, not remembered secrets in rendering data. `AssignmentTable` gains optional controlled `filters/onFiltersChange/sort/onSortChange`; `AssignmentExplorer` gains optional `syncControls/sourcesHref/filters/onFiltersChange`, retaining all hosted defaults.
 
-- [ ] **Step 1 — Write RED public/component tests.** Mock session/D1 resolvers to throw if a guest view touches them. Assert disabled flag/no CTA, enabled guest entry without session, correct `/guest/*` links, local timezone/filter persistence, honest storage error and no hosted controls/sign-out. Assert existing hosted rendering still uses its default controls/links.
+- [x] **Step 1 — Write RED public/component tests.** Mock session/D1 resolvers to throw if a guest view touches them. Assert disabled flag/no CTA, enabled guest entry without session, correct `/guest/*` links, local timezone/filter persistence, honest storage error and no hosted controls/sign-out. Assert existing hosted rendering still uses its default controls/links.
   Core assertions for `guest views do not enter account runtime`:
   ```ts
   expect(sessionResolver).not.toHaveBeenCalled();
@@ -94,7 +94,7 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
   expect(screen.getByText("Saved in this browser")).toBeVisible();
   expect(isGuestEnabled({KAIROS_GUEST_ENABLED:"false"})).toBe(false);
   ```
-- [ ] **Step 2 — Verify RED.** Run `npm test -- tests/component/guest-views.test.tsx tests/component/guest-provider.test.tsx tests/component/assignment-table.test.tsx tests/component/public-pages.test.tsx`. Run `npx playwright test tests/e2e/guest-views.spec.ts --project=chromium --project=firefox`.
-- [ ] **Step 3 — Implement composition.** Guest reads call only the local store. Feature resolution reads Worker configuration but not session/D1. Default base/production flag false; only guarded E2E fixture config enables it. Render `Saved in this browser`, optional account link and local Upcoming/Calendar/Assignments. Sources/settings placeholders link to the coming Part 3 controls without claiming live completion. Reuse actual presentational components; no `router.refresh()` after local writes.
-- [ ] **Step 4 — Verify GREEN.** Repeat focused checks, F3 browser checks affected by route composition, `npm run typecheck`, `npm run lint`, `npm run build:vinext`, `npm run verify:hosted`. Expect hosted defaults and disabled production behavior intact.
-- [ ] **Step 5 — Commit.** Stage only F4 files; commit `feat: add account-free guest dashboard views`.
+- [x] **Step 2 — Verify RED.** Run `npm test -- tests/component/guest-views.test.tsx tests/component/guest-provider.test.tsx tests/component/assignment-table.test.tsx tests/component/public-pages.test.tsx`. Run `npx playwright test tests/e2e/guest-views.spec.ts --project=chromium --project=firefox`.
+- [x] **Step 3 — Implement composition.** Guest reads call only the local store. Feature resolution reads Worker configuration but not session/D1. Default base/production flag false; only guarded E2E fixture config enables it. Render `Saved in this browser`, optional account link and local Upcoming/Calendar/Assignments. Sources/settings placeholders link to the coming Part 3 controls without claiming live completion. Reuse actual presentational components; no `router.refresh()` after local writes.
+- [x] **Step 4 — Verify GREEN.** Repeat focused checks, F3 browser checks affected by route composition, `npm run typecheck`, `npm run lint`, `npm run build:vinext`, `npm run verify:hosted`. Expect hosted defaults and disabled production behavior intact.
+- [x] **Step 5 — Commit.** Stage only F4 files; commit `feat: add account-free guest dashboard views`.
