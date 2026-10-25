@@ -21,7 +21,8 @@ export type GuestRequestFence = GuestRunIdentity & {
   // Setup expects no existing source; reads require a connection ID and generation.
   purpose:"setup"|"read";connectionId:string|null;connectionGeneration:number|null;deadlineAtMs:number;
 };
-export type GuestRegisteredRequest = {fence:GuestRequestFence;members:{canvas:CanvasAssignmentLocator[];courseIds:string[]}};
+// Local registration metadata only; omission normalizes to provider-read.
+export type GuestRegisteredRequest = {fence:GuestRequestFence;members:{canvas:CanvasAssignmentLocator[];courseIds:string[]};intent?:"provider-read"|"stage-result"};
 export type GuestStageOutcome = {runId:string;stage:GuestStage;status:GuestOutcomeStatus;code:GuestSafeCode|null;updatedCount:number;failedCount:number;ignoredCount:number;pendingCount:number;attemptedAt:string;completedAt:string};
 export type GuestRunReport = {run:GuestRunIdentity;mode:"manual"|"automatic";outcomes:GuestStageOutcome[]};
 export type GuestClock = {now:()=>number;setTimeout:(callback:()=>void,delayMs:number)=>unknown;clearTimeout:(handle:unknown)=>void};

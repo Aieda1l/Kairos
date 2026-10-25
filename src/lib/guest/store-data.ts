@@ -18,6 +18,7 @@ export function updateStage(snapshot:GuestSnapshot,state:GuestSyncState):GuestSn
   return {...snapshot,syncStates:[...snapshot.syncStates.filter(s=>s.sourceConnectionId!==state.sourceConnectionId||s.stage!==state.stage),state]};
 }
 export function applyChanges(snapshot:GuestSnapshot,request:GuestRequestFence,registered:StoredRequest,changes:GuestCommitChanges,at:string,uuid:()=>string):{snapshot:GuestSnapshot;updatedCount:number;ignoredCount:number;credential?:{connectionId:string;generation:number;value:string|null}} {
+  if((registered.intent==="stage-result")!==(changes.kind==="stage-result"))invalid();
   if(changes.kind==="connect"){
     const parsed=connectSchema.safeParse(changes);if(!parsed.success)invalid();const data=parsed.data;
     if(request.purpose!=="setup"||data.connection.kind!==request.source||request.source!=="canvas"&&data.assignments.length||request.source==="canvas"&&data.courses.length)invalid();

@@ -1,6 +1,6 @@
 import {openGuestStore} from "../../../src/lib/guest/store";
 import {parseGuestBackup,serializeGuestBackup} from "../../../src/lib/guest/backup";
-import type {GuestCommitChanges,GuestRequestFence,GuestRunLease,GuestStore,GuestSnapshot} from "../../../src/lib/guest/types";
+import type {GuestCommitChanges,GuestRequestFence,GuestRunLease,GuestStage,GuestStore,GuestSnapshot} from "../../../src/lib/guest/types";
 
 declare global {interface ImportMetaEnv {readonly KAIROS_GUEST_STORAGE_TEST:boolean;}}
 if(!import.meta.env.KAIROS_GUEST_STORAGE_TEST || !["127.0.0.1","localhost","[::1]"].includes(location.hostname))throw Error("Loopback test fixture only");
@@ -96,11 +96,12 @@ export async function membershipChecks(){
   try{await store.commit(read,result,time);throw Error("expected abort");}catch(e){if(e instanceof Error&&e.message==="expected abort")throw e;}finally{IDBObjectStore.prototype.put=original;}
   const afterAbort=await raw(name),accepted=await store.commit(read,result,time);
   async function terminal(status:"partial"|"failed",code:"ED_NETWORK_ERROR"|null,updatedCount:number,failedCount:number,pendingCount:number){
-    const request=fence(selection.connections[0],"ed");await store.registerRequest({fence:request,members:{canvas:[],courseIds:[]}},time);
+    const request=fence(selection.connections[0],"ed");await store.registerRequest({fence:request,members:{canvas:[],courseIds:[]},intent:"stage-result"},time);
     await store.commit(request,{kind:"stage-result",outcome:{runId:lease.runId,stage:"ed",status,code,updatedCount,failedCount,ignoredCount:0,pendingCount,attemptedAt:stamp(),completedAt:stamp()},remainingKeys:[]},time);
     return store.read();
   }
   const terminalResult=await terminal("partial",null,7,0,1);
+  await store.releaseRun(lease);lease=await run(store);
   await store.markStageAttempt(lease,c.id,selection.connections[0].generation,"ed",stamp());
   const failedAttempt=await terminal("failed","ED_NETWORK_ERROR",0,1,0);
   await store.releaseRun(lease);lease=await run(store);
@@ -111,4 +112,139 @@ export async function membershipChecks(){
   let corruptMetadataFailed=false;try{await store.clear(selection.datasetId);}catch{corruptMetadataFailed=true;}
   const afterCorruptReset=await raw(name);store.close();
   return {discovery,selection,noop,invalidSelection,invalidMembership,beforeRejected,afterRejected,beforeAbort,afterAbort,accepted,terminal:terminalResult,failedAttempt,requestCount,overLimit,privateRequestLeak,corruptMetadataFailed,beforeCorruptReset,afterCorruptReset};
+}
+
+export async function defaultChecks(){
+  const original=Intl.DateTimeFormat.prototype.resolvedOptions;
+  const results=[];
+  try{
+    for(const zone of ["Asia/Tokyo","Invalid/Zone",null]){
+      Intl.DateTimeFormat.prototype.resolvedOptions=function(){if(zone===null)throw Error("unavailable");return {...original.call(this),timeZone:zone};};
+      const store=await openGuestStore({name:names(`defaults-${zone}`),now});
+      const initial=await store.read();
+      await store.savePreferences({timeZone:"UTC",automaticCanvas:false,automaticGradescope:false},initial.datasetId);
+      const reset=await store.clear(initial.datasetId);store.close();results.push({initial,reset});
+    }
+  }finally{Intl.DateTimeFormat.prototype.resolvedOptions=original;}
+  return results;
+}
+function operationFence(lease:GuestRunLease,connection:GuestSnapshot["connections"][number]|null,operation:GuestRequestFence["operation"],duration=15000):GuestRequestFence {
+  const source=operation.startsWith("canvas")?"canvas":operation.startsWith("gradescope")?"gradescope":"ed";
+  return {datasetId:lease.datasetId,runId:lease.runId,pageEpoch:lease.pageEpoch,generation:lease.generation,requestId:crypto.randomUUID(),source,operation,purpose:connection?"read":"setup",connectionId:connection?.id??null,connectionGeneration:connection?.generation??null,deadlineAtMs:time+duration};
+}
+const noMembers=()=>({canvas:[],courseIds:[]});
+async function allSources(name:string){
+  await seed(name);const store=await openGuestStore({name:names(name),now}),lease=await run(store);
+  for(const source of ["gradescope","ed"] as const){
+    const fence=operationFence(lease,null,source==="ed"?"ed-courses":"gradescope-discovery");
+    if(!await store.registerRequest({fence,members:noMembers()},time))throw Error("discovery registration rejected");
+    const result=await store.commit(fence,{kind:"connect",connection:{id:crypto.randomUUID(),kind:source,enabled:true,generation:1,createdAt:stamp(),updatedAt:stamp()},courses:[],assignments:[],secret:null},time);
+    if(result.status!=="accepted")throw Error("discovery rejected");
+  }
+  await store.releaseRun(lease);return store;
+}
+function statusChange(snapshot:GuestSnapshot):GuestCommitChanges {
+  const c=snapshot.connections.find(c=>c.kind==="canvas")!;
+  return {kind:"course-result",result:{sourceConnectionId:c.id,connectionGeneration:c.generation,stage:"canvas-status",externalCourseId:null,checkedAt:stamp(),assignments:[],statuses:[{externalId:assignment.externalId,errorCode:null,state:"submitted",isLate:false,isMissing:false,submittedAt:null,checkedAt:stamp(),extractorVersion:"test"}],courseSucceeded:true,failedCount:0,code:null,remainingKeys:[]}};
+}
+export async function deadlineChecks(){
+  const store=await allSources("deadlines"),snapshot=await store.read(),lease=await run(store);
+  const registrations:Partial<Record<GuestRequestFence["operation"],boolean>>={},oversized=[];
+  let statusFence:GuestRequestFence|undefined;
+  const operations=["canvas-feed","canvas-status","gradescope","gradescope-discovery","ed","ed-courses"] as const;
+  for(const operation of operations){
+    const source=operation.startsWith("canvas")?"canvas":operation.startsWith("gradescope")?"gradescope":"ed";
+    const connection=snapshot.connections.find(c=>c.kind===source)!;
+    const fence=operationFence(lease,connection,operation,30000);
+    const members=operation==="canvas-status"?{canvas:[{assignmentLocalId:snapshot.assignments[0].id,courseId:"12",assignmentId:"34"}],courseIds:[]}:noMembers();
+    registrations[operation]=await store.registerRequest({fence,members},time);
+    if(operation==="canvas-status"&&registrations[operation])statusFence=fence;
+    oversized.push(await store.registerRequest({fence:operationFence(lease,connection,operation,source==="gradescope"||operation==="canvas-status"?30001:15001),members},time));
+  }
+  const canvas=snapshot.connections.find(c=>c.kind==="canvas")!;
+  const server=operationFence(lease,canvas,"canvas-feed");await store.registerRequest({fence:server,members:noMembers()},time);
+  time+=10000;await store.renewRun(lease,time);time+=10000;await store.renewRun(lease,time);
+  const extensionReply=statusFence?await store.commit(statusFence,statusChange(snapshot),time):null;
+  const serverExpired=await store.commit(server,course({...snapshot,connections:[canvas]}),time);
+  await store.releaseRun(lease);
+  const short=await store.beginRun({pageEpoch:crypto.randomUUID(),nowMs:time,deadlineAtMs:time+10000});if(!short)throw Error("short run rejected");
+  const beyondRunDeadline=await store.registerRequest({fence:operationFence(short,canvas,"canvas-status",10001),members:noMembers()},time);
+  store.close();return {registrations,oversized,extensionReply,serverExpired,beyondRunDeadline};
+}
+function terminalChange(lease:GuestRunLease,stage:GuestStage):GuestCommitChanges {
+  return {kind:"stage-result",outcome:{runId:lease.runId,stage,status:"partial",code:"GUEST_RUN_LIMIT",updatedCount:0,failedCount:0,ignoredCount:0,pendingCount:1,attemptedAt:stamp(),completedAt:stamp()},remainingKeys:[]};
+}
+async function acceptedCommit(store:GuestStore,fence:GuestRequestFence,changes:GuestCommitChanges){try{return (await store.commit(fence,changes,time)).status==="accepted";}catch{return false;}}
+export async function finalizationChecks(){
+  const name="finalizers",store=await allSources(name),snapshot=await store.read(),lease=await run(store);
+  const canvas=snapshot.connections.find(c=>c.kind==="canvas")!,stages=["canvas-feed","canvas-status","gradescope","ed"] as const;
+  let first:GuestRequestFence|undefined;
+  for(let i=0;i<100;i++){
+    const fence=operationFence(lease,canvas,"canvas-feed");if(!await store.registerRequest({fence,members:noMembers()},time))throw Error("provider capacity reduced");
+    if(i===0)first=fence;
+  }
+  const providerCount=(await raw(name)).requests.length;
+  const wrongIntentAccepted=await acceptedCommit(store,first!,terminalChange(lease,"canvas-feed"));
+  const provider101=await store.registerRequest({fence:operationFence(lease,canvas,"canvas-feed"),members:noMembers()},time);
+  const finalizers=[],commits=[],duplicates=[];
+  let wrongFinalizerAccepted=false,mismatchedStageAccepted=false;
+  for(const stage of stages){
+    const connection=snapshot.connections.find(c=>c.kind===(stage.startsWith("canvas")?"canvas":stage))!;
+    const fence=operationFence(lease,connection,stage,180000);
+    const registration={fence,members:noMembers(),intent:"stage-result" as const};
+    let registered=false;try{registered=await store.registerRequest(registration,time);}catch{}
+    finalizers.push(registered);
+    if(registered){
+      if(stage==="canvas-feed"){
+        wrongFinalizerAccepted=await acceptedCommit(store,fence,course({...snapshot,connections:[canvas]}));
+        mismatchedStageAccepted=await acceptedCommit(store,fence,terminalChange(lease,"canvas-status"));
+      }
+      commits.push((await store.commit(fence,terminalChange(lease,stage),time)).status);
+    }
+    let duplicate=false;try{duplicate=await store.registerRequest({...registration,fence:{...fence,requestId:crypto.randomUUID()}},time);}catch{}
+    duplicates.push(duplicate);
+  }
+  const internal=await raw(name),totalRecords=internal.requests.length;
+  const intentNormalized=internal.requests.every(r=>typeof r==="object"&&r!==null&&"intent" in r&&["provider-read","stage-result"].includes(String(r.intent)));
+  await store.releaseRun(lease);const newLease=await run(store);
+  let nonemptyFinalizerAccepted=false;
+  try{nonemptyFinalizerAccepted=await store.registerRequest({fence:operationFence(newLease,canvas,"canvas-status"),members:{canvas:[{assignmentLocalId:snapshot.assignments[0].id,courseId:"12",assignmentId:"34"}],courseIds:[]},intent:"stage-result"},time);}catch{}
+  // Finalizing early must not reduce provider capacity, and consuming a provider must not free a dispatch slot.
+  for(const stage of stages){
+    const connection=snapshot.connections.find(c=>c.kind===(stage.startsWith("canvas")?"canvas":stage))!;
+    const fence=operationFence(newLease,connection,stage);
+    if(!await store.registerRequest({fence,members:noMembers(),intent:"stage-result"},time)||!await acceptedCommit(store,fence,terminalChange(newLease,stage)))throw Error("early finalization rejected");
+  }
+  for(let i=0;i<100;i++){
+    const fence=operationFence(newLease,canvas,"canvas-feed");
+    if(!await store.registerRequest({fence,members:noMembers()},time))throw Error("early finalization reduced provider capacity");
+    if(i===0&&!await acceptedCommit(store,fence,course({...snapshot,connections:[canvas]})))throw Error("provider response rejected");
+  }
+  const finalRecords=(await raw(name)).requests as {intent:string;consumed:boolean}[];
+  const earlyFinalization={providerCount:finalRecords.filter(r=>r.intent==="provider-read").length,totalRecords:finalRecords.length,consumedProviders:finalRecords.filter(r=>r.intent==="provider-read"&&r.consumed).length,provider101:await store.registerRequest({fence:operationFence(newLease,canvas,"canvas-feed"),members:noMembers()},time)};
+  store.close();return {providerCount,provider101,finalizers,commits,totalRecords,duplicates,wrongIntentAccepted,wrongFinalizerAccepted,mismatchedStageAccepted,nonemptyFinalizerAccepted,intentNormalized,earlyFinalization};
+}
+export async function liveMembershipChecks(){
+  const name="live-membership";await seed(name);const store=await openGuestStore({name:names(name),now}),lease=await run(store);
+  let snapshot=await store.read(),locator={assignmentLocalId:snapshot.assignments[0].id,courseId:"12",assignmentId:"34"};const changed=[];
+  for(const next of [{courseId:"13",assignmentId:"34"},{courseId:"13",assignmentId:"35"}]){
+    const status=operationFence(lease,snapshot.connections[0],"canvas-status");
+    if(!await store.registerRequest({fence:status,members:{canvas:[locator],courseIds:[]}},time))throw Error("old locator rejected at registration");
+    time+=1;const feed=await request(store,lease,snapshot.connections[0]);
+    const result=course(snapshot);if(result.kind!=="course-result")throw Error("fixture result");
+    result.result.assignments=[{...assignment,courseId:next.courseId,sourceUrl:`https://canvas.uw.edu/courses/${next.courseId}/assignments/${next.assignmentId}`}];
+    const updated=await store.commit(feed,result,time);if(updated.status!=="accepted")throw Error("feed rejected");snapshot=updated.snapshot;
+    const beforeStale=await raw(name),staleAccepted=await acceptedCommit(store,status,statusChange(snapshot)),afterStale=await raw(name);
+    locator={assignmentLocalId:snapshot.assignments[0].id,...next};
+    const current=operationFence(lease,snapshot.connections[0],"canvas-status");
+    if(!await store.registerRequest({fence:current,members:{canvas:[locator],courseIds:[]}},time))throw Error("current locator rejected");
+    const currentReply=await store.commit(current,statusChange(snapshot),time);changed.push({beforeStale,staleAccepted,afterStale,currentReply});
+  }
+  time+=1;const feed=await request(store,lease,snapshot.connections[0]),result=course(snapshot);if(result.kind!=="course-result")throw Error("fixture result");
+  result.result.assignments=[{...assignment,courseId:null,sourceUrl:"https://canvas.uw.edu/courses/13/assignments/35"}];
+  await store.commit(feed,result,time);
+  const nullable=operationFence(lease,snapshot.connections[0],"canvas-status");let nullableRegistered=false;
+  try{nullableRegistered=await store.registerRequest({fence:nullable,members:{canvas:[locator],courseIds:[]}},time);}catch{}
+  const nullableReply=nullableRegistered?await store.commit(nullable,statusChange(snapshot),time):null;
+  store.close();return {changed,nullableRegistered,nullableReply};
 }

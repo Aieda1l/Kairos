@@ -1,6 +1,6 @@
 import {z} from "zod";
 import {GuestDataError} from "./errors";
-import {guestCountSchema,guestUuidSchema,parseGuestSnapshot} from "./schema";
+import {guestCountSchema,guestPreferencesSchema,guestUuidSchema,parseGuestSnapshot} from "./schema";
 import type {GuestRunLease,GuestSnapshot} from "./types";
 
 export const publicStores=["metadata","connections","courses","assignments","statuses","syncStates","preferences"] as const;
@@ -13,8 +13,13 @@ const metadataSchema=z.object({datasetId:guestUuidSchema,revision:guestCountSche
 }).strict().nullable()}).strict();
 
 export function emptySnapshot(datasetId:string):GuestSnapshot {
+  let timeZone="America/Los_Angeles";
+  try{
+    const browserZone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(guestPreferencesSchema.shape.timeZone.safeParse(browserZone).success)timeZone=browserZone;
+  }catch{}
   return {schemaVersion:1,datasetId,revision:0,connections:[],courses:[],assignments:[],statuses:[],syncStates:[],
-    preferences:{timeZone:"UTC",filters:{course:"",source:"",search:""},sort:"due",automaticCanvas:false,automaticGradescope:false}};
+    preferences:{timeZone,filters:{course:"",source:"",search:""},sort:"due",automaticCanvas:true,automaticGradescope:true}};
 }
 export function storageError(error:unknown):GuestDataError {
   return error instanceof GuestDataError?error:new GuestDataError(error instanceof DOMException && error.name==="QuotaExceededError"?"GUEST_STORAGE_LIMIT":"GUEST_STORAGE_UNAVAILABLE");

@@ -1,5 +1,18 @@
 import {expect,test} from "@playwright/test";
 
+test("guest defaults use the browser timezone with safe fallback on creation and reset",async({page})=>{
+  await page.goto("/");
+  const results=await page.evaluate(async()=>{
+    const path="/tests/e2e/fixtures/guest-store-harness.ts";
+    return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-store-harness")).defaultChecks();
+  });
+  for(const [index,result] of results.entries())for(const snapshot of [result.initial,result.reset]){
+    expect(snapshot.preferences).toEqual({timeZone:index===0?"Asia/Tokyo":"America/Los_Angeles",filters:{course:"",source:"",search:""},sort:"due",automaticCanvas:true,automaticGradescope:true});
+    expect(snapshot.connections).toEqual([]);
+    expect(snapshot.syncStates).toEqual([]);
+  }
+});
+
 test("native guest storage survives reload and aborts all stores atomically",async({page})=>{
   await page.goto("/");
   const initial=await page.evaluate(async()=>{

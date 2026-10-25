@@ -4,7 +4,7 @@ import {allStores,emptySnapshot,idbRequest,openDatabase,persistSnapshot,prepareS
 import {GUEST_LEASE_MS,GUEST_RUN_DEADLINE_MS,GUEST_MAX_SECRET_CHARACTERS} from "./limits";
 import {guestPreferencesSchema,guestStageSchema,guestUtcDateSchema,guestUuidSchema} from "./schema";
 import {applyChanges,initialStage,updateStage} from "./store-data";
-import {activeLease,authorizationTime,commitFence,invalid,register,sameRun,type StoredRequest} from "./store-runs";
+import {activeLease,authorizationTime,commitFence,invalid,register,sameRun,validateMembers,type StoredRequest} from "./store-runs";
 import type {GuestRunIdentity,GuestSnapshot,GuestStore} from "./types";
 
 export async function openGuestStore(options:{name?:string;uuid?:()=>string;now?:()=>number}={}):Promise<GuestStore> {
@@ -84,6 +84,7 @@ export async function openGuestStore(options:{name?:string;uuid?:()=>string;now?
         const snapshot=await readSnapshot(tx,m);
         const registered:StoredRequest|undefined=await idbRequest(tx.objectStore("requests").get(request.requestId));
         const rejected=commitFence(m,snapshot,request,registered,authorizationTime(nowMs,now));if(rejected)return rejected;
+        validateMembers(registered!,snapshot);
         const applied=applyChanges(snapshot,request,registered!,changes,new Date(authorizationTime(nowMs,now)).toISOString(),uuid);
         const prepared=prepareSnapshot(applied.snapshot,m);
         // Recheck after validation/merge, before the first mutation. Renewal timestamps are not request identity.
