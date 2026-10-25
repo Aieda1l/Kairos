@@ -22,6 +22,7 @@
 - Canvas/Ed upstream bodies are at most 2 MiB. Canvas: 5,000 event blocks/2,000 assignments/2 MiB output. Ed: 500 discovered courses/512 KiB output, or one course with 2,000 raw/1,000 visible lessons/2 MiB output.
 - Local limits: 10,000 assignments/statuses, 1,000 courses, 8 MiB noncredential dataset and 10 MiB import. Reject bounds atomically; never truncate into apparent success.
 - Local lease: 30 seconds, renew every 5 seconds. Run: 180 seconds, at most 100 dispatched operations. Canvas batches at most 25; Gradescope one course per batch. Legacy extension waits are 30 seconds and are not upstream cancellation.
+- Local registrations distinguish provider reads from one terminal summary per stage: at most 100 provider registrations plus four local finalizers, 104 total including consumed records.
 - Guest capability: 30 minutes; `__Host-kairos-guest-sync`, Secure/HttpOnly/SameSite=Strict/Path=/, no Domain. Separate loopback-only development cookie.
 - Guest budgets per 600 seconds: bootstrap/network 10; reads/session 30, reads/network 60, reads/global 60. Existing account policies and HMAC derivation vectors remain compatible.
 - Only anonymous admission hashes/timestamps may be written in D1. No account/source/credential/coursework/draft/OAuth/bridge/operation-owner writes, production actions, billing changes or new extension permissions.
@@ -87,6 +88,7 @@ type GuestRequestFence = GuestRunIdentity & {
   deadlineAtMs:number;
 };
 type GuestRegisteredRequest = {
+  intent?:"provider-read"|"stage-result"; // default provider-read; internal local metadata only
   fence:GuestRequestFence;
   members:{canvas:CanvasAssignmentLocator[];courseIds:string[]};
 };
@@ -146,6 +148,8 @@ Shared portable limits live in `src/lib/guest/limits.ts` from F1. Later tasks im
 The coordinator uses `GuestClock`, a fresh UUID factory and the store; current run outcomes separately report pending, failed and ignored members. Never count unprocessed queue members as successful or silently omit them from the visible result.
 
 `hasSuccessfulCheck` is the current-attempt success marker, including legitimate empty/stale-only success; reset it in `markStageAttempt`. Do not infer it from counts or timestamp inequalities. `getIdentity` reads valid metadata independently of coursework graph parsing so a confirmed reset remains fenced when a data record is corrupt. If metadata itself cannot be read safely, show browser-storage recovery instructions rather than silently erasing it.
+
+The implemented store defaults to database `kairos-guest-v1`. Provider registration deadlines are 15 seconds for server reads and 30 seconds for extension reads/discovery, always within the run. Local finalizers have `intent:"stage-result"`, empty members and a matching stage; they do not consume provider-read slots or go through the wire-result registry. At commit, current member/locator validation runs again in the same transaction, before merge.
 
 Credential re-entry after a memory-only reload is not source replacement: the user explicitly selects use for the same source, a bounded read validates the new value, and a `credential` commit preserves coursework/course selection while advancing connection generation and changing only secret/setup metadata. Switching provider identity still requires the approved disconnect/replacement flow. Forgetting a secret clears memory/remembered storage and advances generation without deleting coursework.
 
