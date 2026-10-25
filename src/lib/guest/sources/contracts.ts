@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { guestApiErrorCodeSchema } from "../errors";
+import { guestApiErrorCodeSchema,guestSafeMessage } from "../errors";
 import {
   guestCountSchema,guestDecimalIdSchema,guestDiscoveredCourseSchema,guestNormalizedAssignmentSchema,
   guestUtcDateSchema,guestUuidSchema,isGuestSourceUrl,
@@ -47,7 +47,12 @@ export const guestSessionRequestSchema=boundedJson(z.object({...requestFields,tu
 export const guestSessionResponseSchema=z.object({...successFields,expiresAt:guestUtcDateSchema}).strict()
   .refine(result=>Date.parse(result.expiresAt)>Date.parse(result.checkedAt),"Session expiry must follow admission.");
 export const guestSessionEndRequestSchema=z.object({}).strict();
-export const guestApiErrorSchema=z.object({ok:z.literal(false),...requestFields,code:guestApiErrorCodeSchema}).strict();
+export const guestApiErrorSchema=z.object({
+  ok:z.literal(false),code:guestApiErrorCodeSchema,message:z.string(),
+  retryAfterSeconds:guestCountSchema.min(1).max(3600).optional(),
+}).strict().refine(error=>error.message===guestSafeMessage(error.code),{
+  message:"Guest error copy must match its safe code.",path:["message"],
+});
 
 export type GuestCanvasFeedRequest=z.infer<typeof guestCanvasFeedRequestSchema>;
 export type GuestCanvasFeedResponse=z.infer<typeof guestCanvasFeedResponseSchema>;

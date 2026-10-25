@@ -75,15 +75,33 @@ describe("guest source DTOs",()=>{
     expect(()=>guestEdLessonsResponseSchema.parse({ok:true,schemaVersion:1,requestId,checkedAt,courseId:"12",lessons})).toThrow();
     expect(()=>guestEdLessonsResponseSchema.parse({ok:true,schemaVersion:1,requestId,checkedAt,courseId:"12",lessons:lessons.slice(0,1000).map(row=>({...row,title:"界".repeat(500),sourceStatusText:"界".repeat(500)}))})).toThrow();
   });
-  it("defines strict session bootstrap/end and fixed API errors",()=>{
+  it("defines strict session bootstrap/end",()=>{
     expect(()=>guestSessionRequestSchema.parse({schemaVersion:1,requestId,turnstileToken:"challenge"})).not.toThrow();
     expect(()=>guestSessionRequestSchema.parse({schemaVersion:1,requestId,turnstileToken:"challenge",userId:"foreign"})).toThrow();
     expect(()=>guestSessionResponseSchema.parse({ok:true,schemaVersion:1,requestId,checkedAt,expiresAt:"2026-10-24T12:30:00.000Z"})).not.toThrow();
     expect(()=>guestSessionResponseSchema.parse({ok:true,schemaVersion:1,requestId,checkedAt,expiresAt:"2026-10-24T11:30:00.000Z"})).toThrow();
     expect(guestSessionEndRequestSchema.parse({})).toEqual({});
     expect(()=>guestSessionEndRequestSchema.parse({token:"secret"})).toThrow();
-    expect(()=>guestApiErrorSchema.parse({ok:false,schemaVersion:1,requestId,code:"RATE_LIMITED"})).not.toThrow();
-    expect(()=>guestApiErrorSchema.parse({ok:false,schemaVersion:1,requestId,code:"arbitrary secret"})).toThrow();
-    expect(()=>guestApiErrorSchema.parse({ok:false,schemaVersion:1,requestId,code:"BAD_REQUEST",message:"upstream secret"})).toThrow();
+  });
+  it("accepts fixed API error copy with optional bounded retry advice",()=>{
+    const error={ok:false,code:"RATE_LIMITED",message:"Too many requests. Try again later."};
+    expect(guestApiErrorSchema.parse(error)).toEqual(error);
+    for(const retryAfterSeconds of [1,3600]){
+      expect(guestApiErrorSchema.parse({...error,retryAfterSeconds})).toEqual({...error,retryAfterSeconds});
+    }
+    expect(guestApiErrorSchema.parse({ok:false,code:"BAD_REQUEST",message:"This request could not be read."})).toEqual({ok:false,code:"BAD_REQUEST",message:"This request could not be read."});
+  });
+  it("rejects missing or mismatched error copy, unknown codes and extra envelope fields",()=>{
+    const error={ok:false,code:"RATE_LIMITED",message:"Too many requests. Try again later."};
+    expect(()=>guestApiErrorSchema.parse({ok:false,code:"RATE_LIMITED"})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({ok:false,schemaVersion:1,requestId,code:"RATE_LIMITED"})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({...error,message:"upstream secret"})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({...error,code:"BAD_REQUEST"})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({...error,code:"arbitrary secret"})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({...error,schemaVersion:1})).toThrow();
+    expect(()=>guestApiErrorSchema.parse({...error,requestId})).toThrow();
+  });
+  it.each([0,-1,1.5,3601,Number.MAX_SAFE_INTEGER+1,Infinity,NaN,"30",null])("rejects invalid retry advice %s",retryAfterSeconds=>{
+    expect(()=>guestApiErrorSchema.parse({ok:false,code:"RATE_LIMITED",message:"Too many requests. Try again later.",retryAfterSeconds})).toThrow();
   });
 });
