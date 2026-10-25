@@ -21,7 +21,7 @@ function projectData(snapshot:GuestSnapshot):GuestBackupV1["data"] {
     assignments:snapshot.assignments.map(row=>pick(row,["id","sourceConnectionId","metadataCheckedAt","source","externalId","courseId","courseName","title",
       "releaseAt","dueAt","lateDueAt","status","sourceStatusText","gradeScore","gradeMax","gradeDisplay","sourceUrl","sourceUpdatedAt","firstSeenAt","lastSeenAt"])),
     statuses:snapshot.statuses.map(row=>pick(row,["assignmentId","state","isLate","isMissing","submittedAt","checkedAt","extractorVersion"])),
-    syncStates:snapshot.syncStates.map(row=>pick(row,["sourceConnectionId","stage","lastAttemptedAt","lastSuccessfulAt","lastErrorCode","updatedCount","failedCount","resumeKeys"])),
+    syncStates:snapshot.syncStates.map(row=>pick(row,["sourceConnectionId","stage","lastAttemptedAt","lastSuccessfulAt","hasSuccessfulCheck","lastErrorCode","updatedCount","failedCount","resumeKeys"])),
     preferences:{...pick(snapshot.preferences,["timeZone","sort","automaticCanvas","automaticGradescope"]),filters:pick(snapshot.preferences.filters,["course","source","search"])},
   };
 }

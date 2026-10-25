@@ -18,7 +18,7 @@ export function guestSnapshotFixture(overrides:Partial<GuestSnapshot>={}):GuestS
       sourceUpdatedAt:null,firstSeenAt:at,lastSeenAt:at}],
     statuses:[{assignmentId:guestUuid(3),state:"submitted",isLate:false,isMissing:false,submittedAt:at,checkedAt:at,extractorVersion:"1"}],
     syncStates:[{sourceConnectionId:guestUuid(2),stage:"canvas-status",lastAttemptedAt:at,lastSuccessfulAt:at,
-      lastErrorCode:null,updatedCount:1,failedCount:0,resumeKeys:[]}],
+      hasSuccessfulCheck:false,lastErrorCode:null,updatedCount:1,failedCount:0,resumeKeys:[]}],
     preferences:{timeZone:"America/Los_Angeles",filters:{course:"",source:"",search:""},sort:"due",automaticCanvas:false,automaticGradescope:false},
     ...overrides,
   };

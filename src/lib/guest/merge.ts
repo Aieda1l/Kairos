@@ -97,12 +97,12 @@ export function applyGuestCourseResult(snapshot:GuestSnapshot,result:GuestCourse
 
   const previous=snapshot.syncStates.find(row=>row.sourceConnectionId===connection.id && row.stage===result.stage);
   const failedCount=(previous?.failedCount??0)+result.failedCount;
-  const succeededThisAttempt=result.courseSucceeded || Boolean(previous && (previous.updatedCount>0 ||
-    previous.lastAttemptedAt && previous.lastSuccessfulAt && newer(previous.lastSuccessfulAt,previous.lastAttemptedAt)));
+  // Empty/stale successes count even when completion and attempt times are identical.
+  const hasSuccessfulCheck=result.courseSucceeded || previous?.hasSuccessfulCheck===true;
   const state:GuestSyncState={
     sourceConnectionId:connection.id,stage:result.stage,lastAttemptedAt:previous?.lastAttemptedAt??at,
     lastSuccessfulAt:result.courseSucceeded && newer(at,previous?.lastSuccessfulAt)?at:previous?.lastSuccessfulAt??null,
-    lastErrorCode:failedCount>0 && succeededThisAttempt?"PARTIAL_SYNC":result.code??previous?.lastErrorCode??null,
+    hasSuccessfulCheck,lastErrorCode:failedCount>0 && hasSuccessfulCheck?"PARTIAL_SYNC":result.code??previous?.lastErrorCode??null,
     updatedCount:(previous?.updatedCount??0)+updatedCount,failedCount,resumeKeys:[...result.remainingKeys],
   };
   const syncStates=previous?snapshot.syncStates.map(row=>row===previous?state:row):[...snapshot.syncStates,state];

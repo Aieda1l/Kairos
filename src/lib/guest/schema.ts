@@ -73,6 +73,8 @@ export const guestSubmissionStatusSchema=z.object({
 export const guestStatusRecordSchema=guestSubmissionStatusSchema.extend({assignmentId:guestUuidSchema}).strict();
 export const guestSyncStateSchema=z.object({
   sourceConnectionId:guestUuidSchema,stage:guestStageSchema,lastAttemptedAt:guestUtcDateSchema.nullable(),lastSuccessfulAt:guestUtcDateSchema.nullable(),
+  // Per attempt: the store resets this flag before dispatching source checks.
+  hasSuccessfulCheck:z.boolean().default(false),
   lastErrorCode:guestSafeCodeSchema.nullable(),updatedCount:guestCountSchema,failedCount:guestCountSchema,
   resumeKeys:z.array(guestExternalIdSchema).max(limits.GUEST_MAX_ASSIGNMENTS),
 }).strict();

@@ -18,6 +18,12 @@ describe("guest backup",()=>{
     expect(Object.keys(parsed).sort()).toEqual(["data","exportedAt","schemaVersion"]);
     expect(Object.keys(parsed.data).sort()).toEqual(["assignments","connections","courses","preferences","statuses","syncStates"]);
   });
+  it("preserves the canonical per-attempt success marker through backup projection",()=>{
+    const snapshot=guestSnapshotFixture();
+    snapshot.syncStates=[{...snapshot.syncStates[0],hasSuccessfulCheck:true}];
+    const parsed=parseGuestBackup(serializeGuestBackup(snapshot,at));
+    expect(parsed.data.syncStates[0]).toMatchObject({hasSuccessfulCheck:true});
+  });
   it("projects every nested record onto its noncredential allowlist",()=>{
     const snapshot=guestSnapshotFixture();
     snapshot.courses=[{id:guestUuid(4),sourceConnectionId:guestUuid(2),externalCourseId:"12",shortName:null,fullName:"Math",term:null,year:null,enabled:true,firstSeenAt:at,lastSeenAt:at}];

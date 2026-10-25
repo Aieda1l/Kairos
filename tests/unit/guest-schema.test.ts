@@ -1,10 +1,17 @@
 import { describe,expect,it,vi } from "vitest";
-import { parseGuestSnapshot } from "@/lib/guest/schema";
+import { guestSyncStateSchema,parseGuestSnapshot } from "@/lib/guest/schema";
 import { projectGuestAssignments } from "@/lib/guest/projection";
 import { guestSafeCodeSchema,guestSafeMessage } from "@/lib/guest/errors";
 import { guestSnapshotFixture,guestUuid } from "../helpers/guest-fixtures";
 
 describe("guest dataset contracts",()=>{
+  it("defaults legacy stage state to no current-attempt successful check and preserves explicit markers",()=>{
+    const state=guestSnapshotFixture().syncStates[0];
+    const legacy=Object.fromEntries(Object.entries(state).filter(([key])=>key!=="hasSuccessfulCheck"));
+    expect(guestSyncStateSchema.parse(legacy)).toMatchObject({hasSuccessfulCheck:false});
+    expect(guestSyncStateSchema.parse({...legacy,hasSuccessfulCheck:true})).toMatchObject({hasSuccessfulCheck:true});
+    expect(()=>guestSyncStateSchema.parse({...legacy,hasSuccessfulCheck:"true"})).toThrow();
+  });
   it("accepts Canvas feed rows without discovered courses and joins only public status fields",()=>{
     const snapshot=parseGuestSnapshot(guestSnapshotFixture());
     const {assignmentId,...expectedStatus}=snapshot.statuses[0];

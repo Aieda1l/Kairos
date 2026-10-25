@@ -124,7 +124,7 @@ describe("guest course merge",()=>{
     expect(applied).toMatchObject({updatedCount:0,ignoredCount:0});
     expect(applied.snapshot.assignments).toEqual(snapshot.assignments);
     expect(applied.snapshot.statuses).toEqual(snapshot.statuses);
-    expect(applied.snapshot.syncStates[0].failedCount).toBe(1);
+    expect(applied.snapshot.syncStates[0]).toMatchObject({failedCount:1,hasSuccessfulCheck:false});
   });
   it("requires Canvas member failure totals to cover errored statuses",()=>{
     const snapshot=guestSnapshotFixture();
@@ -191,12 +191,35 @@ describe("guest course merge",()=>{
   });
   it("does not infer current-attempt success from old freshness equal to the attempt timestamp",()=>{
     const snapshot=guestSnapshotFixture();
-    snapshot.syncStates[0]={...snapshot.syncStates[0],updatedCount:0,failedCount:0};
+    snapshot.syncStates[0]={...snapshot.syncStates[0],hasSuccessfulCheck:false,updatedCount:0,failedCount:0};
     const failed=result(snapshot,{stage:"canvas-status",courseSucceeded:false,failedCount:1,code:"CANVAS_NETWORK_ERROR"});
     const first=mergeGuestCourseResult(snapshot,failed,at,uuid);
     const second=mergeGuestCourseResult(first,failed,at,uuid);
-    expect(first.syncStates[0]).toMatchObject({lastErrorCode:"CANVAS_NETWORK_ERROR",failedCount:1});
-    expect(second.syncStates[0]).toMatchObject({lastErrorCode:"CANVAS_NETWORK_ERROR",failedCount:2,lastSuccessfulAt:"2026-10-24T12:00:00.000Z"});
+    expect(first.syncStates[0]).toMatchObject({hasSuccessfulCheck:false,lastErrorCode:"CANVAS_NETWORK_ERROR",failedCount:1});
+    expect(second.syncStates[0]).toMatchObject({hasSuccessfulCheck:false,lastErrorCode:"CANVAS_NETWORK_ERROR",failedCount:2,lastSuccessfulAt:"2026-10-24T12:00:00.000Z"});
+  });
+  it.each(["empty","stale-only"])("retains %s success followed by repeated failure at the exact attempt timestamp",mode=>{
+    const snapshot=courseSnapshot("ed");
+    const success=applyGuestCourseResult(snapshot,result(snapshot,{stage:"ed",externalCourseId:"12",checkedAt:before,
+      assignments:mode==="stale-only"?[metadata(snapshot)]:[]}),at,uuid);
+    expect(success.updatedCount).toBe(0);
+    expect(success.ignoredCount).toBe(mode==="stale-only"?1:0);
+    const failed=result(success.snapshot,{stage:"ed",externalCourseId:"12",courseSucceeded:false,failedCount:1,code:"ED_NETWORK_ERROR"});
+    const first=mergeGuestCourseResult(success.snapshot,failed,at,uuid);
+    const second=mergeGuestCourseResult(first,failed,at,uuid);
+    expect(first.syncStates[0].lastErrorCode).toBe("PARTIAL_SYNC");
+    expect(second.syncStates[0]).toMatchObject({hasSuccessfulCheck:true,lastErrorCode:"PARTIAL_SYNC",failedCount:2,lastAttemptedAt:at,lastSuccessfulAt:at});
+    expect(success.snapshot.syncStates[0]).toMatchObject({hasSuccessfulCheck:true,lastAttemptedAt:at,lastSuccessfulAt:at});
+    expect(second.assignments).toEqual(snapshot.assignments);
+    expect(second.statuses).toEqual(snapshot.statuses);
+  });
+  it.each(["old counts","old freshness"])("does not derive current-attempt success from %s when the marker is false",evidence=>{
+    const snapshot=guestSnapshotFixture();
+    snapshot.syncStates[0]={...snapshot.syncStates[0],hasSuccessfulCheck:false,updatedCount:evidence==="old counts"?1:0,
+      lastAttemptedAt:evidence==="old freshness"?before:snapshot.syncStates[0].lastAttemptedAt};
+    const next=mergeGuestCourseResult(snapshot,result(snapshot,{stage:"canvas-status",courseSucceeded:false,failedCount:1,code:"CANVAS_NETWORK_ERROR"}),at,uuid);
+    expect(next.syncStates[0].lastErrorCode).toBe("CANVAS_NETWORK_ERROR");
+    expect(next.syncStates[0]).toMatchObject({hasSuccessfulCheck:false,failedCount:1});
   });
   it("rejects storage overflow atomically and exposes a fixed typed error",()=>{
     const snapshot=guestSnapshotFixture({statuses:[],syncStates:[]});
