@@ -41,6 +41,7 @@ export type GuestBackupV1 = {schemaVersion:1;exportedAt:string;data:Pick<GuestSn
 
 /** Implementations keep callbacks synchronous within each storage transaction. */
 export interface GuestStore {
+  getIdentity():Promise<{datasetId:string;revision:number}>;
   read():Promise<GuestSnapshot>;
   subscribe(listener:()=>void):()=>void;
   savePreferences(patch:Partial<GuestPreferences>,datasetId:string):Promise<GuestSnapshot>;

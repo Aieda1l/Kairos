@@ -23,6 +23,7 @@ export default defineConfig({
       ...process.env,
       KAIROS_E2E_PERSIST_PATH:e2ePersistPath,
       E2E_FIXTURES:"1",
+      KAIROS_GUEST_STORAGE_TEST:"1",
       KAIROS_CREDENTIAL_KEY_V1:e2eCredentialKey,
       KAIROS_CREDENTIAL_KEY_V2:'',
       KAIROS_CREDENTIAL_ACTIVE_KEY_ID:'v1',
@@ -38,12 +39,12 @@ export default defineConfig({
   projects:[
     {
       name:"chromium",
-      testMatch:/(canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-storage|guest-concurrency|canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
       name:"firefox",
-      testMatch:/(submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-storage|guest-concurrency|submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],
