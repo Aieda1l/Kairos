@@ -27,7 +27,7 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
 
 **Interfaces:** Produce all parent type contracts, including GuestStore, GuestBackupV1 and GuestCourseResult before their later implementations; `parseGuestSnapshot(value:unknown):GuestSnapshot`, `projectGuestAssignments(snapshot:GuestSnapshot):Assignment[]`, strict version-1 Canvas/Ed/session request/response schemas and shared portable limits. `guestSnapshotFixture(overrides?:Partial<GuestSnapshot>):GuestSnapshot` and deterministic `guestUuid(index:number):string` are test-only helpers.
 
-- [ ] **Step 1 — Write RED schema/projection tests.** Assert connection provenance, status joining and bounded graph validation:
+- [x] **Step 1 — Write RED schema/projection tests.** Assert connection provenance, status joining and bounded graph validation:
   ```ts
   const {assignmentId,...expectedStatus}=snapshot.statuses[0];
   expect(projectGuestAssignments(snapshot)[0].submissionStatus).toEqual(expectedStatus);
@@ -36,10 +36,10 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
   expect(() => guestEdLessonsRequestSchema.parse({...validEd,courseId:"1/../2"})).toThrow();
   ```
   Pin 4096/4097 secret characters, 32/33 decimal digits, duplicate local IDs and dangling course/status references; no schema should read browser globals on import.
-- [ ] **Step 2 — Verify RED.** Run `npm test -- tests/unit/guest-schema.test.ts tests/unit/guest-source-contracts.test.ts`; expect missing contract/behavior failures.
-- [ ] **Step 3 — Implement contracts.** Use existing normalized/domain/protocol types. Define `GuestSafeCode`/fixed copy and discriminated commit inputs once. Strictly validate UTC dates, IANA timezone, source/connection references, supported output URLs and byte/count limits; source DTOs contain no local/account identity or raw upstream profile data.
-- [ ] **Step 4 — Verify GREEN.** Run the same command and `npm run typecheck`; expect all new assertions and existing public type contracts to pass.
-- [ ] **Step 5 — Commit.** `git add src/lib/guest tests/helpers/guest-fixtures.ts tests/unit/guest-schema.test.ts tests/unit/guest-source-contracts.test.ts` then `git commit -m "feat: define guest data and source contracts"`.
+- [x] **Step 2 — Verify RED.** Run `npm test -- tests/unit/guest-schema.test.ts tests/unit/guest-source-contracts.test.ts`; expect missing contract/behavior failures.
+- [x] **Step 3 — Implement contracts.** Use existing normalized/domain/protocol types. Define `GuestSafeCode`/fixed copy and discriminated commit inputs once. Strictly validate UTC dates, IANA timezone, source/connection references, supported output URLs and byte/count limits; source DTOs contain no local/account identity or raw upstream profile data.
+- [x] **Step 4 — Verify GREEN.** Run the same command and `npm run typecheck`; expect all new assertions and existing public type contracts to pass.
+- [x] **Step 5 — Commit.** `git add src/lib/guest tests/helpers/guest-fixtures.ts tests/unit/guest-schema.test.ts tests/unit/guest-source-contracts.test.ts` then `git commit -m "feat: define guest data and source contracts"`.
 
 ### F2: Preserve source merge semantics and credential-free backup primitives
 
