@@ -6,10 +6,10 @@ import {D1SourceConnectionRepository} from "@/lib/db/d1/repositories/source-conn
 import {D1SourceCredentialRepository} from "@/lib/db/d1/repositories/source-credentials";
 import {D1CalendarConnectionRepository} from "@/lib/db/d1/repositories/calendar-connections";
 import {D1CalendarCredentialRepository} from "@/lib/db/d1/repositories/calendar-credentials";
-import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 
 const {runtime,abuse}=vi.hoisted(()=>({runtime:vi.fn(),abuse:vi.fn()}));
+vi.mock("@/lib/guest/server/feature",()=>({getGuestEnabled:async()=>false}));
 // Metadata/rendering fixtures have no Worker execution context.
 vi.mock('@/lib/platform/provider-operation-lifetime',()=>({withProviderOperationLifetime:(_key:string,work:()=>Promise<unknown>)=>work()}));
 vi.mock("@/lib/platform/source-api-runtime",()=>({resolveSourceApiRuntime:async()=>({ok:true,runtime:runtime()})}));
@@ -86,7 +86,7 @@ it("drafts_never_appear_in_public_html_api_storage_or_bridge",async()=>{
     const api=[draft,await import("@/app/api/settings/onboarding/route"),await import("@/app/api/calendars/route"),await import("@/app/api/sources/ed/courses/route")];
     for(const route of api){const response=await route.GET();expect(response.status).toBe(200);outputs.push(await response.text());}
     const {default:Home}=await import("@/app/page");
-    const html=renderToStaticMarkup(createElement(Home));outputs.push(html);
+    const html=renderToStaticMarkup(await Home());outputs.push(html);
     document.body.innerHTML=html;
     outputs.push(document.body.innerHTML,JSON.stringify(localStorage),JSON.stringify(sessionStorage));
     const start=await import("@/app/api/sources/gradescope/discover/start/route");
