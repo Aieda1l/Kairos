@@ -2,7 +2,7 @@
 
 Date: 2026-10-24
 
-Status: **APPROVED by the user on 2026-10-24.** Approval covers this design and its proposed first-release boundaries. It does not authorize production activation or claim implementation exists. The next checkpoint is review of the detailed implementation plan and execution method.
+Status: **APPROVED by the user on 2026-10-24.** Approval covers this design and its proposed first-release boundaries. The user subsequently reviewed the plan and selected subagent-driven implementation. Production activation remains a separate concrete release step.
 
 ## 1. Intent and decisions
 

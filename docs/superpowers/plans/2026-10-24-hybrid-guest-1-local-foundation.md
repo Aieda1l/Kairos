@@ -23,9 +23,9 @@ Native atomicity/late-writer/reset tests are mandatory; a memory store fake cann
 
 ### F1: Freeze browser-safe domain and source DTO contracts
 
-**Files:** Create `src/lib/guest/{types,schema,errors,projection}.ts`, `src/lib/guest/sources/contracts.ts`, `tests/helpers/guest-fixtures.ts`; test `tests/unit/guest-schema.test.ts`, `guest-source-contracts.test.ts`.
+**Files:** Create `src/lib/guest/{types,schema,errors,projection,limits}.ts`, `src/lib/guest/sources/contracts.ts`, `tests/helpers/guest-fixtures.ts`; test `tests/unit/guest-schema.test.ts`, `guest-source-contracts.test.ts`.
 
-**Interfaces:** Produce the parent contracts, `parseGuestSnapshot(value:unknown):GuestSnapshot`, `projectGuestAssignments(snapshot:GuestSnapshot):Assignment[]`, strict version-1 Canvas/Ed request/response schemas. `guestSnapshotFixture(overrides?:Partial<GuestSnapshot>):GuestSnapshot` and deterministic `guestUuid(index:number):string` are test-only helpers.
+**Interfaces:** Produce all parent type contracts, including GuestStore, GuestBackupV1 and GuestCourseResult before their later implementations; `parseGuestSnapshot(value:unknown):GuestSnapshot`, `projectGuestAssignments(snapshot:GuestSnapshot):Assignment[]`, strict version-1 Canvas/Ed/session request/response schemas and shared portable limits. `guestSnapshotFixture(overrides?:Partial<GuestSnapshot>):GuestSnapshot` and deterministic `guestUuid(index:number):string` are test-only helpers.
 
 - [ ] **Step 1 — Write RED schema/projection tests.** Assert connection provenance, status joining and bounded graph validation:
   ```ts

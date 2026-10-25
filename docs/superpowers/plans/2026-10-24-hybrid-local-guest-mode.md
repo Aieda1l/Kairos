@@ -10,7 +10,7 @@
 
 **Spec:** [Approved hybrid guest design](../specs/2026-10-24-hybrid-local-guest-mode-design.md).
 
-**Status:** Implementation plan proposed for review; design approved by the user on 2026-10-24. Execution method/review checkpoint is pending. No product implementation or deployment is claimed.
+**Status:** Approved for execution; the user selected subagent-driven implementation on 2026-10-24. Task progress and controller rulings are recorded in the plan-scoped SDD ledger. No public activation or deployment is implied.
 
 ## Global Constraints
 
@@ -138,7 +138,9 @@ interface GuestStore {
 }
 ```
 
-F2 owns `GuestBackupV1={schemaVersion:1,exportedAt:string,data:{connections,courses,assignments,statuses,syncStates,preferences}}` with the same noncredential record types as the snapshot; no dataset identity/revision/run/lease/requests/secret. `GuestCourseResult` is `{sourceConnectionId,connectionGeneration,stage,externalCourseId:string|null,checkedAt,assignments:NormalizedAssignment[],statuses:GuestStatusInput[],courseSucceeded:boolean,failedCount,code:GuestSafeCode|null,remainingKeys:string[]}`. `GuestStatusInput=AssignmentSubmissionStatus & {externalId:string;errorCode:GuestSafeCode|null}` maps to local assignment IDs only after per-connection identity validation/merge. Remaining/resume keys identify not-yet-dispatched members (external assignment IDs for Canvas status, external course IDs for Gradescope/Ed), not in-flight requests; validate them against current source membership and put them first on the next explicit run so limits cannot permanently starve later courses. U2 owns the in-memory credential vault; remembered secrets use the store's separate internal credential record, never `GuestSnapshot`.
+F1 defines `GuestBackupV1={schemaVersion:1,exportedAt:string,data:{connections,courses,assignments,statuses,syncStates,preferences}}` with the same noncredential record types as the snapshot; no dataset identity/revision/run/lease/requests/secret. It also defines `GuestCourseResult={sourceConnectionId,connectionGeneration,stage,externalCourseId:string|null,checkedAt,assignments:NormalizedAssignment[],statuses:GuestStatusInput[],courseSucceeded:boolean,failedCount,code:GuestSafeCode|null,remainingKeys:string[]}`. F2 implements their merge/serialization behavior. `GuestStatusInput=AssignmentSubmissionStatus & {externalId:string;errorCode:GuestSafeCode|null}` maps to local assignment IDs only after per-connection identity validation/merge. Remaining/resume keys identify not-yet-dispatched members (external assignment IDs for Canvas status, external course IDs for Gradescope/Ed), not in-flight requests; validate them against current source membership and put them first on the next explicit run so limits cannot permanently starve later courses. U2 owns the in-memory credential vault; remembered secrets use the store's separate internal credential record, never `GuestSnapshot`.
+
+Shared portable limits live in `src/lib/guest/limits.ts` from F1. Later tasks import those constants rather than creating a second set under source transport modules.
 
 The coordinator uses `GuestClock`, a fresh UUID factory and the store; current run outcomes separately report pending, failed and ignored members. Never count unprocessed queue members as successful or silently omit them from the visible result.
 
@@ -152,6 +154,6 @@ Run each task's focused checks once after its changes. Broaden to the existing s
 - [ ] S1–S4 complete and independently testable.
 - [ ] U1–U4 complete with all agreed live sources.
 - [ ] A1–A3 complete; source/hosted regressions and readiness limits recorded.
-- [ ] Execution method and plan review recorded before product code.
+- [x] Execution method and plan review recorded before product code: subagent-driven, user confirmed 2026-10-24.
 
 Self-review coverage: spec §§1–4 → F4/U3; §§5–6 → F1–F3/U4; §7 → F1/S1–S3; §8 → S2–S4/A3; §9 → F3/U1–U3/A1; §10 → F2/U4/A2; §§11–13 → S4/A1–A3. All five Review Focus items have owning tests below. Interface names/status literals are fixed above and referenced by all parts.
