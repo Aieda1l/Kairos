@@ -84,6 +84,8 @@ jobs:
         run: npx vinext check
       - name: Build vinext Workers target
         run: npm run build:vinext
+      - name: Verify sealed native guest transport and admission
+        run: node scripts/verify-workerd-guest-sources.mjs
       - name: Verify compiled provider completion and recovery
         run: node scripts/verify-workerd-provider-completion.mjs
       - name: Verify compiled iCloud conditional write confirmation
