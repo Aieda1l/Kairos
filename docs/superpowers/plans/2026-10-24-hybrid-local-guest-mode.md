@@ -158,7 +158,7 @@ Credential re-entry after a memory-only reload is not source replacement: the us
 Run each task's focused checks once after its changes. Broaden to the existing suite/build/native/browser gates at integration points or for a new failure, not repeatedly without a new reason. Store RED/GREEN logs and capacity receipts in ignored `artifacts/guest-mode-implementation/`; no real secrets/coursework enter fixtures.
 
 - [x] F1–F4 complete and independently testable; F4 compatibility evidence records its local dependency-layout qualification, with unchanged-root CI still required.
-- [ ] S1–S4 complete and independently testable.
+- [x] S1–S4 complete and independently testable; local native/capacity evidence is preliminary and production guest activation remains off.
 - [ ] U1–U4 complete with all agreed live sources.
 - [ ] A1–A3 complete; source/hosted regressions and readiness limits recorded.
 - [x] Execution method and plan review recorded before product code: subagent-driven, user confirmed 2026-10-24.

@@ -86,7 +86,7 @@ Stalled streams, denial-side costs, alternate ports/redirects, capability-purpos
 
 **Interfaces:** Native script emits `GUEST_NATIVE_TRANSPORT_PASSED` only when every case succeeds and `externalRequests:0`. Separate parser benchmark emits `GUEST_LOCAL_PARSER_MEASUREMENTS` with `evidenceType:"node-process-cpu"`; it never labels values deployed Worker CPU. Write timestamped receipts under ignored `artifacts/guest-source-capacity/` with source ref, fixture bytes/counts/output size, elapsed time and explicit admission read/write metrics.
 
-- [ ] **Step 1 — Write failing native scenarios.** Use the existing sealed Miniflare pattern (`cf:false`, telemetry off, outbound fixture worker). Cases cover valid/escaped redirects, at most six Canvas and one Ed HTTP request, empty/partial data, no-length overflow, stalled body abort, malformed UTF-8, near-cap payloads, provider pause/version change and independent service admission contention. Include distributed bootstrap and global denial after earlier charges; assert no protected-table writes and record all D1 costs.
+- [x] **Step 1 — Write failing native scenarios.** Use the existing sealed Miniflare pattern (`cf:false`, telemetry off, outbound fixture worker). Cases cover valid/escaped redirects, at most six Canvas and one Ed HTTP request, empty/partial data, no-length overflow, stalled body abort, malformed UTF-8, near-cap payloads, provider pause/version change and independent service admission contention. Include distributed bootstrap and global denial after earlier charges; assert no protected-table writes and record all D1 costs.
   Required native assertions for `sealed guest transport and denial accounting`:
   ```js
   assert.equal(report.externalRequests,0);
@@ -95,7 +95,7 @@ Stalled streams, denial-side costs, alternate ports/redirects, capability-purpos
   assert.equal(report.deniedTraffic.admittedEvents,2); // earlier network/session charges before global denial
   assert.equal(report.deniedTraffic.upstreamRequests,0);
   ```
-- [ ] **Step 2 — Verify RED.** Run `node scripts/verify-workerd-guest-sources.mjs`; expect a failed scenario until the missing native behavior is implemented, never a live provider call.
-- [ ] **Step 3 — Finish harness/fixes.** Import actual guest handlers, source transports and schemas, not copied algorithms. Bind synthetic D1/config/keys and fully intercept external fetch. Use deterministic parser generators rather than committed megabyte blobs. Readiness document marks actual hosted CPU, denied-traffic capacity, physical retention and operator live acceptance OPEN until measured; no maintenance activation or billing change is included.
-- [ ] **Step 4 — Verify GREEN.** Run the native script, parser benchmark, `npm run build:vinext` and existing `node scripts/verify-workerd-provider-completion.mjs`; inspect case count/status/zero external requests. Do not claim local elapsed or Node CPU satisfies the Free limit.
-- [ ] **Step 5 — Commit.** Stage S4 files only; commit `test: verify native guest boundaries and capacity evidence`.
+- [x] **Step 2 — Verify RED.** Run `node scripts/verify-workerd-guest-sources.mjs`; expect a failed scenario until the missing native behavior is implemented, never a live provider call.
+- [x] **Step 3 — Finish harness/fixes.** Import actual guest handlers, source transports and schemas, not copied algorithms. Bind synthetic D1/config/keys and fully intercept external fetch. Use deterministic parser generators rather than committed megabyte blobs. Readiness document marks actual hosted CPU, denied-traffic capacity, physical retention and operator live acceptance OPEN until measured; no maintenance activation or billing change is included.
+- [x] **Step 4 — Verify GREEN.** Run the native script, parser benchmark, `npm run build:vinext` and existing `node scripts/verify-workerd-provider-completion.mjs`; inspect case count/status/zero external requests. Do not claim local elapsed or Node CPU satisfies the Free limit.
+- [x] **Step 5 — Commit.** Stage S4 files only; commit `test: verify native guest boundaries and capacity evidence`.
