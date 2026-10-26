@@ -1,5 +1,43 @@
 import {expect,test} from "@playwright/test";
 
+test("two guest pages reject a delayed coordinator commit and preserve the takeover lease",async({page,context})=>{
+  await context.route("**/api/guest/**",route=>route.abort());
+  const second=await context.newPage();await Promise.all([page.goto("/"),second.goto("/")]);
+  const id=crypto.randomUUID();
+  const before=await page.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).startOld(id);},id);
+  const takeover=await second.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).takeOver(id);},id);
+  const late=await page.evaluate(async()=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).settleOld();});
+  expect(late.attempted).toContainEqual({status:"discarded",reason:"superseded"});
+  expect(late.snapshot).toEqual(takeover.snapshot);expect(late.snapshot.assignments).toEqual(before.assignments);
+  expect(late.report.outcomes.every(o=>o.status!=="success")).toBe(true);
+  const owner=await second.evaluate(async()=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).verifyOwner();});
+  expect(owner?.runId).toBe(takeover.lease.runId);await second.close();
+});
+
+test("guest coordinator course refresh preserves selection and rolls back atomically",async({page,context})=>{
+  await context.route("**/api/guest/**",route=>route.abort());await page.goto("/");
+  const result=await page.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).refreshChecks(id);},crypto.randomUUID());
+  expect(result.refresh.status).toBe("success");expect(result.after.courses.find(c=>c.externalCourseId==="1")).toMatchObject({id:result.before.courses[0].id,fullName:"Renamed",enabled:true});
+  expect(result.after.courses.find(c=>c.externalCourseId==="2")).toMatchObject({externalCourseId:"2",enabled:false});
+  expect(result.after.connections[0].generation).toBe(result.before.connections[0].generation+1);
+  expect(result.remembered).toBe("private-test-token");expect(result.rejected?.status).toBe("failed");
+  expect(result.afterAbort).toEqual(result.after);expect(result.secretAfterAbort).toBe("private-test-token");
+  expect(result.duplicateRejected).toBe(true);expect(result.afterRejected).toEqual(result.after);
+  expect(result.accepted.status).toBe("accepted");expect(result.consumed.status).toBe("discarded");expect(result.stale.status).toBe("discarded");
+  expect(result.overflowRejected).toBe(true);expect(result.afterOverflow).toEqual(result.beforeOverflow);expect(result.reuse.status).toBe("accepted");
+});
+
+for(const kind of ["reset","disconnect"] as const)test(`guest coordinator discards a response after ${kind}`,async({page,context})=>{
+  await context.route("**/api/guest/**",route=>route.abort());await page.goto("/");
+  const result=await page.evaluate(async({id,kind})=>{
+    const path="/tests/e2e/fixtures/guest-coordinator-harness.ts",h=await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness");
+    await h.startOld(id);const reset=await h.invalidateOld(kind),late=await h.settleOld();return {reset,late};
+  },{id:crypto.randomUUID(),kind});
+  expect(result.late.snapshot).toEqual(result.reset);expect(result.late.snapshot.assignments).toEqual([]);
+  expect(result.late.attempted.some(r=>r.status==="discarded")).toBe(true);
+  expect(result.late.report.outcomes.every(o=>o.status!=="success")).toBe(true);
+});
+
 test("guest extension deadlines permit renewed replies between fifteen and thirty seconds",async({page})=>{
   await page.goto("/");
   const r=await page.evaluate(async()=>{

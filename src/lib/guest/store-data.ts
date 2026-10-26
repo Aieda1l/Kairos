@@ -9,6 +9,8 @@ import type {GuestCommitChanges,GuestRequestFence,GuestSnapshot,GuestSyncState} 
 const secretSchema=z.object({value:z.string().min(1).max(GUEST_MAX_SECRET_CHARACTERS),remember:z.boolean()}).strict();
 const connectSchema=z.object({kind:z.literal("connect"),connection:guestConnectionSchema,courses:z.array(guestDiscoveredCourseSchema).max(GUEST_MAX_COURSES),assignments:z.array(guestNormalizedAssignmentSchema).max(GUEST_MAX_ASSIGNMENTS),secret:secretSchema.nullable()}).strict();
 const credentialSchema=z.object({kind:z.literal("credential"),secret:secretSchema}).strict();
+const coursesSchema=z.object({kind:z.literal("courses"),courses:z.array(guestDiscoveredCourseSchema).max(GUEST_MAX_COURSES)}).strict()
+  .refine(value=>new Set(value.courses.map(c=>c.externalCourseId)).size===value.courses.length);
 const stageSchema=z.object({kind:z.literal("stage-result"),outcome:z.object({runId:guestUuidSchema,stage:guestStageSchema,status:z.enum(["success","partial","failed","skipped","timed-out","cancelled"]),code:guestSafeCodeSchema.nullable(),updatedCount:guestCountSchema,failedCount:guestCountSchema,ignoredCount:guestCountSchema,pendingCount:guestCountSchema,attemptedAt:guestUtcDateSchema,completedAt:guestUtcDateSchema}).strict(),remainingKeys:z.array(guestExternalIdSchema).max(GUEST_MAX_ASSIGNMENTS)}).strict();
 
 export function initialStage(connectionId:string,stage:GuestSyncState["stage"]):GuestSyncState {
@@ -32,6 +34,18 @@ export function applyChanges(snapshot:GuestSnapshot,request:GuestRequestFence,re
   }
   if(request.purpose!=="read")invalid();
   const connection=snapshot.connections.find(c=>c.id===request.connectionId);if(!connection)invalid();
+  if(changes.kind==="courses"){
+    const parsed=coursesSchema.safeParse(changes);
+    if(!parsed.success || registered.intent!=="provider-read" || registered.members.canvas.length || registered.members.courseIds.length ||
+      !(connection.kind==="ed"&&request.source==="ed"&&request.operation==="ed-courses" || connection.kind==="gradescope"&&request.source==="gradescope"&&request.operation==="gradescope-discovery"))invalid();
+    const courses=[...snapshot.courses];
+    for(const incoming of parsed.data.courses){
+      const index=courses.findIndex(c=>c.sourceConnectionId===connection.id&&c.externalCourseId===incoming.externalCourseId);
+      if(index<0)courses.push({...incoming,id:uuid(),sourceConnectionId:connection.id,enabled:false,firstSeenAt:at,lastSeenAt:at});
+      else courses[index]={...courses[index],...incoming,lastSeenAt:Date.parse(at)>Date.parse(courses[index].lastSeenAt)?at:courses[index].lastSeenAt};
+    }
+    return {snapshot:{...snapshot,courses,connections:snapshot.connections.map(c=>c.id===connection.id?{...c,generation:c.generation+1,updatedAt:at}:c)},updatedCount:0,ignoredCount:0};
+  }
   if(changes.kind==="credential"){
     const parsed=credentialSchema.safeParse(changes);if(!parsed.success || !["canvas-feed","ed-courses","gradescope-discovery"].includes(request.operation))invalid();
     const generation=connection.generation+1;

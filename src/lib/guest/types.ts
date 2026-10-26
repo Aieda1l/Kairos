@@ -36,6 +36,7 @@ export type GuestCourseResult = {
 export type GuestCommitChanges =
   | {kind:"connect";connection:GuestConnection;courses:DiscoveredSourceCourse[];assignments:NormalizedAssignment[];secret:GuestSecretChoice|null}
   | {kind:"credential";secret:GuestSecretChoice}
+  | {kind:"courses";courses:DiscoveredSourceCourse[]}
   | {kind:"course-result";result:GuestCourseResult}
   | {kind:"stage-result";outcome:GuestStageOutcome;remainingKeys:string[]};
 export type GuestBackupV1 = {schemaVersion:1;exportedAt:string;data:Pick<GuestSnapshot,"connections"|"courses"|"assignments"|"statuses"|"syncStates"|"preferences">};
