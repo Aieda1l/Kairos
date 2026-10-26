@@ -67,7 +67,7 @@ Stalled streams, denial-side costs, alternate ports/redirects, capability-purpos
 
 **Interfaces:** `createGuestSourceHandler(operation:"canvas-feed"|"ed-courses"|"ed-lessons",runtimeFactory?:()=>Promise<GuestServerRuntime>):(request:Request)=>Promise<Response>`. It parses the corresponding F1 schema, validates capability/origin/budget/control state, invokes S1 and emits a validated bounded DTO. Local fixture transport is returned only by the same triple gate as existing local fixtures: E2E_FIXTURES=1, explicit loopback runtime/ingress and canonical localhost/127.0.0.1 origin.
 
-- [ ] **Step 1 — Write RED route tests.** Without preparing an account, assert a valid guest cookie permits all three reads and writes only null-user rate rows. Snapshot all account/source/credential/coursework/draft/request/owner tables before/after and assert identical rows. Assert existing account cookies neither authorize nor select data. Reject GET, media/body/extra fields, forged origin, wrong capability, paused provider, control-version drift, disabled feature, source credential errors and oversized result with correct no-store/fixed-error behavior. Synthetic secret markers in exceptions must not appear in response/log structures.
+- [x] **Step 1 — Write RED route tests.** Without preparing an account, assert a valid guest cookie permits all three reads and writes only null-user rate rows. Snapshot all account/source/credential/coursework/draft/request/owner tables before/after and assert identical rows. Assert existing account cookies neither authorize nor select data. Reject GET, media/body/extra fields, forged origin, wrong capability, paused provider, control-version drift, disabled feature, source credential errors and oversized result with correct no-store/fixed-error behavior. Synthetic secret markers in exceptions must not appear in response/log structures.
   Core assertions for `anonymous source reads persist only admission metadata`:
   ```ts
   expect(afterProtectedTables).toEqual(beforeProtectedTables);
@@ -75,10 +75,10 @@ Stalled streams, denial-side costs, alternate ports/redirects, capability-purpos
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(foreignOriginResponse.status).toBe(403);
   ```
-- [ ] **Step 2 — Verify RED.** `npm test -- tests/integration/guest-source-api.test.ts tests/integration/guest-no-account-writes.test.ts tests/unit/guest-fixture-boundary.test.ts` must fail on absent routes/boundaries.
-- [ ] **Step 3 — Implement wiring.** Keep route files thin. Disabled feature fails before loading expensive source/config/data. Check control version before dispatch/redirect and before output; no held `operation_locks`. Use exact POST bodies from F1, 401 only for missing/expired guest capability, 422 for provider credential/result errors, 429+Retry-After for budgets and 503 for protection storage/control failure. Source credentials are request-local, never keys or values in D1. The fixture handles synthetic guest Siteverify proof/action and pinned provider URLs; preserve existing auth fixture behavior and reject unexpected fixture outbound traffic.
-- [ ] **Step 4 — Verify GREEN.** Repeat tests plus existing `tests/integration/hosted-source-boundary.test.ts` and `tenant-scope-contract.test.ts`, `npm run typecheck`, `npm run verify:hosted`.
-- [ ] **Step 5 — Commit.** Stage S3 files only; commit `feat: expose bounded hybrid guest source reads`.
+- [x] **Step 2 — Verify RED.** `npm test -- tests/integration/guest-source-api.test.ts tests/integration/guest-no-account-writes.test.ts tests/unit/guest-fixture-boundary.test.ts` must fail on absent routes/boundaries.
+- [x] **Step 3 — Implement wiring.** Keep route files thin. Disabled feature fails before loading expensive source/config/data. Check control version before dispatch/redirect and before output; no held `operation_locks`. Use exact POST bodies from F1, 401 only for missing/expired guest capability, 422 for provider credential/result errors, 429+Retry-After for budgets and 503 for protection storage/control failure. Source credentials are request-local, never keys or values in D1. The fixture handles synthetic guest Siteverify proof/action and pinned provider URLs; preserve existing auth fixture behavior and reject unexpected fixture outbound traffic.
+- [x] **Step 4 — Verify GREEN.** Repeat tests plus existing `tests/integration/hosted-source-boundary.test.ts` and `tenant-scope-contract.test.ts`, `npm run typecheck`, `npm run verify:hosted`.
+- [x] **Step 5 — Commit.** Stage S3 files only; commit `feat: expose bounded hybrid guest source reads`.
 
 ### S4: Verify native transport/admission and preliminary capacity honestly
 
