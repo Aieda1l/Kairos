@@ -1,5 +1,15 @@
 import {expect,test} from "@playwright/test";
 
+test("guest initial partial Canvas setup persists diagnostics atomically",async({page,context})=>{
+  await context.route("**/api/guest/**",route=>route.abort());await page.goto("/");
+  const r=await page.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).initialPartialChecks(id);},crypto.randomUUID());
+  expect(r.failed?.status).toBe("failed");expect(r.afterAbort).toEqual(r.before);expect(r.abortedSecret).toBeNull();
+  expect(r.accepted).toMatchObject({status:"success",code:"PARTIAL_SYNC"});
+  expect(r.after.connections).toHaveLength(1);expect(r.after.assignments).toEqual([expect.objectContaining({externalId:"accepted-partial",title:"Accepted homework"})]);
+  expect(r.after.syncStates).toEqual([expect.objectContaining({stage:"canvas-feed",hasSuccessfulCheck:true,updatedCount:1,failedCount:2,lastErrorCode:"PARTIAL_SYNC"})]);
+  expect(r.secret).toBe("private-partial-feed");expect(JSON.stringify(r.after)).not.toContain("private-partial-feed");
+});
+
 test("two guest pages reject a delayed coordinator commit and preserve the takeover lease",async({page,context})=>{
   await context.route("**/api/guest/**",route=>route.abort());
   const second=await context.newPage();await Promise.all([page.goto("/"),second.goto("/")]);

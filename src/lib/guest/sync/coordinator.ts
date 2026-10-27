@@ -17,13 +17,20 @@ const sourceOf=(stage:GuestOperation):SourceKind=>stage.startsWith("canvas")?"ca
 const safeCode=(error:unknown):GuestSafeCode=>error instanceof GuestDataError?error.code:"INVALID_RESULT";
 const haltsQueue=(code:GuestSafeCode)=>["RATE_LIMITED","ED_RATE_LIMITED","EXTENSION_TIMEOUT","GUEST_RUN_TIMEOUT","GUEST_RUN_LIMIT","GUEST_SUPERSEDED","GUEST_INTERRUPTED"].includes(code);
 const emptyMembers=():GuestRegisteredRequest["members"]=>({canvas:[],courseIds:[]});
+const EXTENSION_RETRY_DELAY_MS=60_000;
+function reportsExtensionTimeout(read:GuestValidatedRead):boolean{
+  if(read.operation==="canvas-status")return read.result.errorCode==="EXTENSION_TIMEOUT"||read.result.results.some(row=>row.errorCode==="EXTENSION_TIMEOUT");
+  if(read.operation==="gradescope")return read.result.errorCode==="EXTENSION_TIMEOUT"||read.result.courses.some(row=>row.errorCode==="EXTENSION_TIMEOUT");
+  return read.operation==="gradescope-discovery"&&read.result.errorCode==="EXTENSION_TIMEOUT";
+}
 function ordered(keys:string[],resume:string[]):string[]{return [...new Set([...resume.filter(k=>keys.includes(k)),...keys])];}
 function identity(run:GuestRunIdentity):GuestRunIdentity {return {datasetId:run.datasetId,runId:run.runId,pageEpoch:run.pageEpoch,generation:run.generation};}
 
 export function createGuestSyncCoordinator(options:GuestCoordinatorOptions) {
   const {store,bridge,transient,credentials,clock,uuid,pageEpoch}=options;
-  let active:Context|null=null,acquiring=false,stopEpoch=0;
+  let active:Context|null=null,acquiring=false,stopEpoch=0,extensionRetryAt=0;
   const stamp=()=>new Date(clock.now()).toISOString();
+  function extensionTimeout(ctx:Context){ctx.extensionTimedOut=true;extensionRetryAt=Math.max(extensionRetryAt,clock.now()+EXTENSION_RETRY_DELAY_MS);}
   function cancel(ctx:Context,code:GuestSafeCode){
     ctx.code??=code;ctx.registry.invalidateRun(ctx.lease.runId);ctx.abort.abort();
     for(const reject of ctx.cancel)reject(ctx.code);
@@ -63,7 +70,7 @@ export function createGuestSyncCoordinator(options:GuestCoordinatorOptions) {
   async function dispatch(ctx:Context,connection:GuestConnection|null,operation:GuestOperation,members:GuestRegisteredRequest["members"],secret?:string):Promise<{read:GuestValidatedRead;fence:GuestRequestFence}>{
     check(ctx);if(ctx.operations>=limits.GUEST_MAX_DISPATCHED_OPERATIONS)throw new GuestDataError("GUEST_RUN_LIMIT");
     const extension=operation==="canvas-status"||operation.startsWith("gradescope");
-    if(extension&&ctx.extensionTimedOut)throw new GuestDataError("EXTENSION_TIMEOUT");
+    if(extension&&(ctx.extensionTimedOut||clock.now()<extensionRetryAt))throw new GuestDataError("EXTENSION_TIMEOUT");
     const request=fence(ctx,connection,operation),registration={fence:request,members};
     if(!await store.registerRequest(registration,clock.now()))throw new GuestDataError("GUEST_SUPERSEDED");
     check(ctx);if(!ctx.registry.register(registration))throw new GuestDataError("GUEST_SUPERSEDED");
@@ -84,8 +91,9 @@ export function createGuestSyncCoordinator(options:GuestCoordinatorOptions) {
       }
       const value=await Promise.race([pending,failure]);check(ctx);
       const read=ctx.registry.accept(requestId,value,clock.now());if(!read)throw new GuestDataError("GUEST_SUPERSEDED");
+      if(reportsExtensionTimeout(read))extensionTimeout(ctx);
       return {read,fence:request};
-    }catch(error){if(extension&&safeCode(error)==="EXTENSION_TIMEOUT")ctx.extensionTimedOut=true;throw error;}
+    }catch(error){if(extension&&safeCode(error)==="EXTENSION_TIMEOUT")extensionTimeout(ctx);throw error;}
     finally{clock.clearTimeout(timeout);ctx.cancel.delete(rejectPending);ctx.abort.signal.removeEventListener("abort",abort);}
   }
   async function commit(ctx:Context,request:GuestRequestFence,changes:GuestCommitChanges):Promise<Extract<GuestCommitResult,{status:"accepted"}>>{
@@ -113,8 +121,9 @@ export function createGuestSyncCoordinator(options:GuestCoordinatorOptions) {
     }else if(read.operation==="gradescope"){
       const course=snapshot.courses.find(row=>row.sourceConnectionId===c.id&&row.externalCourseId===keys[0])!;
       const row=read.result.courses.find(row=>row.courseId===keys[0]);
-      result.code=row?.errorCode??read.result.errorCode??(row?null:"INVALID_RESULT");
+      result.code=row?.errorCode??(row?null:read.result.errorCode??"INVALID_RESULT");
       if(result.code){result.failedCount=1;return result;}
+      result.code=read.result.errorCode??null;
       result.checkedAt=row!.checkedAt;result.courseSucceeded=true;
       for(const a of row!.assignments){
         const externalId=`${a.courseId}:${a.assignmentId}`;
@@ -153,6 +162,7 @@ export function createGuestSyncCoordinator(options:GuestCoordinatorOptions) {
           let response:Awaited<ReturnType<typeof dispatch>>;
           try{response=await dispatch(ctx,c,stage,members,secret??undefined);}finally{dispatched=ctx.operations>before;if(dispatched)remaining=rest;}
           const converted=convert(response.read,snapshot,c,stage,batch,stage==="canvas-feed"?[]:rest);
+          if(ctx.extensionTimedOut&&(stage==="canvas-status"||stage==="gradescope"))converted.code="EXTENSION_TIMEOUT";
           const saved=await commit(ctx,response.fence,{kind:"course-result",result:converted});snapshot=saved.snapshot;
           outcome.updatedCount+=saved.updatedCount;outcome.ignoredCount+=saved.ignoredCount;outcome.failedCount+=converted.failedCount;
           successful=snapshot.syncStates.find(s=>s.sourceConnectionId===c.id&&s.stage===stage)?.hasSuccessfulCheck===true;

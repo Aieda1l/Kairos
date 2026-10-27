@@ -4,6 +4,7 @@ import type { NormalizedAssignment } from "@/lib/assignments/normalize";
 import type { SourceCourse,DiscoveredSourceCourse,SourceKind } from "@/lib/sources/types";
 import type { AssignmentSubmissionStatus,CanvasAssignmentLocator } from "@/lib/submission-status/types";
 import type { GuestSafeCode } from "./errors";
+import type { GuestCanvasFeedResponse } from "./sources/contracts";
 
 export type GuestStage = "canvas-feed" | "canvas-status" | "gradescope" | "ed";
 export type GuestOperation = GuestStage | "gradescope-discovery" | "ed-courses";
@@ -34,7 +35,7 @@ export type GuestCourseResult = {
   assignments:NormalizedAssignment[];statuses:GuestStatusInput[];courseSucceeded:boolean;failedCount:number;code:GuestSafeCode|null;remainingKeys:string[];
 };
 export type GuestCommitChanges =
-  | {kind:"connect";connection:GuestConnection;courses:DiscoveredSourceCourse[];assignments:NormalizedAssignment[];secret:GuestSecretChoice|null}
+  | {kind:"connect";connection:GuestConnection;courses:DiscoveredSourceCourse[];assignments:NormalizedAssignment[];secret:GuestSecretChoice|null;canvasReport?:GuestCanvasFeedResponse["report"]}
   | {kind:"credential";secret:GuestSecretChoice}
   | {kind:"courses";courses:DiscoveredSourceCourse[]}
   | {kind:"course-result";result:GuestCourseResult}

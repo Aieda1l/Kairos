@@ -2,12 +2,13 @@ import {z} from "zod";
 import {guestSafeCodeSchema} from "./errors";
 import {GUEST_MAX_ASSIGNMENTS,GUEST_MAX_COURSES,GUEST_MAX_SECRET_CHARACTERS} from "./limits";
 import {applyGuestCourseResult} from "./merge";
+import {guestCanvasFeedResponseSchema} from "./sources/contracts";
 import {guestConnectionSchema,guestCountSchema,guestDiscoveredCourseSchema,guestExternalIdSchema,guestNormalizedAssignmentSchema,guestStageSchema,guestUtcDateSchema,guestUuidSchema,parseGuestSnapshot} from "./schema";
 import {invalid,type StoredRequest} from "./store-runs";
 import type {GuestCommitChanges,GuestRequestFence,GuestSnapshot,GuestSyncState} from "./types";
 
 const secretSchema=z.object({value:z.string().min(1).max(GUEST_MAX_SECRET_CHARACTERS),remember:z.boolean()}).strict();
-const connectSchema=z.object({kind:z.literal("connect"),connection:guestConnectionSchema,courses:z.array(guestDiscoveredCourseSchema).max(GUEST_MAX_COURSES),assignments:z.array(guestNormalizedAssignmentSchema).max(GUEST_MAX_ASSIGNMENTS),secret:secretSchema.nullable()}).strict();
+const connectSchema=z.object({kind:z.literal("connect"),connection:guestConnectionSchema,courses:z.array(guestDiscoveredCourseSchema).max(GUEST_MAX_COURSES),assignments:z.array(guestNormalizedAssignmentSchema).max(GUEST_MAX_ASSIGNMENTS),secret:secretSchema.nullable(),canvasReport:guestCanvasFeedResponseSchema.shape.report.optional()}).strict();
 const credentialSchema=z.object({kind:z.literal("credential"),secret:secretSchema}).strict();
 const coursesSchema=z.object({kind:z.literal("courses"),courses:z.array(guestDiscoveredCourseSchema).max(GUEST_MAX_COURSES)}).strict()
   .refine(value=>new Set(value.courses.map(c=>c.externalCourseId)).size===value.courses.length);
@@ -23,11 +24,11 @@ export function applyChanges(snapshot:GuestSnapshot,request:GuestRequestFence,re
   if((registered.intent==="stage-result")!==(changes.kind==="stage-result"))invalid();
   if(changes.kind==="connect"){
     const parsed=connectSchema.safeParse(changes);if(!parsed.success)invalid();const data=parsed.data;
-    if(request.purpose!=="setup"||data.connection.kind!==request.source||request.source!=="canvas"&&data.assignments.length||request.source==="canvas"&&data.courses.length)invalid();
+    if(request.purpose!=="setup"||data.connection.kind!==request.source||request.source!=="canvas"&&(data.assignments.length||data.canvasReport!==undefined)||request.source==="canvas"&&data.courses.length)invalid();
     snapshot={...snapshot,connections:[...snapshot.connections,data.connection],courses:[...snapshot.courses,...data.courses.map(c=>({...c,id:uuid(),sourceConnectionId:data.connection.id,enabled:false,firstSeenAt:at,lastSeenAt:at}))]};
     let updatedCount=0,ignoredCount=0;
     if(request.source==="canvas"){
-      const merged=applyGuestCourseResult(snapshot,{sourceConnectionId:data.connection.id,connectionGeneration:data.connection.generation,stage:"canvas-feed",externalCourseId:null,checkedAt:at,assignments:data.assignments,statuses:[],courseSucceeded:true,failedCount:0,code:null,remainingKeys:[]},at,uuid);
+      const merged=applyGuestCourseResult(snapshot,{sourceConnectionId:data.connection.id,connectionGeneration:data.connection.generation,stage:"canvas-feed",externalCourseId:null,checkedAt:at,assignments:data.assignments,statuses:[],courseSucceeded:true,failedCount:data.canvasReport?.malformedCount??0,code:data.canvasReport?.partial?"PARTIAL_SYNC":null,remainingKeys:[]},at,uuid);
       snapshot=merged.snapshot;updatedCount=merged.updatedCount;ignoredCount=merged.ignoredCount;
     }
     return {snapshot,updatedCount,ignoredCount,credential:{connectionId:data.connection.id,generation:data.connection.generation,value:data.secret?.remember?data.secret.value:null}};

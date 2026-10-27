@@ -57,6 +57,17 @@ function harness(snapshot=fixture()) {
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(at);vi.stubGlobal("fetch",()=>{throw Error("Network forbidden");});});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 describe("guest coordinator",()=>{
+  it.each([true,false])("atomically preserves initial Canvas partial=%s diagnostics and accepted rows",async partial=>{
+    const h=harness(guestSnapshotFixture({connections:[],assignments:[],statuses:[],syncStates:[]}));
+    const row={source:"canvas" as const,externalId:"accepted",courseId:"12",courseName:"Math",title:"Homework",releaseAt:null,dueAt:null,lateDueAt:null,status:"pending" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://canvas.uw.edu/courses/12/assignments/42",sourceUpdatedAt:null};
+    h.transient.canvasFeed=async r=>({ok:true,schemaVersion:1,requestId:r.requestId,checkedAt:at,assignments:[row],report:{skippedCount:3,malformedCount:partial?1:0,partial}});
+    const result=await h.coordinator.connectCanvas({value:"synthetic-feed",remember:false});
+    expect(result).toMatchObject({status:"success",code:partial?"PARTIAL_SYNC":null});
+    expect(h.snapshot().assignments).toEqual([expect.objectContaining(row)]);
+    expect(h.snapshot().syncStates).toEqual([expect.objectContaining({stage:"canvas-feed",updatedCount:1,failedCount:partial?1:0,lastErrorCode:partial?"PARTIAL_SYNC":null,hasSuccessfulCheck:true})]);
+    expect(await h.credentials.get(result.connectionId!,1)).toBe("synthetic-feed");
+    expect(h.registrations).toHaveLength(1);expect(h.registrations[0].intent).not.toBe("stage-result");
+  });
   it("installs only accepted setup secrets, restores without replacing data, and refreshes discovery",async()=>{
     const h=harness(guestSnapshotFixture({connections:[],assignments:[],statuses:[],syncStates:[]}));
     h.transient.edCourses=async r=>({ok:true,schemaVersion:1,requestId:r.requestId,checkedAt:at,courses:[{externalCourseId:"1",shortName:null,fullName:"One",term:null,year:null}]});
@@ -122,6 +133,37 @@ describe("guest coordinator",()=>{
     const h=harness();h.bridge.canvas=async()=>{throw new GuestDataError("EXTENSION_TIMEOUT");};
     const report=await h.coordinator.run();expect(h.calls).toEqual(["canvas-feed","ed:1","ed:2"]);
     expect(report.outcomes[2]).toMatchObject({code:"EXTENSION_TIMEOUT",pendingCount:2});
+  });
+  it.each(["canvas-top","canvas-member","gradescope-top","gradescope-course","thrown"] as const)("halts extension work and enforces retry delay for %s timeout",async mode=>{
+    const s=fixture();
+    s.assignments=Array.from({length:26},(_,i)=>({...s.assignments[0],id:guestUuid(200+i),externalId:`event-${i}`,sourceUrl:`https://canvas.uw.edu/courses/12/assignments/${i+1}`}));s.statuses=[];
+    const h=harness(s),canvas=h.bridge.canvas,gradescope=h.bridge.gradescopeSync;
+    if(mode.startsWith("canvas")||mode==="thrown")h.bridge.canvas=async r=>{
+      h.calls.push("canvas-timeout");if(mode==="thrown")throw new GuestDataError("EXTENSION_TIMEOUT");
+      return {protocolVersion:1,requestId:r.requestId,...(mode==="canvas-top"?{errorCode:"EXTENSION_TIMEOUT" as const}:{}),results:r.assignments.map((a,i)=>({...a,state:"submitted",isLate:false,isMissing:false,submittedAt:null,checkedAt:at,extractorVersion:"test",...(mode==="canvas-member"&&i===0?{errorCode:"CANVAS_NETWORK_ERROR" as const}:mode==="canvas-member"&&i===1?{errorCode:"EXTENSION_TIMEOUT" as const}:{})}))};
+    };
+    else h.bridge.gradescopeSync=async r=>{h.calls.push("gradescope-timeout");return {protocolVersion:1,requestId:r.requestId,...(mode==="gradescope-top"?{errorCode:"EXTENSION_TIMEOUT" as const}:{}),courses:[{courseId:r.courseIds[0],checkedAt:at,assignments:[],parseDiagnosticCounts:[],...(mode==="gradescope-course"?{errorCode:"EXTENSION_TIMEOUT" as const}:{})}]};};
+    const report=await h.coordinator.run();
+    expect(h.calls.filter(c=>c==="canvas-timeout"||c==="gradescope-timeout")).toHaveLength(1);
+    expect(h.calls.some(c=>c.startsWith("gradescope:"))).toBe(false);
+    expect(h.calls.slice(-2)).toEqual(["ed:1","ed:2"]);
+    const stage=mode.startsWith("gradescope")?"gradescope":"canvas-status";
+    expect(report.outcomes.find(o=>o.stage===stage)).toMatchObject({code:"EXTENSION_TIMEOUT",pendingCount:1});
+    if(mode==="canvas-member")expect(report.outcomes.find(o=>o.stage===stage)).toMatchObject({status:"partial",updatedCount:23,failedCount:2});
+    if(mode==="canvas-top")expect(report.outcomes.find(o=>o.stage===stage)).toMatchObject({status:"partial",updatedCount:25,failedCount:0});
+    if(mode==="gradescope-top")expect(h.snapshot().syncStates.find(s=>s.stage===stage)?.hasSuccessfulCheck).toBe(true);
+    h.bridge.canvas=canvas;h.bridge.gradescopeSync=gradescope;h.calls.length=0;vi.setSystemTime(Date.now()+59999);
+    await h.coordinator.run();expect(h.calls).toEqual(["canvas-feed","ed:1","ed:2"]);
+    h.calls.length=0;vi.setSystemTime(Date.now()+1);await h.coordinator.run({sources:["gradescope"]});expect(h.calls).toHaveLength(2);
+  });
+  it("applies the same timeout retry delay to Gradescope discovery without blocking Ed setup",async()=>{
+    const h=harness(guestSnapshotFixture({connections:[],assignments:[],statuses:[],syncStates:[]}));
+    h.bridge.gradescopeDiscover=async r=>{h.calls.push("discover");return {protocolVersion:1,requestId:r.requestId,courses:[],errorCode:"EXTENSION_TIMEOUT"};};
+    expect(await h.coordinator.connectGradescope()).toMatchObject({status:"failed",code:"EXTENSION_TIMEOUT"});
+    h.bridge.gradescopeDiscover=async r=>{h.calls.push("discover");return {protocolVersion:1,requestId:r.requestId,courses:[]};};
+    expect(await h.coordinator.connectGradescope()).toMatchObject({status:"failed",code:"EXTENSION_TIMEOUT"});expect(h.calls).toEqual(["discover"]);
+    expect(await h.coordinator.connectEd({value:"synthetic-token",remember:false})).toMatchObject({status:"success",code:null});
+    vi.setSystemTime(Date.now()+60000);expect(await h.coordinator.connectGradescope()).toMatchObject({status:"success",code:null});expect(h.calls).toEqual(["discover","discover"]);
   });
   it("uses a new registry after clock rollback and never reuses request IDs",async()=>{
     const h=harness();await h.coordinator.run({sources:["ed"]});vi.setSystemTime(Date.now()-600000);

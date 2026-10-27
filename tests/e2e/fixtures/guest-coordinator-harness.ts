@@ -77,3 +77,21 @@ export async function refreshChecks(id:string){
   const afterOverflow=await store.read(),reuse=await store.commit(overflow,{kind:"courses",courses:[]},time);
   await store.releaseRun(lease);store.close();return {before,refresh,after,remembered,rejected,afterAbort,secretAfterAbort,duplicateRejected,afterRejected,accepted,consumed,stale,beforeOverflow,overflowRejected,afterOverflow,reuse};
 }
+
+export async function initialPartialChecks(id:string){
+  const store=await openGuestStore({name:name(id),now}),credentials=createGuestCredentials(store),before=await store.read();
+  const assignment={source:"canvas" as const,externalId:"accepted-partial",courseId:"12",courseName:"Math",title:"Accepted homework",releaseAt:null,dueAt:null,lateDueAt:null,status:"pending" as const,sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:"https://canvas.uw.edu/courses/12/assignments/42",sourceUpdatedAt:null};
+  const client:GuestTransientClient={...transient,canvasFeed:async r=>({ok:true,schemaVersion:1,requestId:r.requestId,checkedAt:stamp(),assignments:[assignment],report:{skippedCount:5,malformedCount:2,partial:true}})};
+  let attemptedId="";
+  const observed:GuestStore={...store,async commit(...args){if(args[1].kind==="connect")attemptedId=args[1].connection.id;return store.commit(...args);}};
+  const coordinator=createGuestSyncCoordinator({store:observed,credentials,transient:client,bridge,clock,uuid:()=>crypto.randomUUID(),pageEpoch:crypto.randomUUID()});
+  const original=IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put=function(...args:Parameters<IDBObjectStore["put"]>){if(this.name==="requests")throw new DOMException("injected","QuotaExceededError");return original.apply(this,args);};
+  let failed;
+  try{failed=await coordinator.connectCanvas({value:"private-partial-feed",remember:true});}finally{IDBObjectStore.prototype.put=original;}
+  const afterAbort=await store.read(),abortedSecret=await store.readRememberedSecret(attemptedId);
+  const accepted=await coordinator.connectCanvas({value:"private-partial-feed",remember:true}),after=await store.read();
+  if(!accepted.connectionId)throw Error("Partial setup rejected");
+  const secret=await store.readRememberedSecret(accepted.connectionId);store.close();
+  return {before,failed,afterAbort,abortedSecret,accepted,after,secret};
+}

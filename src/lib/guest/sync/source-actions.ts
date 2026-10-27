@@ -5,6 +5,7 @@ import type {GuestCredentials} from "../credentials";
 import type {GuestCommitChanges,GuestCommitResult,GuestConnection,GuestSecretChoice,GuestStore} from "../types";
 import type {GuestValidatedRead} from "./request-registry";
 
+/** Success means accepted local data; PARTIAL_SYNC remains a visible warning. */
 export type GuestSourceActionOutcome={status:"success"|"failed";code:GuestSafeCode|null;connectionId:string|null};
 export type GuestSetupRead=(source:SourceKind,connection:GuestConnection|null,secret:string|undefined,changes:(read:GuestValidatedRead)=>GuestCommitChanges)=>Promise<Extract<GuestCommitResult,{status:"accepted"}>>;
 type Options={store:GuestStore;credentials:GuestCredentials;uuid:()=>string;now:()=>number;read:GuestSetupRead};
@@ -32,10 +33,10 @@ export function createGuestSourceActions({store,credentials,uuid,now,read}:Optio
       const id=uuid();
       const saved=await read(source,null,secret?.value,result=>{
         const at=new Date(now()).toISOString();
-        return {kind:"connect",connection:{id,kind:source,enabled:true,generation:1,createdAt:at,updatedAt:at},courses:source==="canvas"?[]:courses(result),assignments:result.operation==="canvas-feed"?result.result.assignments:[],secret};
+        return {kind:"connect",connection:{id,kind:source,enabled:true,generation:1,createdAt:at,updatedAt:at},courses:source==="canvas"?[]:courses(result),assignments:result.operation==="canvas-feed"?result.result.assignments:[],secret,...(result.operation==="canvas-feed"?{canvasReport:result.result.report}:{})};
       });
       if(secret)credentials.put(id,saved.snapshot.connections.find(c=>c.id===id)!.generation,secret.value);
-      return {status:"success",code:null,connectionId:id};
+      return {status:"success",code:source==="canvas"?saved.snapshot.syncStates.find(s=>s.sourceConnectionId===id&&s.stage==="canvas-feed")?.lastErrorCode??null:null,connectionId:id};
     }catch(error){return failure(error);}
   }
   return {
