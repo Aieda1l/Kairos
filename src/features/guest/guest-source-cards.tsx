@@ -1,0 +1,65 @@
+"use client";
+import {useEffect,useId,useState} from "react";
+import {Button} from "@/components/ui/button";
+import {Label} from "@/components/ui/label";
+import {MemoryInput} from "@/features/onboarding/private-drafts";
+import type {SourceCourse,SourceKind} from "@/lib/sources/types";
+import type {GuestConnection} from "@/lib/guest/types";
+import {useGuest} from "./guest-provider";
+import {useGuestSources} from "./guest-sources-provider";
+
+const names={canvas:"Canvas",gradescope:"Gradescope",ed:"Ed"};
+function CredentialForm({kind,connection}:{kind:"canvas"|"ed";connection?:GuestConnection}){
+  const sources=useGuestSources(),id=useId();
+  const [value,setValue]=useState(""),[remember,setRemember]=useState(false);
+  useEffect(()=>{
+    const clear=()=>{setValue("");setRemember(false);};
+    const hide=()=>{if(document.visibilityState==="hidden")clear();};
+    window.addEventListener("pagehide",clear);document.addEventListener("visibilitychange",hide);
+    return ()=>{window.removeEventListener("pagehide",clear);document.removeEventListener("visibilitychange",hide);};
+  },[]);
+  const label=kind==="canvas"?"Canvas calendar feed URL":"Ed API token",name=names[kind];
+  return <form className="space-y-3" onSubmit={event=>{
+    event.preventDefault();if(!value||sources.busy||!sources.ready)return;
+    const choice={value,remember};
+    void (connection?sources.restoreSecret(connection.id,choice):kind==="canvas"?sources.connectCanvas(choice):sources.connectEd(choice)).then(result=>{
+      if(result.status==="success"||result.code==="GUEST_SESSION_REQUIRED"){setValue("");setRemember(false);}
+    });
+  }}>
+    <Label htmlFor={id}>{label}</Label>
+    <MemoryInput id={id} type="password" value={value} onValueChange={setValue} maxLength={4096} required autoComplete="off" spellCheck={false} disabled={!sources.ready||sources.busy} aria-describedby={`${id}-help`}/>
+    <p id={`${id}-help`} className="text-sm text-[var(--muted)]">{connection?(sources.secretAvailable[connection.id]?"A credential is available for this source. Enter a new one to replace it.":"Re-enter your credential to refresh this source."):"Kept in memory unless you choose to remember it on this device."}</p>
+    <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={remember} disabled={sources.busy} onChange={event=>setRemember(event.target.checked)}/>Remember {name} credential on this device</label>
+    <div className="flex flex-wrap gap-3"><Button type="submit" disabled={!sources.ready||sources.busy||!value}>{connection?`Update ${name} credential`:`Connect ${name}`}</Button>
+      {connection&&<Button type="button" variant="secondary" disabled={!sources.ready||sources.busy} onClick={()=>{setValue("");setRemember(false);void sources.forgetCredential(connection.id);}}>Forget {name} credential</Button>}</div>
+  </form>;
+}
+function CourseSelection({connection,courses}:{connection:GuestConnection;courses:SourceCourse[]}){
+  const sources=useGuestSources(),name=names[connection.kind];
+  const [selected,setSelected]=useState(()=>courses.filter(c=>c.enabled).map(c=>c.externalCourseId));
+  return <form className="space-y-3" onSubmit={event=>{event.preventDefault();void sources.setEnabledCourses(connection.id,selected);}}>
+    <fieldset disabled={!sources.ready||sources.busy} className="space-y-2"><legend className="font-medium">Choose {name} courses</legend>
+      {courses.map(c=><label key={c.id} className="flex min-h-11 items-center gap-3 break-words"><input type="checkbox" checked={selected.includes(c.externalCourseId)} onChange={event=>setSelected(ids=>event.target.checked?[...ids,c.externalCourseId]:ids.filter(id=>id!==c.externalCourseId))}/><span className="min-w-0 [overflow-wrap:anywhere]">{c.shortName??c.fullName}</span></label>)}
+      {!courses.length&&<p className="text-sm text-[var(--muted)]">No courses discovered. Open your signed-in source tab or check your credential, then refresh courses.</p>}
+    </fieldset>
+    <div className="flex flex-wrap gap-3"><Button type="submit" variant="secondary" disabled={!sources.ready||sources.busy}>Save {name} courses</Button><Button type="button" variant="secondary" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.refreshCourses(connection.id);}}>Refresh {name} courses</Button></div>
+    <p className="text-sm text-[var(--muted)]">New courses start unchecked. Refresh keeps your saved course selection and coursework.</p>
+  </form>;
+}
+function SourceCard({kind,connection,courses}:{kind:SourceKind;connection?:GuestConnection;courses:SourceCourse[]}){
+  const sources=useGuestSources(),name=names[kind],heading=useId();
+  return <section aria-labelledby={heading} className="min-w-0 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
+    <div><h2 id={heading} className="text-lg font-semibold">{name}</h2><p className="mt-1 text-sm text-[var(--muted)]">{connection?"Connected in this browser":kind==="gradescope"?"Open Gradescope in a signed-in tab with the Kairos extension to discover your courses.":kind==="canvas"?"Import your UW Canvas calendar feed. The extension adds live submission status.":"Use your Ed API token to discover and select courses. No extension is needed."}</p></div>
+    {kind!=="gradescope"&&<CredentialForm key={sources.draftEpoch} kind={kind} connection={connection}/>}
+    {kind==="gradescope"&&!connection&&<Button type="button" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.connectGradescope();}}>Connect Gradescope</Button>}
+    {connection&&kind!=="canvas"&&<CourseSelection key={connection.generation} connection={connection} courses={courses}/>}
+    {connection&&<div className="flex flex-wrap gap-3"><Button type="button" variant="secondary" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.run({sources:[kind]});}}>Sync {name}</Button><Button type="button" variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.disconnect(connection.id);}}>Disconnect {name}</Button></div>}
+  </section>;
+}
+export function GuestSourceCards(){
+  const guest=useGuest();if(guest.phase!=="ready")return null;
+  return <div className="grid min-w-0 gap-5">{(["canvas","gradescope","ed"] as const).map(kind=>{
+    const c=guest.snapshot.connections.find(c=>c.kind===kind);
+    return <SourceCard key={`${guest.snapshot.datasetId}:${c?.id??kind}`} kind={kind} connection={c} courses={guest.snapshot.courses.filter(course=>course.sourceConnectionId===c?.id)}/>;
+  })}</div>;
+}

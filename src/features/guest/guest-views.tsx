@@ -5,6 +5,8 @@ import {AssignmentTable} from "@/features/assignments/assignment-table";
 import {AssignmentCalendar} from "@/features/assignments/assignment-calendar";
 import {projectGuestAssignments} from "@/lib/guest/projection";
 import {useGuest} from "./guest-provider";
+import {GuestSources} from "./guest-sources";
+import {GuestSyncControls} from "./guest-sync-controls";
 
 export function GuestViews({view}:{view:"upcoming"|"assignments"|"calendar"|"sources"|"settings"}) {
   const guest=useGuest();
@@ -17,10 +19,10 @@ export function GuestViews({view}:{view:"upcoming"|"assignments"|"calendar"|"sou
   return <div className="space-y-5">
     <div><h1 className="text-2xl font-semibold capitalize">{view}</h1><p className="mt-1 text-sm text-[var(--muted)]">Times shown in {timeZone}</p></div>
     {guest.actionError&&<p role="alert" className="rounded-xl border border-[var(--border)] p-4">{guest.actionError}</p>}
-    {view==="upcoming"&&<AssignmentExplorer assignments={assignments} timeZone={timeZone} canvasConnected={false} syncControls={null} sourcesHref="/guest/sources" filters={filters} onFiltersChange={changeFilters}/>}
-    {view==="assignments"&&<AssignmentTable assignments={assignments} timeZone={timeZone} filters={filters} onFiltersChange={changeFilters} sort={sort} onSortChange={value=>{void guest.savePreferences({sort:value});}}/>}
+    {view==="upcoming"&&<AssignmentExplorer assignments={assignments} timeZone={timeZone} canvasConnected={snapshot.connections.some(c=>c.kind==="canvas"&&c.enabled)} syncControls={<GuestSyncControls/>} sourcesHref="/guest/sources" filters={filters} onFiltersChange={changeFilters}/>}
+    {view==="assignments"&&<><GuestSyncControls/><AssignmentTable assignments={assignments} timeZone={timeZone} filters={filters} onFiltersChange={changeFilters} sort={sort} onSortChange={value=>{void guest.savePreferences({sort:value});}}/></>}
     {view==="calendar"&&<AssignmentCalendar assignments={assignments} timeZone={timeZone}/>}
-    {view==="sources"&&<section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6"><h2 className="font-semibold">Source setup is coming in the next guest release</h2><p className="mt-2 text-[var(--muted)]">This foundation can display coursework already saved in this browser. Canvas, Gradescope, and Ed connection and sync controls are not available here yet.</p><Link href="/guest/settings" className="mt-4 inline-flex min-h-11 items-center underline underline-offset-4">Guest settings</Link></section>}
+    {view==="sources"&&<GuestSources/>}
     {view==="settings"&&<section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6"><h2 className="font-semibold">Device settings are coming in the next guest release</h2><p className="mt-2 text-[var(--muted)]">Your assignment filters and sort order are saved locally. Timezone, backup, recovery, and source settings controls are not available here yet. Browser site data removal deletes this local workspace.</p><Link href="/guest/sources" className="mt-4 inline-flex min-h-11 items-center underline underline-offset-4">Guest sources</Link></section>}
   </div>;
 }

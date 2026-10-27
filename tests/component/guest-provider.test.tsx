@@ -1,10 +1,25 @@
 // @vitest-environment jsdom
-import {StrictMode} from "react";
+import {StrictMode,useEffect} from "react";
 import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {expect,it,vi} from "vitest";
-import {GuestProvider,useGuest} from "@/features/guest/guest-provider";
+import {GuestProvider,useGuest,useGuestStoreLifecycle} from "@/features/guest/guest-provider";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
+
+it("publishes only the owned hydrated store and retires consumers before dataset replacement and close",async()=>{
+  const fake=guestStoreFake();const events:string[]=[];const handles:unknown[]=[];
+  vi.mocked(fake.store.close).mockImplementation(()=>{events.push("close");});
+  function Consumer(){const lifecycle=useGuestStoreLifecycle();useEffect(()=>{
+    if(!lifecycle)return;handles.push(lifecycle.store);events.push("acquired:"+lifecycle.datasetId);
+    return lifecycle.onRetire(()=>{expect(lifecycle.isActive()).toBe(false);events.push("retired");});
+  },[lifecycle]);return null;}
+  const factory=async()=>fake.store;
+  const view=render(<GuestProvider storeFactory={factory}><Consumer/><Preferences/></GuestProvider>);
+  await screen.findByText("Asia/Tokyo");await waitFor(()=>expect(handles).toEqual([fake.store]));
+  await act(async()=>fake.replace({...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}));
+  expect(events).toEqual(["acquired:"+guestSnapshot().datasetId,"retired","acquired:22222222-2222-4222-8222-222222222222"]);
+  expect(fake.store.close).not.toHaveBeenCalled();view.unmount();expect(events.slice(-2)).toEqual(["retired","close"]);expect(handles).toEqual([fake.store,fake.store]);
+});
 
 function Preferences(){
   const guest=useGuest();
