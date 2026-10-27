@@ -59,6 +59,12 @@ export function GuestProvider({children,storeFactory=openGuestStore}:{children:R
             const identity=await store.getIdentity();
             if(!current.active||version!==current.readVersion)return;
             if(!initial&&!current.readFailed&&sameIdentity(current.snapshot,identity))return;
+            // Identity is enough to invalidate private ownership. A replacement
+            // graph may be slow or unreadable; it must never keep the old vault
+            // and coordinator active while hydration is pending or failed.
+            if(currentLifecycle&&currentLifecycle.datasetId!==identity.datasetId){
+              retire();currentLifecycle=null;setLifecycle(null);
+            }
             current.identity=identity;
             const snapshot=await store.read();
             if(!current.active||version!==current.readVersion)return;

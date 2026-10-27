@@ -3,14 +3,14 @@ import {StrictMode,useEffect} from "react";
 import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {beforeEach,expect,it,vi} from "vitest";
-import {GuestProvider} from "@/features/guest/guest-provider";
+import {GuestProvider,useGuest,useGuestStoreLifecycle} from "@/features/guest/guest-provider";
 import {GuestSourcesProvider,useGuestSources} from "@/features/guest/guest-sources-provider";
 import {GuestSyncControls} from "@/features/guest/guest-sync-controls";
 import {GuestDataError,guestSafeMessage} from "@/lib/guest/errors";
-import type {GuestStage,GuestStageOutcome} from "@/lib/guest/types";
+import type {GuestSnapshot,GuestStage,GuestStageOutcome} from "@/lib/guest/types";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
 
-const mocks=vi.hoisted(()=>({factory:vi.fn(),bootstrap:vi.fn(),clear:vi.fn(),run:vi.fn(),stop:vi.fn(),connectCanvas:vi.fn(),refresh:vi.fn()}));
+const mocks=vi.hoisted(()=>({factory:vi.fn(),bootstrap:vi.fn(),clear:vi.fn(),run:vi.fn(),stop:vi.fn(),connectCanvas:vi.fn(),restoreSecret:vi.fn(),refresh:vi.fn()}));
 vi.mock("@/lib/guest/sync/coordinator",()=>({createGuestSyncCoordinator:mocks.factory}));
 vi.mock("@/lib/guest/credentials",()=>({createGuestCredentials:()=>({get:async()=>null,clear:mocks.clear})}));
 vi.mock("@/lib/guest/sync/transient-client",()=>({createGuestTransientClient:()=>({bootstrap:mocks.bootstrap})}));
@@ -20,8 +20,9 @@ const outcome=(stage:GuestStage,patch:Partial<GuestStageOutcome>={}):GuestStageO
 const report=(outcomes:GuestStageOutcome[])=>({run:{},mode:"manual",outcomes});
 beforeEach(()=>{
   vi.stubGlobal("fetch",vi.fn(()=>{throw Error("Unexpected network");}));
-  mocks.factory.mockReturnValue({run:mocks.run,stop:mocks.stop,connectCanvas:mocks.connectCanvas});mocks.run.mockResolvedValue(report([]));
+  mocks.factory.mockReturnValue({run:mocks.run,stop:mocks.stop,connectCanvas:mocks.connectCanvas,restoreSecret:mocks.restoreSecret});mocks.run.mockResolvedValue(report([]));
   mocks.connectCanvas.mockResolvedValue({status:"success",code:null,connectionId:"c"});
+  mocks.restoreSecret.mockResolvedValue({status:"success",code:null,connectionId:"c"});
 });
 function mount(snapshot=guestSnapshot(),children=<GuestSyncControls/>){
   const fake=guestStoreFake(snapshot);const factory=async()=>fake.store;
@@ -90,6 +91,73 @@ it("returns an interrupted action result if its dataset retires before completio
   await act(async()=>fake.replace({...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}));
   await act(async()=>settle({status:"success",code:null,connectionId:"retired"}));
   expect(await pending).toMatchObject({status:"failed",code:"GUEST_INTERRUPTED",connectionId:null});
+});
+it.each(["resolves","rejects"] as const)("retires private ownership before a replacement read %s, then reacquires only hydrated data",async resolution=>{
+  let latest!:ReturnType<typeof useGuestSources>,lifecycle:ReturnType<typeof useGuestStoreLifecycle>=null;
+  let finishProof!:(value:unknown)=>void,proofSignal!:AbortSignal;
+  mocks.connectCanvas.mockResolvedValueOnce({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null});
+  mocks.bootstrap.mockImplementationOnce((_input,signal:AbortSignal)=>{proofSignal=signal;return new Promise(resolve=>{finishProof=resolve;});});
+  function Harness(){
+    const sources=useGuestSources(),storeLifecycle=useGuestStoreLifecycle(),guest=useGuest();
+    useEffect(()=>{latest=sources;lifecycle=storeLifecycle;},[sources,storeLifecycle]);
+    return <><GuestSyncControls/><p data-testid="guest-phase">{guest.phase}</p></>;
+  }
+  const fake=mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(latest?.ready).toBe(true));
+  const oldSources=latest,oldLifecycle=lifecycle!,retired=vi.fn();oldLifecycle.onRetire(retired);
+  await act(async()=>{await oldSources.connectCanvas({value:"old-private-draft",remember:false});});
+  let proof!:Promise<void>;await act(async()=>{proof=oldSources.verify("fixture-guest-"+crypto.randomUUID());});
+  expect(proofSignal.aborted).toBe(false);
+  const replacement={...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"};
+  let resolveRead!:(value:GuestSnapshot)=>void,rejectRead!:(error:Error)=>void;
+  const hydration=new Promise<GuestSnapshot>((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;});
+  const atRead:{retired:boolean;stopped:boolean;cleared:boolean;proofAborted:boolean}[]=[];
+  vi.mocked(fake.store.read).mockImplementation(()=>{
+    atRead.push({retired:retired.mock.calls.length===1,stopped:mocks.stop.mock.calls.length===1,cleared:mocks.clear.mock.calls.length===1,proofAborted:proofSignal.aborted});
+    return hydration;
+  });
+  const closes=vi.mocked(fake.store.close).mock.calls.length;
+  await act(async()=>fake.replace(replacement));
+  if(resolution==="rejects")await act(async()=>rejectRead(Error("replacement storage failure")));
+  expect(atRead[0]).toEqual({retired:true,stopped:true,cleared:true,proofAborted:true});
+  expect(oldLifecycle.isActive()).toBe(false);expect(lifecycle).toBeNull();expect(latest.ready).toBe(false);
+  expect(mocks.factory).toHaveBeenCalledOnce();expect(fake.store.close).toHaveBeenCalledTimes(closes);
+  await act(async()=>{await oldSources.connectCanvas({value:"retired-private",remember:false});await oldSources.restoreSecret("c",{value:"retired-private",remember:false});await oldSources.run();await oldSources.verify("fixture-guest-"+crypto.randomUUID());});
+  expect(mocks.connectCanvas).toHaveBeenCalledOnce();expect(mocks.restoreSecret).not.toHaveBeenCalled();expect(mocks.run).not.toHaveBeenCalled();expect(mocks.bootstrap).toHaveBeenCalledOnce();
+  await act(async()=>{finishProof({ok:true});await proof;});expect(mocks.connectCanvas).toHaveBeenCalledOnce();
+  if(resolution==="rejects"){
+    expect(screen.getByTestId("guest-phase")).toHaveTextContent("error");expect(lifecycle).toBeNull();expect(latest.ready).toBe(false);expect(mocks.factory).toHaveBeenCalledOnce();
+    vi.mocked(fake.store.read).mockResolvedValue(replacement);await act(async()=>fake.notify());
+  }else await act(async()=>resolveRead(replacement));
+  await waitFor(()=>expect(latest.ready).toBe(true));
+  expect(lifecycle!.datasetId).toBe(replacement.datasetId);expect(lifecycle!.isActive()).toBe(true);expect(lifecycle).not.toBe(oldLifecycle);expect(mocks.factory).toHaveBeenCalledTimes(2);
+  await act(async()=>{await latest.connectCanvas({value:"fresh-dataset-draft",remember:false});});expect(mocks.connectCanvas).toHaveBeenCalledTimes(2);
+});
+it.each([["setup","pagehide"],["setup","cancel"],["restore","pagehide"],["restore","cancel"]] as const)("does not revive a delayed %s rejection after %s",async(action,cancellation)=>{
+    let sources!:ReturnType<typeof useGuestSources>,settle!:(value:unknown)=>void;
+    const read=action==="setup"?mocks.connectCanvas:mocks.restoreSecret;
+    read.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
+    function Harness(){const value=useGuestSources();useEffect(()=>{sources=value;},[value]);return <GuestSyncControls/>;}
+    const view=mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(sources?.ready).toBe(true));
+    const before=read.mock.calls.length;let pending!:ReturnType<ReturnType<typeof useGuestSources>["connectCanvas"]>;
+    await act(async()=>{pending=action==="setup"?sources.connectCanvas({value:"cancelled-private",remember:false}):sources.restoreSecret("c",{value:"cancelled-private",remember:false});});
+    await act(async()=>{if(cancellation==="pagehide")window.dispatchEvent(new Event("pagehide"));else sources.cancelVerification();});
+    const epoch=sources.draftEpoch;expect(epoch).toBeGreaterThan(0);
+    await act(async()=>settle({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null}));
+    expect(sources.verificationRequired).toBe(false);expect(screen.queryByRole("region",{name:"Guest verification"})).not.toBeInTheDocument();expect(sources.actionOutcome).toBeNull();expect(sources.draftEpoch).toBe(epoch);
+    expect(await pending).toEqual({status:"failed",code:"GUEST_INTERRUPTED",connectionId:null});
+    await act(async()=>{await sources.verify("fixture-guest-"+crypto.randomUUID());});
+    expect(mocks.bootstrap).not.toHaveBeenCalled();expect(read).toHaveBeenCalledTimes(before+1);view.unmount();
+});
+it("retains accepted store data after cancellation without publishing a successful action or retry",async()=>{
+  let sources!:ReturnType<typeof useGuestSources>,snapshot:GuestSnapshot|null=null,settle!:(value:unknown)=>void;
+  mocks.connectCanvas.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
+  function Harness(){const value=useGuestSources(),guest=useGuest();useEffect(()=>{sources=value;if(guest.phase==="ready")snapshot=guest.snapshot;},[value,guest]);return <GuestSyncControls/>;}
+  const fake=mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(sources?.ready).toBe(true));
+  let pending!:ReturnType<ReturnType<typeof useGuestSources>["connectCanvas"]>;await act(async()=>{pending=sources.connectCanvas({value:"accepted-private",remember:false});});
+  await act(async()=>window.dispatchEvent(new Event("pagehide")));
+  const accepted={...guestSnapshot(),revision:1,connections:[{id:"accepted",kind:"canvas" as const,enabled:true,generation:1,createdAt:"",updatedAt:""}]};
+  await act(async()=>{fake.replace(accepted);settle({status:"success",code:null,connectionId:"accepted"});});
+  expect(snapshot!.connections).toEqual(accepted.connections);expect(await pending).toEqual({status:"failed",code:"GUEST_INTERRUPTED",connectionId:null});expect(sources.actionOutcome).toBeNull();expect(sources.verificationRequired).toBe(false);
 });
 it("bootstraps only after fresh proof and deliberate continue, then retries rejected setup with the coordinator",async()=>{
   mocks.connectCanvas.mockResolvedValueOnce({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null}).mockResolvedValueOnce({status:"success",code:null,connectionId:"c"});mocks.bootstrap.mockResolvedValue({ok:true});
