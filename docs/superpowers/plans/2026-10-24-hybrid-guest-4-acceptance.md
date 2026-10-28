@@ -46,7 +46,7 @@ Use the same browser context to test guest/account switching. Real IndexedDB tra
 
 **Interfaces:** Reuse existing fixture-user helpers only inside account-isolation tests. Ordinary guest tests must not call `prepareFixtureUser`. Guest data is a separate IndexedDB namespace; account data remains user-scoped D1.
 
-- [ ] **Step 1 — Write RED same-context tests.** Seed a guest dataset, sign into Alice then Bob in that same context, visit guest/hosted views and sign out. Assert each dataset/timezone stays separate and no guest data/secret is uploaded. Delete/reset guest and verify hosted data/session intact; delete the hosted fixture account and verify local guest data intact. Assert signed-in account cookies do not authorize guest reads without capability and guest capability never grants account API access. Guest disabled/default config hides routes/link and rejects API work before upstream fetch.
+- [x] **Step 1 — Write RED same-context tests.** Seed a guest dataset, sign into Alice then Bob in that same context, visit guest/hosted views and sign out. Assert each dataset/timezone stays separate and no guest data/secret is uploaded. Delete/reset guest and verify hosted data/session intact; delete the hosted fixture account and verify local guest data intact. Assert signed-in account cookies do not authorize guest reads without capability and guest capability never grants account API access. Guest disabled/default config hides routes/link and rejects API work before upstream fetch.
   Core assertions for `guest/account switching in one browser never transfers data`:
   ```ts
   expect(guestAfterAccountDeletion).toEqual(guestBeforeAccountDeletion);
@@ -54,10 +54,10 @@ Use the same browser context to test guest/account switching. Real IndexedDB tra
   expect(guestCapabilityAgainstAccountApi.status).toBe(401);
   expect(disabledGuestUpstreamCalls).toBe(0);
   ```
-- [ ] **Step 2 — Verify RED.** Run `npm test -- tests/integration/guest-production-boundary.test.ts` and `npx playwright test tests/e2e/guest-isolation.spec.ts --project=chromium --project=firefox`.
-- [ ] **Step 3 — Complete boundaries.** Fix explicit composition/auth/config errors, never add guest exceptions to protected account routes. Ensure production cannot use loopback cookie/test transport/Turnstile fixture bypasses and new guest modules do not import native SQLite or hosted request ownership.
-- [ ] **Step 4 — Verify GREEN.** Run the complete repository verification once: `npm test`, `npm run lint`, `npm run typecheck`, `npm run db:verify`, `npm run verify:workerd:abuse`, `node scripts/verify-workerd-calendar-lifetime.mjs`, `node scripts/verify-workerd-turnstile.mjs`, `node scripts/verify-workerd-guest-sources.mjs`, `npm run build:extension`, `npm run test:e2e`, `npm run build`, `npx vinext check`, `npm run build:vinext`, `node scripts/verify-workerd-provider-completion.mjs`, `node scripts/verify-workerd-icloud.mjs`, `node scripts/verify-dynamic-dashboard-build.mjs` and `npm run verify:hosted`. Record actual totals; do not reuse the old 1,776/65 counts after adding tests.
-- [ ] **Step 5 — Commit.** Commit separation/regression coverage as `test: verify guest and hosted account separation`.
+- [x] **Step 2 — Verify RED.** Run `npm test -- tests/integration/guest-production-boundary.test.ts` and `npx playwright test tests/e2e/guest-isolation.spec.ts --project=chromium --project=firefox`.
+- [x] **Step 3 — Complete boundaries.** Fix explicit composition/auth/config errors, never add guest exceptions to protected account routes. Ensure production cannot use loopback cookie/test transport/Turnstile fixture bypasses and new guest modules do not import native SQLite or hosted request ownership.
+- [x] **Step 4 — Verify GREEN.** Run the complete repository verification once: `npm test`, `npm run lint`, `npm run typecheck`, `npm run db:verify`, `npm run verify:workerd:abuse`, `node scripts/verify-workerd-calendar-lifetime.mjs`, `node scripts/verify-workerd-turnstile.mjs`, `node scripts/verify-workerd-guest-sources.mjs`, `npm run build:extension`, `npm run test:e2e`, `npm run build`, `npx vinext check`, `npm run build:vinext`, `node scripts/verify-workerd-provider-completion.mjs`, `node scripts/verify-workerd-icloud.mjs`, `node scripts/verify-dynamic-dashboard-build.mjs` and `npm run verify:hosted`. Record actual totals; do not reuse the old 1,776/65 counts after adding tests.
+- [x] **Step 5 — Commit.** Commit separation/regression coverage as `test: verify guest and hosted account separation`.
 
 ### A3: Record capacity/privacy/live gates and prepare a reviewable release boundary
 
