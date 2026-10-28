@@ -162,8 +162,8 @@ Run each task's focused checks once after its changes. Broaden to the existing s
 - [x] F1–F4 complete and independently testable; F4 compatibility evidence records its local dependency-layout qualification, with unchanged-root CI still required.
 - [x] S1–S4 complete and independently testable; S4 precommit evidence remains preliminary, while final A2/A3 native runtime evidence passes locally. Hosted capacity and production guest activation remain open/off.
 - [x] U1–U4 implemented with all agreed live source workflows; real-provider activation acceptance remains separate.
-- [ ] A1–A3 accepted; implementation/evidence work is prepared and local regressions/readiness limits are recorded in the [guest acceptance ledger](../../deployment/guest-acceptance.md). Controller A3 acceptance remains pending.
-- [ ] Controller A3 task review and fresh whole-branch review complete; retain every deferred observation's disposition.
+- [x] A1–A3 task scopes accepted behind the disabled flag; local regressions/readiness limits are recorded in the [guest acceptance ledger](../../deployment/guest-acceptance.md). External release gates remain open.
+- [ ] Fresh whole-branch review complete; retain every deferred observation's disposition. A3 task review is approved.
 - [ ] Exact integrated-source Linux CI and guest activation gates complete (hosted CPU/memory/D1 billing, cleanup/physical retention, operator live acceptance and concrete production approval remain OPEN).
 - [x] Execution method and plan review recorded before product code: subagent-driven, user confirmed 2026-10-24.
 

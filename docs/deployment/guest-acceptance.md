@@ -97,7 +97,7 @@ different release. **Exact integrated-source Linux CI is OPEN.** Record the run
 URL, tested head/merge SHA, complete job conclusions, totals and retained native
 receipt before claiming release CI. Reconcile the final merge/main SHA as well.
 
-Controller A3 task review and the fresh whole-branch review remain **OPEN** here.
+Controller A3 task review is approved; the fresh whole-branch review remains **OPEN** here.
 The final reviewer must triage every retained observation in the ignored SDD
 `progress.md`: conservative Canvas `BEGIN:VEVENT` substring false positives,
 native cancellation observation coverage, script/render/network/auth/eval/color/
