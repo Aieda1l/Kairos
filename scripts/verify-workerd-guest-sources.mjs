@@ -166,14 +166,22 @@ try {
     ['/api/guest/sources/ed/lessons',{token:'synthetic-ed-secret',courseId:'12'},'lessons'],
   ]){
     currentCase='compiled:'+path;
+    const networkBefore=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
     const response=await compiledPhase.mf.dispatchFetch('https://guest.invalid'+path,{method:'POST',headers:{'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://guest.invalid',...(compiledCookie?{cookie:compiledCookie}:{})},body:JSON.stringify({schemaVersion:1,requestId:fixtureRequestId,...fields})});
     const raw=await response.text(),metrics=JSON.parse(response.headers.get('x-probe-metrics')??'null');
     check(currentCase+' registered and composed',response.status===200&&metrics!==null,{status:response.status});
+    // Compiled runtime fetch does not necessarily use globalThis.fetch. Measure
+    // actual requests at the sealed destination, separately from driver controls.
+    const networkAfter=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+    const providerRequests=networkAfter.providerRequests-networkBefore.providerRequests;
+    const challengeRequests=networkAfter.challengeRequests-networkBefore.challengeRequests;
+    metrics.requests=providerRequests+challengeRequests;
+    check(currentCase+' exact sealed destination requests',providerRequests===(member?1:0)&&challengeRequests===(member?0:1),{providerRequests,challengeRequests,measurement:'sealed fixture counters; driver stats excluded'});
     const payload=JSON.parse(raw);compiledPhase.metrics.push(metrics);
     const schema=member==='assignments'?schemas.guestCanvasFeedResponseSchema:member==='courses'?schemas.guestEdCoursesResponseSchema:member==='lessons'?schemas.guestEdLessonsResponseSchema:schemas.guestSessionResponseSchema;
     check(currentCase+' actual response schema',schema.safeParse(payload).success);
     check(currentCase+' public result',payload.ok===true&&payload.schemaVersion===1&&payload.requestId===fixtureRequestId&&(!member||payload[member]?.length===1));
-    check(currentCase+' no account dependency',metrics.accountStatements===0&&metrics.protectedWriteStatements===0&&metrics.requests===1);
+    check(currentCase+' no account dependency',metrics.accountStatements===0&&metrics.protectedWriteStatements===0&&metrics.requests===1,{metrics});
     if(!member){compiledCookie=response.headers.get('set-cookie')?.split(';')[0];assert(compiledCookie?.startsWith('__Host-kairos-guest-sync='));}
     check(currentCase+' does not echo secrets',!raw.includes('synthetic-ed-secret')&&!raw.includes('synthetic.ics')&&!raw.includes(compiledCookie));
   }

@@ -75,12 +75,11 @@ export function instrumentCompiledGuest(script) {
  const instrumentation=`${measuredDatabaseEntry}
  const originalGuestFetch=${defaultName}.fetch;
  ${defaultName}.fetch=async(request,env,ctx)=>{
-  const originalDb=env.DB,prepare=originalDb.prepare,batch=originalDb.batch,exec=originalDb.exec,originalFetch=globalThis.fetch;
-  const measured=measuredDatabase({prepare:sql=>prepare.call(originalDb,sql)}),network={requests:0,bodyWithoutLength:0};
+  const originalDb=env.DB,prepare=originalDb.prepare,batch=originalDb.batch,exec=originalDb.exec;
+  const measured=measuredDatabase({prepare:sql=>prepare.call(originalDb,sql)});
   originalDb.prepare=measured.db.prepare;originalDb.batch=measured.db.batch;originalDb.exec=measured.db.exec;
-  globalThis.fetch=async(...args)=>{network.requests++;const response=await originalFetch(...args);if(!response.headers.has('content-length'))network.bodyWithoutLength++;return response;};
-  try{const response=await originalGuestFetch.call(${defaultName},request,env,ctx);const headers=new Headers(response.headers);headers.set('x-probe-metrics',JSON.stringify({...measured.stats,...network}));return new Response(response.body,{status:response.status,headers});}
-  finally{originalDb.prepare=prepare;originalDb.batch=batch;originalDb.exec=exec;globalThis.fetch=originalFetch;}
+  try{const response=await originalGuestFetch.call(${defaultName},request,env,ctx);const headers=new Headers(response.headers);headers.set('x-probe-metrics',JSON.stringify(measured.stats));return new Response(response.body,{status:response.status,headers});}
+  finally{originalDb.prepare=prepare;originalDb.batch=batch;originalDb.exec=exec;}
  };`;
  return script.slice(0,exportAt)+'\n'+instrumentation+script.slice(exportAt);
 }
