@@ -27,7 +27,7 @@ Use the same browser context to test guest/account switching. Real IndexedDB tra
 
 **Interfaces:** Consume actual F3/U2/U3 behavior; fixtures return only schema-valid v1 protocol and approved guest DTOs. Tests may delay/alter responses at the API/message boundary, never fake store completion or remove final-stage assertions.
 
-- [ ] **Step 1 — Write the missing RED journeys.** Start a no-session browser, connect all sources, select courses, run full sync, verify data/current outcomes, reload and verify persistence. Include one Canvas failed member while Gradescope/Ed succeed. Defer a read across source replacement, reset and import; simulate two-tab contention/takeover; resolve stale responses and assert no resurrection or stale lease release. Inject native IDB write abort and verify old snapshot in every store. Test unavailable/older bridge, empty selected courses, rate limit and overall timeout.
+- [x] **Step 1 — Write the missing RED journeys.** Start a no-session browser, connect all sources, select courses, run full sync, verify data/current outcomes, reload and verify persistence. Include one Canvas failed member while Gradescope/Ed succeed. Defer a read across source replacement, reset and import; simulate two-tab contention/takeover; resolve stale responses and assert no resurrection or stale lease release. Inject native IDB write abort and verify old snapshot in every store. Test unavailable/older bridge, empty selected courses, rate limit and overall timeout.
   Core assertions for `complete guest flow survives reload and rejects a late reset result`:
   ```ts
   await expect(page.getByText(/9 of 10/)).toBeVisible();
@@ -35,10 +35,10 @@ Use the same browser context to test guest/account switching. Real IndexedDB tra
   expect(hostedSourceRequests).toEqual([]);
   expect(afterLateResponse.datasetId).toBe(afterReset.datasetId);
   ```
-- [ ] **Step 2 — Verify RED.** Run `npx playwright test tests/e2e/guest-lifecycle.spec.ts --project=chromium --project=firefox`; record missing behaviors with traces, not a zero-test run.
-- [ ] **Step 3 — Fix owning boundaries only.** Route defects to their F/S/U module; preserve membership/freshness/auth checks and source success/partial semantics. Add the focused regression that identifies each actual defect before its minimal fix.
-- [ ] **Step 4 — Verify GREEN.** Run all `guest-*.spec.ts` files in both projects, all new guest Vitest files, typecheck and lint. Inspect actual case selection from `npx playwright test --list` so both browsers cover each guest journey.
-- [ ] **Step 5 — Commit.** Commit focused fixes plus lifecycle coverage as `test: verify guest sync lifecycle and recovery`.
+- [x] **Step 2 — Verify RED.** Run `npx playwright test tests/e2e/guest-lifecycle.spec.ts --project=chromium --project=firefox`; record missing behaviors with traces, not a zero-test run.
+- [x] **Step 3 — Fix owning boundaries only.** Route defects to their F/S/U module; preserve membership/freshness/auth checks and source success/partial semantics. Add the focused regression that identifies each actual defect before its minimal fix.
+- [x] **Step 4 — Verify GREEN.** Run all `guest-*.spec.ts` files in both projects, all new guest Vitest files, typecheck and lint. Inspect actual case selection from `npx playwright test --list` so both browsers cover each guest journey.
+- [x] **Step 5 — Commit.** Commit focused fixes plus lifecycle coverage as `test: verify guest sync lifecycle and recovery`.
 
 ### A2: Prove same-browser account separation and hosted compatibility
 
