@@ -15,6 +15,8 @@ test("two guest pages reject a delayed coordinator commit and preserve the takeo
   const second=await context.newPage();await Promise.all([page.goto("/"),second.goto("/")]);
   const id=crypto.randomUUID();
   const before=await page.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).startOld(id);},id);
+  const contention=await second.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).contend(id);},id);
+  expect(contention).toBeNull();
   const takeover=await second.evaluate(async id=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).takeOver(id);},id);
   const late=await page.evaluate(async()=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).settleOld();});
   expect(late.attempted).toContainEqual({status:"discarded",reason:"superseded"});
@@ -22,6 +24,19 @@ test("two guest pages reject a delayed coordinator commit and preserve the takeo
   expect(late.report.outcomes.every(o=>o.status!=="success")).toBe(true);
   const owner=await second.evaluate(async()=>{const path="/tests/e2e/fixtures/guest-coordinator-harness.ts";return (await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness")).verifyOwner();});
   expect(owner?.runId).toBe(takeover.lease.runId);await second.close();
+});
+
+test("overall guest deadline ends the run and rejects a late reader result",async({page,context})=>{
+  await context.route("**/api/guest/**",route=>route.abort());await page.goto("/");
+  const result=await page.evaluate(async id=>{
+    const path="/tests/e2e/fixtures/guest-coordinator-harness.ts",h=await import(/* @vite-ignore */ path) as typeof import("./fixtures/guest-coordinator-harness");
+    const before=await h.startOld(id);return {before,...await h.expireOld()};
+  },crypto.randomUUID());
+  expect(result.report.outcomes).toEqual([
+    expect.objectContaining({stage:"canvas-feed",status:"timed-out",code:"GUEST_RUN_TIMEOUT",failedCount:1}),
+    expect.objectContaining({stage:"canvas-status",status:"timed-out",code:"GUEST_RUN_TIMEOUT"}),
+  ]);
+  expect(result.afterLate).toEqual(result.beforeLate);expect(result.afterLate.assignments).toEqual(result.before.assignments);expect(result.attempted).toEqual([]);
 });
 
 test("guest coordinator course refresh preserves selection and rolls back atomically",async({page,context})=>{

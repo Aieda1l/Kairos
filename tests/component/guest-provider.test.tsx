@@ -3,7 +3,7 @@ import {StrictMode,useEffect} from "react";
 import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {expect,it,vi} from "vitest";
-import {GuestProvider,useGuest,useGuestStoreLifecycle} from "@/features/guest/guest-provider";
+import {GuestProvider,useGuest,useGuestStoreLifecycle,useGuestDatasetChange} from "@/features/guest/guest-provider";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
 
 it("publishes only the owned hydrated store and retires consumers before dataset replacement and close",async()=>{
@@ -95,4 +95,28 @@ it("keeps a storage read failure visible when an in-flight preference write also
   await act(async()=>rejectSave(Error("write failed")));
   expect(screen.getByText("error")).toBeInTheDocument();
   expect(screen.queryByLabelText("Preference search")).not.toBeInTheDocument();
+});
+
+it.each(["success","abort"] as const)("rehydrates a retired lifecycle when a lease notification supersedes the post-reset read: %s",async outcome=>{
+  const fake=guestStoreFake(),factory=async()=>fake.store;
+  let change!:ReturnType<typeof useGuestDatasetChange>,lifecycle!:ReturnType<typeof useGuestStoreLifecycle>;
+  function Consumer(){
+    const value=useGuestDatasetChange(),owned=useGuestStoreLifecycle(),guest=useGuest();
+    useEffect(()=>{change=value;lifecycle=owned;},[value,owned]);
+    return <p>{guest.phase==="ready"?guest.snapshot.datasetId:guest.phase}</p>;
+  }
+  render(<GuestProvider storeFactory={factory}><Consumer/></GuestProvider>);
+  await screen.findByText(guestSnapshot().datasetId);const retired=lifecycle!;
+  const saved=outcome==="success"?{...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}:guestSnapshot();
+  fake.store.clear=vi.fn(async()=>{if(outcome==="abort")throw Error("native write abort");fake.replace(saved);return saved;});
+  let finishIdentity!:(identity:{datasetId:string;revision:number})=>void;
+  vi.mocked(fake.store.getIdentity).mockImplementationOnce(()=>new Promise(resolve=>{finishIdentity=resolve;}));
+  let pending!:Promise<boolean>;await act(async()=>{pending=change(null,guestSnapshot().datasetId);});
+  await waitFor(()=>expect(finishIdentity).toBeDefined());expect(retired.isActive()).toBe(false);
+  // A late old-run release can notify with unchanged coursework metadata while
+  // the explicit reset's forced hydration is still awaiting its metadata read.
+  await act(async()=>fake.notify());
+  await act(async()=>{finishIdentity({datasetId:saved.datasetId,revision:saved.revision});expect(await pending).toBe(outcome==="success");});
+  expect(lifecycle?.isActive()).toBe(true);expect(lifecycle).not.toBe(retired);
+  expect(lifecycle?.datasetId).toBe(saved.datasetId);expect(screen.getByText(saved.datasetId)).toBeVisible();
 });

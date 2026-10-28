@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import {render,screen} from "@testing-library/react";
-import {expect,it,vi} from "vitest";
+import {afterEach,expect,it,vi} from "vitest";
 import {GuestProvider} from "@/features/guest/guest-provider";
 import {GuestShell} from "@/features/guest/guest-shell";
 import {GuestViews} from "@/features/guest/guest-views";
 import {GuestSourcesProvider} from "@/features/guest/guest-sources-provider";
 import {isGuestEnabled} from "@/lib/guest/feature";
+import * as guestStore from "@/lib/guest/store";
 import GuestLayout from "@/app/guest/layout";
 import HomePage from "@/app/page";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
@@ -17,6 +18,7 @@ vi.mock("@/lib/platform/source-runtime",()=>({getSourceRuntimeContext:d1Resolver
 vi.mock("../../../auth",()=>({auth:sessionResolver,getAuthSessionFromHeaders:sessionResolver}));
 vi.mock("@/features/sync/connected-source-sync-controls",()=>({ConnectedSourceSyncControls:hostedControls}));
 vi.mock("next/navigation",()=>({usePathname:()=>"/guest/upcoming",notFound:()=>{throw Error("not-found");}}));
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 it("enables only literal string true and gates guest layout and homepage CTA",async()=>{
   for(const value of [undefined,false,true,"false","1",1,"TRUE"])expect(isGuestEnabled({KAIROS_GUEST_ENABLED:value})).toBe(false);
@@ -27,7 +29,13 @@ it("enables only literal string true and gates guest layout and homepage CTA",as
   view.unmount();
   render(await HomePage());
   expect(screen.getByRole("link",{name:"Try without an account"})).toHaveAttribute("href","/guest/upcoming");
-  expect((await GuestLayout({children:<p>Guest content</p>})).type).toBe(GuestProvider);
+  const fake=guestStoreFake();vi.spyOn(guestStore,"openGuestStore").mockResolvedValue(fake.store);
+  vi.stubGlobal("matchMedia",vi.fn((media:string)=>({matches:false,media,onchange:null,addListener:vi.fn(),removeListener:vi.fn(),addEventListener:vi.fn(),removeEventListener:vi.fn(),dispatchEvent:vi.fn(()=>true)})));
+  render(await GuestLayout({children:<GuestViews view="upcoming"/>}));
+  expect(await screen.findByText("No assignments yet")).toBeVisible();
+  expect(screen.getByRole("navigation",{name:"Guest navigation"})).toBeVisible();
+  expect(screen.getByRole("link",{name:"Connect a source"})).toHaveAttribute("href","/guest/sources");
+  expect(hostedControls).not.toHaveBeenCalled();
   expect(sessionResolver).not.toHaveBeenCalled();
   expect(d1Resolver).not.toHaveBeenCalled();
   feature.mockResolvedValueOnce(false);

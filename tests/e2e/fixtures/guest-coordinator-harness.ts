@@ -13,7 +13,9 @@ const now=()=>time,stamp=()=>new Date(time).toISOString();
 const forbidden=async()=>{throw Error("Unexpected reader");};
 const bridge:GuestBridgeReader={ping:forbidden,canvas:forbidden,gradescopeDiscover:forbidden,gradescopeSync:forbidden};
 const transient:GuestTransientClient={bootstrap:forbidden,endSession:forbidden,canvasFeed:forbidden,edCourses:forbidden,edLessons:forbidden};
-const clock={now,setTimeout:()=>0,clearTimeout:()=>{}}; // Deliberately paused old-tab scheduling.
+const timers=new Map<number,{callback:()=>void;delay:number}>();let timerId=0;
+// Deliberately paused old-tab scheduling; the deadline case resumes the real timer callback.
+const clock={now,setTimeout:(callback:()=>void,delay:number)=>{const id=++timerId;timers.set(id,{callback,delay});return id;},clearTimeout:(id:unknown)=>{timers.delete(id as number);}};
 const name=(id:string)=>`u2-${id}`;
 let settle:()=>void=()=>{throw Error("No pending read");};
 let pending:ReturnType<ReturnType<typeof createGuestSyncCoordinator>["run"]>;
@@ -33,7 +35,16 @@ export async function startOld(id:string){
   return store.read();
 }
 export async function settleOld(){settle();const report=await pending;const snapshot=await oldStore.read();oldStore.close();return {report,snapshot,attempted};}
+export async function expireOld(){
+  const deadline=[...timers.values()].find(t=>t.delay===180000);if(!deadline)throw Error("Missing overall deadline");
+  time+=180000;deadline.callback();const report=await pending,beforeLate=await oldStore.read();
+  settle();await Promise.resolve();const afterLate=await oldStore.read();oldStore.close();return {report,beforeLate,afterLate,attempted};
+}
 let newStore:GuestStore,newLease:GuestRunLease;
+export async function contend(id:string){
+  const store=await openGuestStore({name:name(id),now});
+  try{return await store.beginRun({pageEpoch:crypto.randomUUID(),nowMs:time,deadlineAtMs:time+180000});}finally{store.close();}
+}
 export async function takeOver(id:string){
   time+=31000;newStore=await openGuestStore({name:name(id),now});
   const lease=await newStore.beginRun({pageEpoch:crypto.randomUUID(),nowMs:time,deadlineAtMs:time+180000});if(!lease)throw Error("Takeover failed");newLease=lease;

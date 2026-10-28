@@ -39,12 +39,12 @@ export default defineConfig({
   projects:[
     {
       name:"chromium",
-      testMatch:/(guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
       name:"firefox",
-      testMatch:/(guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],

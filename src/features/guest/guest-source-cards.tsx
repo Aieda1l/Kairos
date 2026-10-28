@@ -48,24 +48,33 @@ function CourseSelection({connection,courses}:{connection:GuestConnection;course
     <p className="text-sm text-[var(--muted)]">New courses start unchecked. Refresh keeps your saved course selection and coursework.</p>
   </form>;
 }
-function SourceCard({kind,connection,courses}:{kind:SourceKind;connection?:GuestConnection;courses:SourceCourse[]}){
+function SourceCard({kind,connection,courses,onDisconnected}:{kind:SourceKind;connection?:GuestConnection;courses:SourceCourse[];onDisconnected:(kind:SourceKind)=>void}){
   const sources=useGuestSources(),guest=useGuest(),name=names[kind],heading=useId();
   const [confirming,setConfirming]=useState(false),disconnectRef=useRef<HTMLButtonElement>(null),confirmRef=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(confirming)confirmRef.current?.focus();},[confirming]);
   const count=guest.phase==="ready"?guest.snapshot.assignments.filter(a=>a.sourceConnectionId===connection?.id).length:0;
-  return <section aria-labelledby={heading} className="min-w-0 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
+  return <section aria-labelledby={heading} data-source-kind={kind} tabIndex={-1} className="min-w-0 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
     <div><h2 id={heading} className="text-lg font-semibold">{name}</h2><p className="mt-1 text-sm text-[var(--muted)]">{connection?"Connected in this browser":kind==="gradescope"?"Open Gradescope in a signed-in tab with the Kairos extension to discover your courses.":kind==="canvas"?"Import your UW Canvas calendar feed. The extension adds live submission status.":"Use your Ed API token to discover and select courses. No extension is needed."}</p></div>
     {kind!=="gradescope"&&<CredentialForm key={`credential:${sources.draftEpoch}`} kind={kind} connection={connection}/>}
     {kind==="gradescope"&&!connection&&<Button type="button" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.connectGradescope();}}>Connect Gradescope</Button>}
     {connection&&kind!=="canvas"&&<CourseSelection key={`courses:${connection.generation}`} connection={connection} courses={courses}/>}
     {connection&&<div className="flex flex-wrap gap-3"><Button type="button" variant="secondary" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.run({sources:[kind]});}}>Sync {name}</Button><Button ref={disconnectRef} type="button" variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>setConfirming(true)}>Disconnect {name}</Button></div>}
-    {connection&&confirming&&<div ref={confirmRef} tabIndex={-1} className="space-y-3 rounded-xl border border-[var(--border)] p-4"><p>Remove {name}, its credential, {courses.length} courses and {count} assignments from this browser? Other sources and original provider records stay.</p><div className="flex flex-wrap gap-3"><Button variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.disconnect(connection.id).then(result=>{if(result.status==="success")setConfirming(false);});}}>Confirm disconnect {name}</Button><Button variant="secondary" disabled={sources.busy} onClick={()=>{setConfirming(false);disconnectRef.current?.focus();}}>Cancel disconnect</Button></div></div>}
+    {connection&&confirming&&<div ref={confirmRef} tabIndex={-1} className="space-y-3 rounded-xl border border-[var(--border)] p-4"><p>Remove {name}, its credential, {courses.length} courses and {count} assignments from this browser? Other sources and original provider records stay.</p><div className="flex flex-wrap gap-3"><Button variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.disconnect(connection.id).then(result=>{if(result.status==="success"){setConfirming(false);onDisconnected(kind);}});}}>Confirm disconnect {name}</Button><Button variant="secondary" disabled={sources.busy} onClick={()=>{setConfirming(false);disconnectRef.current?.focus();}}>Cancel disconnect</Button></div></div>}
   </section>;
 }
 export function GuestSourceCards(){
-  const guest=useGuest();if(guest.phase!=="ready")return null;
-  return <div className="grid min-w-0 gap-5">{(["canvas","gradescope","ed"] as const).map(kind=>{
+  const guest=useGuest(),cardsRef=useRef<HTMLDivElement>(null);
+  const [focusRequest,setFocusRequest]=useState<{kind:SourceKind}|null>(null);
+  const focusedRequest=useRef<typeof focusRequest>(null);
+  useEffect(()=>{
+    if(focusRequest&&focusRequest!==focusedRequest.current&&guest.phase==="ready"&&!guest.snapshot.connections.some(c=>c.kind===focusRequest.kind)){
+      const card=cardsRef.current?.querySelector<HTMLElement>(`[data-source-kind="${focusRequest.kind}"]`);
+      if(card){card.focus();focusedRequest.current=focusRequest;}
+    }
+  },[focusRequest,guest]);
+  if(guest.phase!=="ready")return null;
+  return <div ref={cardsRef} className="grid min-w-0 gap-5">{(["canvas","gradescope","ed"] as const).map(kind=>{
     const c=guest.snapshot.connections.find(c=>c.kind===kind);
-    return <SourceCard key={`${guest.snapshot.datasetId}:${c?.id??kind}`} kind={kind} connection={c} courses={guest.snapshot.courses.filter(course=>course.sourceConnectionId===c?.id)}/>;
+    return <SourceCard key={`${guest.snapshot.datasetId}:${c?.id??kind}`} kind={kind} connection={c} onDisconnected={kind=>setFocusRequest({kind})} courses={guest.snapshot.courses.filter(course=>course.sourceConnectionId===c?.id)}/>;
   })}</div>;
 }

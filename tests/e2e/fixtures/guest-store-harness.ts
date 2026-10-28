@@ -94,7 +94,12 @@ export async function membershipChecks(){
   const original=IDBObjectStore.prototype.put;
   IDBObjectStore.prototype.put=function(...args:Parameters<IDBObjectStore["put"]>){if(this.name==="requests")throw new DOMException("injected","QuotaExceededError");return original.apply(this,args);};
   try{await store.commit(read,result,time);throw Error("expected abort");}catch(e){if(e instanceof Error&&e.message==="expected abort")throw e;}finally{IDBObjectStore.prototype.put=original;}
-  const afterAbort=await raw(name),accepted=await store.commit(read,result,time);
+  const afterAbort=await raw(name);
+  // Abort the real native transaction after its request-consumption write was queued.
+  IDBObjectStore.prototype.put=function(...args:Parameters<IDBObjectStore["put"]>){const request=original.apply(this,args);if(this.name==="requests")this.transaction.abort();return request;};
+  let nativeAborted=false;
+  try{await store.commit(read,result,time);}catch{nativeAborted=true;}finally{IDBObjectStore.prototype.put=original;}
+  const afterNativeAbort=await raw(name),accepted=await store.commit(read,result,time);
   async function terminal(status:"partial"|"failed",code:"ED_NETWORK_ERROR"|null,updatedCount:number,failedCount:number,pendingCount:number){
     const request=fence(selection.connections[0],"ed");await store.registerRequest({fence:request,members:{canvas:[],courseIds:[]},intent:"stage-result"},time);
     await store.commit(request,{kind:"stage-result",outcome:{runId:lease.runId,stage:"ed",status,code,updatedCount,failedCount,ignoredCount:0,pendingCount,attemptedAt:stamp(),completedAt:stamp()},remainingKeys:[]},time);
@@ -111,7 +116,7 @@ export async function membershipChecks(){
   await raw(name,tx=>{tx.objectStore("metadata").put({broken:true},"identity");});const beforeCorruptReset=await raw(name);
   let corruptMetadataFailed=false;try{await store.clear(selection.datasetId);}catch{corruptMetadataFailed=true;}
   const afterCorruptReset=await raw(name);store.close();
-  return {discovery,selection,noop,invalidSelection,invalidMembership,beforeRejected,afterRejected,beforeAbort,afterAbort,accepted,terminal:terminalResult,failedAttempt,requestCount,overLimit,privateRequestLeak,corruptMetadataFailed,beforeCorruptReset,afterCorruptReset};
+  return {discovery,selection,noop,invalidSelection,invalidMembership,beforeRejected,afterRejected,beforeAbort,afterAbort,nativeAborted,afterNativeAbort,accepted,terminal:terminalResult,failedAttempt,requestCount,overLimit,privateRequestLeak,corruptMetadataFailed,beforeCorruptReset,afterCorruptReset};
 }
 
 export async function defaultChecks(){

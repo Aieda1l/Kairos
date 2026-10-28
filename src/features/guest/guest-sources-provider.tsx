@@ -89,9 +89,10 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
     async function run(options:GuestRunOptions){
       if(!current()||session.busy)return;
       session.busy=true;cancel();publish({busy:true,report:null,actionOutcome:null});
+      const version=verificationVersion;
       try{
         const report=await coordinator.run(options);
-        if(report.outcomes.some(o=>o.code==="GUEST_SESSION_REQUIRED")){session.verification=true;publish({verificationRequired:true});}
+        if(current()&&version===verificationVersion&&report.outcomes.some(o=>o.code==="GUEST_SESSION_REQUIRED")){session.verification=true;publish({verificationRequired:true});}
         publish({report});
       }catch(error){publish({actionOutcome:failure(codeOf(error))});}
       finally{session.busy=false;publish({busy:false});void availability();}

@@ -73,6 +73,17 @@ it("retains a draft after an uncertain failure, and clears new drafts when verif
   await userEvent.type(input,"new-private-draft");await userEvent.click(screen.getByRole("button",{name:"Cancel verification"}));
   expect(screen.getByLabelText("Canvas calendar feed URL")).toHaveValue("");
 });
+it("returns focus to the replacement source card after confirmed disconnect removes the old card",async()=>{
+  const snapshot=guestSnapshot();snapshot.connections=[{id:"ed-local",kind:"ed",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  const fake=mount(snapshot);
+  mocks.coordinator.disconnect.mockImplementationOnce(async()=>{fake.replace({...snapshot,revision:1,connections:[]});return {status:"success",code:null,connectionId:"ed-local"};});
+  const disconnect=await screen.findByRole("button",{name:"Disconnect Ed"});await waitFor(()=>expect(disconnect).toBeEnabled());
+  await userEvent.click(disconnect);await userEvent.click(screen.getByRole("button",{name:"Confirm disconnect Ed"}));
+  await waitFor(()=>expect(screen.getByRole("region",{name:"Ed"})).toHaveFocus());
+  expect(screen.getByRole("button",{name:"Connect Ed"})).toBeVisible();expect(screen.queryByRole("button",{name:"Confirm disconnect Ed"})).not.toBeInTheDocument();
+  const canvas=screen.getByLabelText("Canvas calendar feed URL");await userEvent.click(canvas);
+  await act(async()=>fake.replace({...snapshot,revision:2,connections:[]}));expect(canvas).toHaveFocus();
+});
 it("preserves explicit selections and submits exact external course IDs, with separate refresh and credential actions",async()=>{
   const snapshot=guestSnapshot();snapshot.connections=[{id:"ed-local",kind:"ed",enabled:true,generation:3,createdAt:"",updatedAt:""}];
   snapshot.courses=[{id:"local-A",sourceConnectionId:"ed-local",externalCourseId:"123",shortName:"CSE 331",fullName:"Software",term:null,year:null,enabled:true,firstSeenAt:"",lastSeenAt:""},{id:"local-B",sourceConnectionId:"ed-local",externalCourseId:"456",shortName:null,fullName:"New course",term:null,year:null,enabled:false,firstSeenAt:"",lastSeenAt:""}];

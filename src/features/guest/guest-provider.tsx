@@ -65,7 +65,9 @@ export function GuestProvider({children,storeFactory=openGuestStore}:{children:R
             const identity=await store.getIdentity();
             if(!current.active||version!==current.readVersion)return;
             metadataRead=true;
-            if(!initial&&!current.readFailed&&sameIdentity(current.snapshot,identity))return;
+            // Reset/import retires the lifecycle before publishing its saved snapshot.
+            // A lease-only notification must still finish that pending hydration.
+            if(!initial&&!current.readFailed&&currentLifecycle?.isActive()&&currentLifecycle.datasetId===identity.datasetId&&sameIdentity(current.snapshot,identity))return;
             // Identity is enough to invalidate private ownership. A replacement
             // graph may be slow or unreadable; it must never keep the old vault
             // and coordinator active while hydration is pending or failed.

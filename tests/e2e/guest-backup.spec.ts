@@ -2,18 +2,12 @@ import {expect,test,type Page} from "@playwright/test";
 import {guestSnapshotFixture,guestUuid} from "../helpers/guest-fixtures";
 import {serializeGuestBackup} from "../../src/lib/guest/backup";
 import {sealGuestJourney} from "./fixtures/guest-session";
+import {localData,privateData} from "./fixtures/guest-lifecycle";
 
 const backup=serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z");
 async function importBackup(page:Page,text=backup){
   await page.goto("/guest/settings");await page.getByLabel("Import guest backup").setInputFiles({name:"backup.json",mimeType:"application/json",buffer:Buffer.from(text)});await page.getByRole("button",{name:"Replace local data"}).click();await expect(page.getByText(/Backup imported/)).toBeVisible();
 }
-async function localData(page:Page){return page.evaluate(async()=>{
-  const path="/src/lib/guest/store.ts";const {openGuestStore}=await import(/* @vite-ignore */ path) as typeof import("../../src/lib/guest/store");const store=await openGuestStore();try{return await store.read();}finally{store.close();}
-});}
-async function privateData(page:Page){return page.evaluate(async()=>{
-  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open("kairos-guest-v1");request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
-  try{return await new Promise<Record<string,unknown[]>>((resolve,reject)=>{const names=Array.from(db.objectStoreNames),tx=db.transaction(names,"readonly"),result:Record<string,unknown[]>={};for(const name of names){const request=tx.objectStore(name).getAll();request.onsuccess=()=>{result[name]=request.result;};}tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error);});}finally{db.close();}
-});}
 test("imports, exports and clears local data with confirmation, privately and offline",async({page,context})=>{
   const capture=await sealGuestJourney(page);await page.setViewportSize({width:320,height:900});await page.goto("/guest/settings");
   await page.getByRole("button",{name:"Toggle theme"}).click();const savedTheme=await page.evaluate(()=>localStorage.getItem("theme"));expect(savedTheme).not.toBeNull();

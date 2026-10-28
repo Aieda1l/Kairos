@@ -57,6 +57,8 @@ test("native guest selection and response membership preserve source provenance"
   expect(r.invalidMembership).toBe(true);
   expect(r.afterRejected).toEqual(r.beforeRejected);
   expect(r.afterAbort).toEqual(r.beforeAbort);
+  expect(r.nativeAborted).toBe(true);
+  expect(r.afterNativeAbort).toEqual(r.beforeAbort);
   expect(r.accepted.status).toBe("accepted");
   expect(r.terminal.syncStates[0]).toMatchObject({hasSuccessfulCheck:true,lastErrorCode:"PARTIAL_SYNC",updatedCount:7,failedCount:0});
   expect(r.failedAttempt.syncStates[0]).toMatchObject({hasSuccessfulCheck:false,lastErrorCode:"ED_NETWORK_ERROR",updatedCount:0,failedCount:1,lastSuccessfulAt:r.terminal.syncStates[0].lastSuccessfulAt});

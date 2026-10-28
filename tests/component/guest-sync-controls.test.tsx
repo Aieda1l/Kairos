@@ -162,6 +162,22 @@ it.each([["setup","pagehide"],["setup","cancel"],["restore","pagehide"],["restor
     await act(async()=>{await sources.verify("fixture-guest-"+crypto.randomUUID());});
     expect(mocks.bootstrap).not.toHaveBeenCalled();expect(read).toHaveBeenCalledTimes(before+1);view.unmount();
 });
+it.each(["pagehide","cancel"] as const)("does not revive verification from a delayed run after %s, retains useful outcomes and permits a fresh explicit run",async cancellation=>{
+  let sources!:ReturnType<typeof useGuestSources>,settle!:(value:unknown)=>void;
+  mocks.run.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
+  function Harness(){const value=useGuestSources();useEffect(()=>{sources=value;},[value]);return <GuestSyncControls/>;}
+  mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(sources?.ready).toBe(true));
+  let pending!:Promise<void>;await act(async()=>{pending=sources.run();});
+  await act(async()=>{if(cancellation==="pagehide")window.dispatchEvent(new Event("pagehide"));else sources.cancelVerification();});
+  await act(async()=>{settle(report([outcome("canvas-feed",{status:"failed",code:"GUEST_SESSION_REQUIRED"}),outcome("ed")]));await pending;});
+  expect(sources.verificationRequired).toBe(false);expect(screen.queryByRole("region",{name:"Guest verification"})).not.toBeInTheDocument();
+  expect(screen.getByText(/Ed sync complete/)).toBeVisible();
+  await act(async()=>{await sources.verify("cancelled-proof");});expect(mocks.bootstrap).not.toHaveBeenCalled();
+  mocks.run.mockResolvedValueOnce(report([outcome("canvas-feed",{status:"failed",code:"GUEST_SESSION_REQUIRED"})]));
+  await act(async()=>{await sources.run();});expect(sources.verificationRequired).toBe(true);
+  mocks.bootstrap.mockResolvedValueOnce({ok:true});await act(async()=>{await sources.verify("fresh-proof");});
+  expect(sources.verified).toBe(true);expect(mocks.run).toHaveBeenCalledTimes(2);
+});
 it("retains accepted store data after cancellation without publishing a successful action or retry",async()=>{
   let sources!:ReturnType<typeof useGuestSources>,snapshot:GuestSnapshot|null=null,settle!:(value:unknown)=>void;
   mocks.connectCanvas.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
