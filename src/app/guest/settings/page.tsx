@@ -1,2 +1,2 @@
-import {GuestViews} from "@/features/guest/guest-views";
-export default function GuestSettingsPage(){return <GuestViews view="settings"/>;}
+import {GuestSettings} from "@/features/guest/guest-settings";
+export default function GuestSettingsPage(){return <GuestSettings/>;}

@@ -114,6 +114,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
     function dispose(){
       if(!session.active)return;session.active=false;availabilityVersion++;session.pending=null;
       verificationVersion++;bootstrap?.abort();coordinator.stop();credentials.clear();
+      setReady(null);setState(value=>({...initial(),draftEpoch:value.draftEpoch+1}));
     }
     const session:Owned={coordinator,active:true,busy:false,pending:null,verification:false,dispose,availability,execute,run,verify,cancel};
     owned.current=session;
@@ -123,7 +124,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
     // Defer until the effect has survived StrictMode's setup/cleanup pass.
     queueMicrotask(()=>{
       if(!current())return;
-      setState(initial());setReady(lifecycle);void availability();
+      setState(value=>({...initial(),draftEpoch:value.draftEpoch}));setReady(lifecycle);void availability();
       const saved=snapshot.current;
       if(saved?.datasetId===lifecycle.datasetId){const sources=staleSources(saved);if(sources.length)void run({automatic:true,sources});}
     });
@@ -137,7 +138,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
     const session=currentOwned();if(!session?.active)return Promise.resolve(failure("GUEST_INTERRUPTED"));
     return session.execute(()=>invoke(session.coordinator),retryable);
   };
-  return <Context.Provider value={{...(ready===lifecycle?state:initial()),ready:ready===lifecycle&&!!lifecycle?.isActive(),siteKey,
+  return <Context.Provider value={{...(ready===lifecycle?state:{...initial(),draftEpoch:state.draftEpoch}),ready:ready===lifecycle&&!!lifecycle?.isActive(),siteKey,
     run:(options={})=>currentOwned()?.run(options)??Promise.resolve(),
     connectCanvas:choice=>action(c=>c.connectCanvas(choice)),connectEd:choice=>action(c=>c.connectEd(choice)),connectGradescope:()=>action(c=>c.connectGradescope()),
     restoreSecret:(id,choice)=>action(c=>c.restoreSecret(id,choice)),refreshCourses:id=>action(c=>c.refreshCourses(id)),setEnabledCourses:(id,ids)=>action(c=>c.setEnabledCourses(id,ids),false),

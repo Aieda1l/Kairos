@@ -3,7 +3,7 @@ import {StrictMode,useEffect} from "react";
 import {act,render,screen,waitFor} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {beforeEach,expect,it,vi} from "vitest";
-import {GuestProvider,useGuest,useGuestStoreLifecycle} from "@/features/guest/guest-provider";
+import {GuestProvider,useGuest,useGuestStoreLifecycle,useGuestDatasetChange} from "@/features/guest/guest-provider";
 import {GuestSourcesProvider,useGuestSources} from "@/features/guest/guest-sources-provider";
 import {GuestSyncControls} from "@/features/guest/guest-sync-controls";
 import {GuestDataError,guestSafeMessage} from "@/lib/guest/errors";
@@ -28,6 +28,20 @@ function mount(snapshot=guestSnapshot(),children=<GuestSyncControls/>){
   const fake=guestStoreFake(snapshot);const factory=async()=>fake.store;
   return {...fake,...render(<StrictMode><GuestProvider storeFactory={factory}><GuestSourcesProvider siteKey="public-test">{children}</GuestSourcesProvider></GuestProvider></StrictMode>)};
 }
+it.each(["success","abort"])("retires vault, requests and verification before an owned reset: %s",async result=>{
+  let sources!:ReturnType<typeof useGuestSources>,change!:ReturnType<typeof useGuestDatasetChange>,lifecycle!:ReturnType<typeof useGuestStoreLifecycle>;
+  let proofSignal!:AbortSignal,finishProof!:(value:unknown)=>void;
+  mocks.connectCanvas.mockResolvedValueOnce({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null});
+  mocks.bootstrap.mockImplementationOnce((_input,signal:AbortSignal)=>{proofSignal=signal;return new Promise(resolve=>{finishProof=resolve;});});
+  function Harness(){const s=useGuestSources(),c=useGuestDatasetChange(),l=useGuestStoreLifecycle();useEffect(()=>{sources=s;change=c;lifecycle=l;},[s,c,l]);return null;}
+  const fake=mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(sources?.ready).toBe(true));const old=sources,oldLifecycle=lifecycle!;
+  await act(async()=>{await sources.connectCanvas({value:"pending-private",remember:false});});let pending!:Promise<void>;await act(async()=>{pending=sources.verify("local-proof");});
+  let privateStateAtWrite:unknown;
+  fake.store.clear=vi.fn(async()=>{privateStateAtWrite={active:oldLifecycle.isActive(),stopped:mocks.stop.mock.calls.length,cleared:mocks.clear.mock.calls.length,aborted:proofSignal.aborted};if(result==="abort")throw Error("storage failed");const saved={...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"};fake.replace(saved);return saved;});
+  await act(async()=>{expect(await change(null,guestSnapshot().datasetId)).toBe(result==="success");});
+  expect(privateStateAtWrite).toEqual({active:false,stopped:1,cleared:1,aborted:true});expect(lifecycle).not.toBe(oldLifecycle);expect(lifecycle!.isActive()).toBe(true);
+  await act(async()=>{finishProof({ok:true});await pending;await old.connectCanvas({value:"retired-private",remember:false});});expect(mocks.connectCanvas).toHaveBeenCalledOnce();expect(sources.verificationRequired).toBe(false);expect(sources.actionOutcome).toBeNull();
+});
 it("partial Canvas does not hide successful Ed or require a Kairos account",async()=>{
   mocks.run.mockResolvedValue(report([outcome("canvas-status",{status:"partial",code:"PARTIAL_SYNC",updatedCount:9,failedCount:1}),outcome("ed",{updatedCount:4})]));
   mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));

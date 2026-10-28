@@ -2,7 +2,7 @@
 import {act,render,screen,waitFor,within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {beforeEach,expect,it,vi} from "vitest";
-import {GuestProvider} from "@/features/guest/guest-provider";
+import {GuestProvider,useGuestDatasetChange} from "@/features/guest/guest-provider";
 import {GuestSourcesProvider} from "@/features/guest/guest-sources-provider";
 import {GuestSources} from "@/features/guest/guest-sources";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
@@ -18,10 +18,10 @@ beforeEach(()=>{
   for(const action of [mocks.coordinator.connectCanvas,mocks.coordinator.connectEd,mocks.coordinator.connectGradescope,mocks.coordinator.restoreSecret,mocks.coordinator.refreshCourses,mocks.coordinator.setEnabledCourses,mocks.coordinator.forgetCredential,mocks.coordinator.disconnect])action.mockResolvedValue({status:"success",code:null,connectionId:"c"});
   mocks.coordinator.run.mockResolvedValue({run:{},mode:"manual",outcomes:[]});
 });
-function mount(snapshot=guestSnapshot()){
+function mount(snapshot=guestSnapshot(),extra?:React.ReactNode){
   const fake=guestStoreFake(snapshot);vi.mocked(fake.store.readRememberedSecret).mockResolvedValue(null);
   const factory=async()=>fake.store;
-  const view=render(<GuestProvider storeFactory={factory}><GuestSourcesProvider siteKey="public-test"><GuestSources/></GuestSourcesProvider></GuestProvider>);
+  const view=render(<GuestProvider storeFactory={factory}><GuestSourcesProvider siteKey="public-test"><GuestSources/>{extra}</GuestSourcesProvider></GuestProvider>);
   return {...fake,...view};
 }
 it("connects each source with private memory fields, explicit remembering, and no account dependency",async()=>{
@@ -42,6 +42,20 @@ it("connects each source with private memory fields, explicit remembering, and n
   expect(screen.getByText(/temporarily.*server/i)).toBeVisible();
   expect(screen.queryByText(/sign in to Kairos/i)).not.toBeInTheDocument();
   expect(mocks.refresh).not.toHaveBeenCalled();
+});
+it("clears unsent private drafts synchronously before a reset write, even on abort",async()=>{
+  function Reset(){const change=useGuestDatasetChange();return <button onClick={()=>{void change(null,guestSnapshot().datasetId);}}>Internal reset</button>;}
+  const fake=mount(guestSnapshot(),<Reset/>);const input=await screen.findByLabelText("Canvas calendar feed URL");await waitFor(()=>expect(input).toBeEnabled());await userEvent.type(input,"private-unsent-draft");
+  let atWrite:string|undefined;
+  fake.store.clear=vi.fn(async()=>{atWrite=(input as HTMLInputElement).value;throw Error("storage abort");});
+  await userEvent.click(screen.getByText("Internal reset"));await waitFor(()=>expect(fake.store.clear).toHaveBeenCalled());expect(atWrite).toBe("");
+  expect(screen.getByLabelText("Canvas calendar feed URL")).toHaveValue("");
+});
+it("keeps draft and course selection identities distinct after reset abort",async()=>{
+  const errors=vi.spyOn(console,"error").mockImplementation(()=>{}),snapshot=guestSnapshot();snapshot.connections=[{id:"ed-local",kind:"ed",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  function Reset(){const change=useGuestDatasetChange();return <button onClick={()=>{void change(null,snapshot.datasetId);}}>Internal reset</button>;}
+  mount(snapshot,<Reset/>);await waitFor(()=>expect(screen.getByRole("button",{name:"Save Ed courses"})).toBeEnabled());await userEvent.click(screen.getByText("Internal reset"));await waitFor(()=>expect(screen.getByRole("button",{name:"Save Ed courses"})).toBeEnabled());
+  expect(errors).not.toHaveBeenCalled();errors.mockRestore();
 });
 it("keeps accepted partial Canvas setup connected, clears the secret, and shows the warning",async()=>{
   mocks.coordinator.connectCanvas.mockResolvedValue({status:"success",code:"PARTIAL_SYNC",connectionId:"c"});
@@ -71,5 +85,7 @@ it("preserves explicit selections and submits exact external course IDs, with se
   await userEvent.type(screen.getByLabelText("Ed API token"),"replacement");await userEvent.click(screen.getByRole("button",{name:"Update Ed credential"}));
   expect(mocks.coordinator.restoreSecret).toHaveBeenCalledWith("ed-local",{value:"replacement",remember:false});
   const card=screen.getByRole("region",{name:"Ed"});await userEvent.click(within(card).getByRole("button",{name:"Disconnect Ed"}));
+  expect(mocks.coordinator.disconnect).not.toHaveBeenCalled();
+  await userEvent.click(within(card).getByRole("button",{name:"Confirm disconnect Ed"}));
   expect(mocks.coordinator.disconnect).toHaveBeenCalledWith("ed-local");
 });
