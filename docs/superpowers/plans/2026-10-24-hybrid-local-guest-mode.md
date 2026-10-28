@@ -44,7 +44,7 @@
 | [3. Live orchestration and UI](2026-10-24-hybrid-guest-3-live-orchestration.md) | All agreed live sources, current-run outcomes, remembered-secret controls and backup/reset UX | Parts 1 and 2 interfaces |
 | [4. Acceptance and release evidence](2026-10-24-hybrid-guest-4-acceptance.md) | Complete guest/account/lifecycle regression and honest capacity/readiness evidence | Parts 1–3 |
 
-This split does not reduce first-release scope. Intermediate parts remain behind the flag; a store-only or fixture-only slice is not the finished guest feature. Each task has a RED/GREEN cycle and commit; use one integration branch rather than a production deployment per task.
+This split does not reduce first-release scope. Intermediate parts remain behind the flag; a store-only or fixture-only slice is not the finished guest feature. Behavior changes use a RED/GREEN cycle and commit; factual evidence/documentation work records actual checks without manufacturing RED. Use one integration branch rather than a production deployment per task.
 
 ## Canonical cross-part interfaces
 
@@ -160,9 +160,11 @@ Credential re-entry after a memory-only reload is not source replacement: the us
 Run each task's focused checks once after its changes. Broaden to the existing suite/build/native/browser gates at integration points or for a new failure, not repeatedly without a new reason. Store RED/GREEN logs and capacity receipts in ignored `artifacts/guest-mode-implementation/`; no real secrets/coursework enter fixtures.
 
 - [x] F1–F4 complete and independently testable; F4 compatibility evidence records its local dependency-layout qualification, with unchanged-root CI still required.
-- [x] S1–S4 complete and independently testable; local native/capacity evidence is preliminary and production guest activation remains off.
-- [ ] U1–U4 complete with all agreed live sources.
-- [ ] A1–A3 complete; source/hosted regressions and readiness limits recorded.
+- [x] S1–S4 complete and independently testable; S4 precommit evidence remains preliminary, while final A2/A3 native runtime evidence passes locally. Hosted capacity and production guest activation remain open/off.
+- [x] U1–U4 implemented with all agreed live source workflows; real-provider activation acceptance remains separate.
+- [ ] A1–A3 accepted; implementation/evidence work is prepared and local regressions/readiness limits are recorded in the [guest acceptance ledger](../../deployment/guest-acceptance.md). Controller A3 acceptance remains pending.
+- [ ] Controller A3 task review and fresh whole-branch review complete; retain every deferred observation's disposition.
+- [ ] Exact integrated-source Linux CI and guest activation gates complete (hosted CPU/memory/D1 billing, cleanup/physical retention, operator live acceptance and concrete production approval remain OPEN).
 - [x] Execution method and plan review recorded before product code: subagent-driven, user confirmed 2026-10-24.
 
 Self-review coverage: spec §§1–4 → F4/U3; §§5–6 → F1–F3/U4; §7 → F1/S1–S3; §8 → S2–S4/A3; §9 → F3/U1–U3/A1; §10 → F2/U4/A2; §§11–13 → S4/A1–A3. All five Review Focus items have owning tests below. Interface names/status literals are fixed above and referenced by all parts.

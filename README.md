@@ -16,6 +16,17 @@ Kairos and the Firefox extension use the [MIT License](LICENSE), with Copyright 
 
 ## Requirements and local development
 
+Hybrid guest mode is implemented on this branch behind `KAIROS_GUEST_ENABLED`,
+which defaults to `false` in base and production configuration. It provides local
+coursework/preferences, Canvas feed and Ed reads through bounded anonymous server
+requests, and Canvas status/Gradescope reads through Firefox. Credentials stay in
+memory unless explicitly remembered on the device; backups exclude credentials.
+Guest data is separate from signed-in accounts. Public activation, exact-source
+Linux CI, hosted CPU/memory/D1 capacity, physical retention and operator live
+acceptance remain open. See the [guest acceptance ledger](docs/deployment/guest-acceptance.md)
+and [capacity evidence](docs/deployment/guest-capacity-readiness.md); the hosted
+release results above belong to the earlier deployed release.
+
 - Node.js 22.13+ and npm 10+
 - Firefox 140+ on desktop for Canvas submission status and Gradescope browser-local sync
 - A Canvas private calendar feed URL and/or Ed personal API token for the sources you select

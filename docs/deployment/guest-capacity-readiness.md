@@ -1,16 +1,22 @@
 # Guest capacity readiness
 
-Status: implementation can remain behind the disabled guest flag. Hosted capacity
-and launch acceptance are **OPEN**. These local checks do not authorize guest
+Status: guest behavior is implemented behind the disabled guest flag; controller
+review and release gates remain separate. Hosted capacity and launch acceptance
+are **OPEN**. These local checks do not authorize guest
 activation, deployment, maintenance, new keys, billing changes or real provider
 traffic. Base and production `KAIROS_GUEST_ENABLED` defaults remain `false`.
 
-## Reproduce the preliminary evidence
+The [acceptance ledger and operator sequence](guest-acceptance.md) records exact
+receipt identities, local suite results, CI source/graph coverage and remaining
+review/live gates. This page preserves the earlier S4 measurements below; their
+precommit status is not retroactively changed by later passing integrated checks.
+
+## Reproduce local evidence
 
 ```sh
+npm run build:vinext
 node scripts/verify-workerd-guest-sources.mjs
 node scripts/measure-guest-source-parsers.mjs
-npm run build:vinext
 node scripts/verify-workerd-provider-completion.mjs
 ```
 
@@ -19,11 +25,26 @@ Receipts are UTF-8 JSON under ignored
 `artifacts/guest-source-capacity/<UTC timestamp>-native/receipt.json` and
 `<UTC timestamp>-node/receipt.json`. Each records the measured Git ref, dirty
 qualification and SHA-256 hashes of scripts and relevant source inputs. A run
-before commit is preliminary; integrated-source acceptance must rerun against
-the final reviewed source. Receipts contain counts, timings and hashes, never
-credentials, cookies, capabilities, coursework bodies or raw provider errors.
+before commit is preliminary; integrated-source acceptance must identify the
+reviewed runtime/configuration inputs. Documentation-only commits can retain
+those input hashes without claiming a new runtime build. Receipts contain counts,
+timings and hashes, never credentials, cookies, capabilities, coursework bodies or
+raw provider errors.
 
 ## What the native check establishes
+
+The final A2 check and fresh A3 check passed **79 checks across five phases**.
+The fresh clean-source receipt is
+`artifacts/guest-source-capacity/2026-10-28T21-56-23-135Z-native/receipt.json`,
+source `c0f8763e3284da851db6b798b00f1c2684684104`, SHA-256
+`2000272773f97efa26316beb05ff48178c041c4070c94cf8b731acfb169f4e1a`.
+All 119 recorded input hashes matched. The compiled phase exercises the actual
+built default session/Canvas/Ed routes without fixture flags or identity/calendar
+credential bindings. Its four observed fixture calls (one challenge, three
+provider reads) add ten anonymous admission rows while 21 protected tables remain
+unchanged. It records zero account SQL/protected writes, rejecting-sink attempts
+and unexpected fixture destinations. See the acceptance ledger for distinct input
+and rebundled SHA-256 identities.
 
 The runner bundles the actual guest source/session handlers, feature check,
 runtime, admission SQL, source transports, parsers and response schemas. Two
@@ -96,7 +117,11 @@ The distributed phase creates 263 admission event rows: 73 successful bootstrap
 charges, 128 network/session charges for its first 64 reads, 60 global charges,
 and two charges for the later global denial. The additional bootstrap denial
 does not add a row. All four phases together produced 441 anonymous event rows
-in the preliminary run. These are fixture observations, not capacity forecasts.
+in the preliminary four-phase S4 run. The final five-phase A3 run includes the
+compiled phase: 451 anonymous event rows, 961 guest SQL statements (483 admission;
+467 attempted admission INSERTs and 16 denial SELECTs), and local native counters
+of 6,018 rows read / 2,255 rows written. Observer/migration/control costs remain
+separate. These are fixture observations, not capacity forecasts or billed rows.
 
 ## CPU and memory interpretation
 
@@ -129,7 +154,8 @@ not a claim that the local fixtures meet Free capacity.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local native transport/admission | Preliminary local evidence | Passing receipt with all results true and zero unexpected/internet attempts; final integrated-source rerun |
+| Local native transport/admission/compiled routes | **PASS, local** | Fresh clean `c0f8763` receipt: 79/79 checks; input hashes match A2 runtime; no hosted capacity inference |
+| Exact integrated-source Linux CI and controller whole-branch review | **OPEN** | Actual run URL/revision/conclusions and fresh controller review; local Windows checks cannot replace them |
 | Hosted Worker CPU | **OPEN** | Deployed per-request CPU for near-cap success, parse failure, redirect, admission denial and bootstrap paths |
 | Shared-isolate memory | **OPEN** | Hosted peak memory and failures under bounded concurrent near-cap traffic |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |
@@ -137,7 +163,19 @@ not a claim that the local fixtures meet Free capacity.
 | Physical retention | **OPEN** | Verified physical deletion mechanism/cadence and retention bounds; `purge_after_ms` alone does not prove deletion |
 | Operator live acceptance | **OPEN** | Separately authorized Canvas, Gradescope and Ed acceptance, ingress configuration and operational review |
 
+Physical expiry is only eligibility: the existing
+[bounded cleanup](../../scripts/lib/abuse-maintenance.mjs) selects expired
+`purge_after_ms` rows, and the [hourly maintenance workflow](../../.github/workflows/production-maintenance.yml)
+is gated by `KAIROS_MAINTENANCE_ENABLED`. Source/configuration does not prove that
+it ran, kept up, or physically removed guest rows. Both operator authorization and
+measured deletion/catch-up evidence are still required; A3 did not activate it.
+The [admission repository](../../src/lib/db/d1/repositories/rate-limits.ts) sets
+eligibility one hour after admission; that is not a one-hour physical retention
+promise. The configured batch removes at most 100 rate rows per invocation.
+Bootstrap admission is per network, with no global bootstrap cap; the global
+source-read budget cannot bound distributed bootstrap churn or cleanup backlog.
+
 No hosted measurements, live provider checks or maintenance activation are part
-of this S4 evidence. If hosted measurements exceed a limit, resolve the workload
+of the S4/A2/A3 evidence. If hosted measurements exceed a limit, resolve the workload
 or operating-plan decision before activation; do not silently raise guest budgets
 or reinterpret local measurements as a passing hosted gate.
