@@ -46,16 +46,12 @@ export async function sourceIdentity(root, inputs) {
     qualification: 'Hashes identify measured inputs; a dirty pre-commit run is not exact integrated-source acceptance.', sha256: hashes};
 }
 
-export const guestWorkerEntry = `
-import {createGuestSourceHandler} from './src/lib/guest/server/source-handler';
-import {createGuestSessionHandlers} from './src/lib/guest/server/session';
-import {resolveGuestServerRuntime} from './src/lib/guest/server/runtime';
-import {getGuestEnabled} from './src/lib/guest/server/feature';
-import * as schemas from './src/lib/guest/sources/contracts';
+const measuredDatabaseEntry = `
 function measuredDatabase(db) {
- const stats = {statements:0, admissionStatements:0, admissionReadStatements:0, admissionWriteStatements:0, admissionRowsRead:0, admissionRowsWritten:0, readStatements:0, writeStatements:0, changes:0, protectedWriteStatements:0, rowsRead:0, rowsWritten:0, missingRowsRead:0, missingRowsWritten:0};
+ const stats = {statements:0, admissionStatements:0, admissionReadStatements:0, admissionWriteStatements:0, admissionRowsRead:0, admissionRowsWritten:0, readStatements:0, writeStatements:0, changes:0, protectedWriteStatements:0, accountStatements:0, rowsRead:0, rowsWritten:0, missingRowsRead:0, missingRowsWritten:0};
  const count=(sql,r)=>{
   stats.statements++; if(sql.includes('abuse_rate_events')) stats.admissionStatements++;
+  if(!sql.includes('abuse_rate_events')&&!sql.includes('abuse_controls'))stats.accountStatements++;
   const write=/\\b(?:INSERT|UPDATE|DELETE)\\b/i.test(sql);
   if(sql.includes('abuse_rate_events')){stats[write?'admissionWriteStatements':'admissionReadStatements']++;stats.admissionRowsRead+=r.meta?.rows_read??0;stats.admissionRowsWritten+=r.meta?.rows_written??0;}
   stats[write?'writeStatements':'readStatements']++;
@@ -68,7 +64,34 @@ function measuredDatabase(db) {
  };
  const wrap=(sql,s)=>({bind:(...args)=>wrap(sql,s.bind(...args)),all:async()=>count(sql,await s.all()),run:async()=>count(sql,await s.run()),first:async(column)=>{const row=count(sql,await s.all()).results[0]??null;return column?row?.[column]??null:row;}});
  return {stats,db:{prepare:sql=>wrap(sql,db.prepare(sql)),batch:()=>{throw new Error('Uninstrumented guest batch');},exec:()=>{throw new Error('Uninstrumented guest exec');}}};
+}`;
+
+// Sequential compiled requests only: wrap actual env.DB methods because default
+// guest handlers obtain cloudflare:workers.env rather than a factory injection.
+export function instrumentCompiledGuest(script) {
+ const exportAt=script.lastIndexOf('\nexport {');
+ const defaultName=script.slice(exportAt).match(/\b([A-Za-z_$][A-Za-z0-9_$]*)\s+as\s+default\s*[,}]/)?.[1];
+ if(exportAt<0||!defaultName)throw new Error('COMPILED_GUEST_EXPORT_INVALID');
+ const instrumentation=`${measuredDatabaseEntry}
+ const originalGuestFetch=${defaultName}.fetch;
+ ${defaultName}.fetch=async(request,env,ctx)=>{
+  const originalDb=env.DB,prepare=originalDb.prepare,batch=originalDb.batch,exec=originalDb.exec,originalFetch=globalThis.fetch;
+  const measured=measuredDatabase({prepare:sql=>prepare.call(originalDb,sql)}),network={requests:0,bodyWithoutLength:0};
+  originalDb.prepare=measured.db.prepare;originalDb.batch=measured.db.batch;originalDb.exec=measured.db.exec;
+  globalThis.fetch=async(...args)=>{network.requests++;const response=await originalFetch(...args);if(!response.headers.has('content-length'))network.bodyWithoutLength++;return response;};
+  try{const response=await originalGuestFetch.call(${defaultName},request,env,ctx);const headers=new Headers(response.headers);headers.set('x-probe-metrics',JSON.stringify({...measured.stats,...network}));return new Response(response.body,{status:response.status,headers});}
+  finally{originalDb.prepare=prepare;originalDb.batch=batch;originalDb.exec=exec;globalThis.fetch=originalFetch;}
+ };`;
+ return script.slice(0,exportAt)+'\n'+instrumentation+script.slice(exportAt);
 }
+
+export const guestWorkerEntry = `
+import {createGuestSourceHandler} from './src/lib/guest/server/source-handler';
+import {createGuestSessionHandlers} from './src/lib/guest/server/session';
+import {resolveGuestServerRuntime} from './src/lib/guest/server/runtime';
+import {getGuestEnabled} from './src/lib/guest/server/feature';
+import * as schemas from './src/lib/guest/sources/contracts';
+${measuredDatabaseEntry}
 export default {async fetch(request,env){
  const measured=measuredDatabase(env.DB), network={requests:0,bodyWithoutLength:0};
  const fetchImpl=async(...args)=>{network.requests++;const response=await fetch(...args);if(!response.headers.has('content-length'))network.bodyWithoutLength++;return response;};

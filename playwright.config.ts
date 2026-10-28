@@ -19,6 +19,7 @@ export default defineConfig({
     command:`npx wrangler d1 migrations apply kairos --local --persist-to "${e2ePersistPath}" && npm run dev:vinext -- --host 127.0.0.1`,
     url:"http://127.0.0.1:3000",
     reuseExistingServer:false,
+    timeout:process.platform === "win32" ? 240_000 : 60_000,
     env:{
       ...process.env,
       KAIROS_E2E_PERSIST_PATH:e2ePersistPath,
@@ -39,12 +40,12 @@ export default defineConfig({
   projects:[
     {
       name:"chromium",
-      testMatch:/(guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-isolation|guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|canvas-onboarding|ed-sync|sync-all-recovery|calendar-sync|multi-user-isolation|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Chrome"]},
     },
     {
       name:"firefox",
-      testMatch:/(guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
+      testMatch:/(guest-isolation|guest-lifecycle|guest-backup|guest-source-sync|guest-views|guest-storage|guest-concurrency|submission-status|gradescope-sync|sync-all-recovery|sign-out|privacy-boundary|optional-onboarding|first-run-onboarding|auth-initiation)\.spec\.ts/,
       use:{...devices["Desktop Firefox"]},
     },
   ],

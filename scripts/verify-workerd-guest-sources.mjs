@@ -6,7 +6,7 @@ import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
-import {emptyServerOnly, fixtureRequestId, fixtureWorkerEntry, guestWorkerEntry, sourceIdentity} from '../tests/helpers/guest-workerd-fixtures.mjs';
+import {emptyServerOnly, fixtureRequestId, fixtureWorkerEntry, guestWorkerEntry, instrumentCompiledGuest, sourceIdentity} from '../tests/helpers/guest-workerd-fixtures.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const started = Date.now();
@@ -27,7 +27,7 @@ function check(name, condition, details = {}) {
   assert(condition, name);
 }
 function sumMetrics(metrics) {
-  const keys = ['statements', 'admissionStatements', 'admissionReadStatements', 'admissionWriteStatements', 'admissionRowsRead', 'admissionRowsWritten', 'readStatements', 'writeStatements', 'changes', 'protectedWriteStatements', 'rowsRead', 'rowsWritten', 'missingRowsRead', 'missingRowsWritten', 'requests'];
+  const keys = ['statements', 'admissionStatements', 'admissionReadStatements', 'admissionWriteStatements', 'admissionRowsRead', 'admissionRowsWritten', 'readStatements', 'writeStatements', 'changes', 'protectedWriteStatements', 'accountStatements', 'rowsRead', 'rowsWritten', 'missingRowsRead', 'missingRowsWritten', 'requests'];
   return Object.fromEntries(keys.map(key => [key, metrics.reduce((sum, m) => sum + (m[key] ?? 0), 0)]));
 }
 async function snapshot(db, observerMetrics) {
@@ -50,7 +50,7 @@ async function startPhase(name, scripts) {
     // Driver-only header envelope preserves forged values through Miniflare's
     // proxy. Draining tiny synthetic inputs here is not request-body timing evidence.
     {...shared, name: 'ingress', script: `export default {async fetch(request,env){const headers=new Headers(request.headers);headers.set('host',headers.get('x-driver-host')??new URL(request.url).host);headers.set('origin',headers.get('x-driver-origin'));headers.set('cf-connecting-ip',headers.get('x-driver-network'));const target=headers.get('x-driver-worker')==='1'?env.SECOND:env.FIRST;for(const key of ['x-driver-network','x-driver-worker','x-driver-host','x-driver-origin'])headers.delete(key);const body=await request.arrayBuffer();return target.fetch(new Request(request.url,{method:request.method,headers,body}));}};`, serviceBindings: {FIRST: 'first', SECOND: 'second'}, outboundService: 'deny'},
-    ...['first', 'second'].map(name => ({...shared, name, script: scripts.app, bindings, d1Databases: {DB: 'synthetic-guest'}, outboundService: 'outbound'})),
+    ...['first', 'second'].map(name => ({...shared, name, script: scripts.app, bindings, d1Databases: {DB: 'synthetic-guest'}, outboundService: 'outbound', serviceBindings: {ASSETS:()=>new Response(null,{status:404})}})),
     // App code cannot reach fixture administration via its outbound fetch.
     {...shared, name: 'outbound', script: `export default {fetch(request,env){return env.FIXTURE.fetch(new URL(request.url).origin==='http://fixture.invalid'?new Request('https://unexpected.invalid/'):request);}};`, serviceBindings: {FIXTURE: 'fixture'}, outboundService: 'deny'},
     {...shared, name: 'fixture', script: scripts.fixture, d1Databases: {DB: 'synthetic-guest'}, outboundService: 'deny'},
@@ -104,6 +104,7 @@ async function finishPhase(phase) {
   if (phase.name === 'concurrent-near-cap') check('concurrent fixture bytes independently bounded', stats.fixtureBytes === 6 * 2097088,
     {aggregateFixtureBytes: stats.fixtureBytes, perReadFixtureBytes: 2097088, concurrency: 6});
   const metrics = sumMetrics(phase.metrics);
+  check(phase.name + ': no account lookups', metrics.accountStatements === 0);
   check(phase.name + ': guest writes only admission SQL', metrics.protectedWriteStatements === 0 && metrics.changes === rates.length);
   report.phases.push({name: phase.name, elapsedMs: Date.now() - phase.started, d1: metrics, rateRows: rates.length,
     nativeD1MetaQualification: 'Local Miniflare metadata only, not deployed billing; missing counters counted separately. Statement counts include attempted INSERTs that deny.',
@@ -147,10 +148,36 @@ function safeResult(result) {
 }
 
 try {
-  report.source = await sourceIdentity(root, ['scripts/verify-workerd-guest-sources.mjs', 'tests/helpers/guest-workerd-fixtures.mjs']);
+  report.source = await sourceIdentity(root, ['scripts/verify-workerd-guest-sources.mjs', 'tests/helpers/guest-workerd-fixtures.mjs', 'src/app/api/guest/session/route.ts', 'src/app/api/guest/session/end/route.ts', 'src/app/api/guest/sources/canvas/feed/route.ts', 'src/app/api/guest/sources/ed/courses/route.ts', 'src/app/api/guest/sources/ed/lessons/route.ts', 'vite.config.ts', 'wrangler.jsonc', 'dist/server/index.js']);
   const bundle = async contents => (await build({stdin: {contents, resolveDir: root, sourcefile: 'guest-native-probe.ts', loader: 'ts'},
     bundle: true, write: false, format: 'esm', platform: 'browser', external: ['node:*', 'cloudflare:workers'], logLevel: 'silent', plugins: [emptyServerOnly]})).outputFiles[0].text;
   const scripts = {app: await bundle(guestWorkerEntry), fixture: await bundle(fixtureWorkerEntry)};
+  const schemas=await import('data:text/javascript;base64,'+Buffer.from(await bundle("export * from './src/lib/guest/sources/contracts';")).toString('base64'));
+
+  currentCase='compiled:build';
+  const compiled=(await build({entryPoints:[join(root,'dist/server/index.js')],bundle:true,write:false,format:'esm',platform:'browser',external:['node:*','cloudflare:*'],logLevel:'silent'})).outputFiles[0].text;
+  report.compiled={entry:'dist/server/index.js',bundledSha256:createHash('sha256').update(compiled).digest('hex'),authIdentityCalendarCredentialBindings:false,fixtureFlags:false};
+  const compiledPhase=await startPhase('compiled-anonymous-routes',{app:instrumentCompiledGuest(compiled),fixture:scripts.fixture});
+  let compiledCookie;
+  for(const [path,fields,member] of [
+    ['/api/guest/session',{turnstileToken:'synthetic-guest-'+crypto.randomUUID()},null],
+    ['/api/guest/sources/canvas/feed',{feedUrl:'https://canvas.uw.edu/feeds/calendars/synthetic.ics'},'assignments'],
+    ['/api/guest/sources/ed/courses',{token:'synthetic-ed-secret'},'courses'],
+    ['/api/guest/sources/ed/lessons',{token:'synthetic-ed-secret',courseId:'12'},'lessons'],
+  ]){
+    currentCase='compiled:'+path;
+    const response=await compiledPhase.mf.dispatchFetch('https://guest.invalid'+path,{method:'POST',headers:{'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://guest.invalid',...(compiledCookie?{cookie:compiledCookie}:{})},body:JSON.stringify({schemaVersion:1,requestId:fixtureRequestId,...fields})});
+    const raw=await response.text(),metrics=JSON.parse(response.headers.get('x-probe-metrics')??'null');
+    check(currentCase+' registered and composed',response.status===200&&metrics!==null,{status:response.status});
+    const payload=JSON.parse(raw);compiledPhase.metrics.push(metrics);
+    const schema=member==='assignments'?schemas.guestCanvasFeedResponseSchema:member==='courses'?schemas.guestEdCoursesResponseSchema:member==='lessons'?schemas.guestEdLessonsResponseSchema:schemas.guestSessionResponseSchema;
+    check(currentCase+' actual response schema',schema.safeParse(payload).success);
+    check(currentCase+' public result',payload.ok===true&&payload.schemaVersion===1&&payload.requestId===fixtureRequestId&&(!member||payload[member]?.length===1));
+    check(currentCase+' no account dependency',metrics.accountStatements===0&&metrics.protectedWriteStatements===0&&metrics.requests===1);
+    if(!member){compiledCookie=response.headers.get('set-cookie')?.split(';')[0];assert(compiledCookie?.startsWith('__Host-kairos-guest-sync='));}
+    check(currentCase+' does not echo secrets',!raw.includes('synthetic-ed-secret')&&!raw.includes('synthetic.ics')&&!raw.includes(compiledCookie));
+  }
+  await finishPhase(compiledPhase);
 
   const transport = await startPhase('transport', scripts);
   const cookie = await session(transport);
