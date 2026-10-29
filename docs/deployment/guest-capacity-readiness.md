@@ -33,7 +33,7 @@ raw provider errors.
 
 ## Final-review fix receipt
 
-The fresh clean implementation commit `db8c0c09aed11ba5181210f6e6b4d517cb8db977` has a local native receipt at `artifacts/guest-source-capacity/2026-10-29T21-45-38-209Z-native/receipt.json` (SHA-256 `ad112a7977e73bfbf7465ea7b9419f0affd6c2b2fdf2a9eb1fe10d637c5218f8`). It passed 81/81 checks across five phases, with 120 matching measured input hashes. The compiled guest wrong-origin denial made zero D1/account statements and zero fixture upstream calls. The [acceptance ledger](guest-acceptance.md) records the separate bundle identities and the final browser failures. This is local synthetic evidence; hosted capacity, retention and live-provider gates remain OPEN. The A2/A3 observations below are historical.
+The fresh clean implementation commit `db8c0c09aed11ba5181210f6e6b4d517cb8db977` has a local native receipt at `artifacts/guest-source-capacity/2026-10-29T21-45-38-209Z-native/receipt.json` (SHA-256 `ad112a7977e73bfbf7465ea7b9419f0affd6c2b2fdf2a9eb1fe10d637c5218f8`). It passed 81/81 checks across five phases, with 120 matching measured input hashes. The compiled guest wrong-origin denial made zero D1/account statements and zero fixture upstream calls. The [acceptance ledger](guest-acceptance.md) records the separate bundle identities, later test-only commits and unresolved full-browser failures. This is local synthetic evidence; hosted capacity, retention and live-provider gates remain OPEN. The A2/A3 observations below are historical.
 
 ## What the native check establishes
 
