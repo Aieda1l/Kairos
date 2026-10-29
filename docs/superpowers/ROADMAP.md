@@ -204,3 +204,5 @@ As additional sources arrive, Kairos should preserve each source record independ
 October 29 guest review corrections are committed at `db8c0c0`; the [acceptance ledger](../deployment/guest-acceptance.md) records the fresh 81-check native receipt and two unresolved failures in the final captured browser run. Earlier A2/A3 evidence above is historical. Scoped re-review, exact Linux CI and activation gates remain open.
 
 Test-only follow-ups `3495428` and `6990ba4` retain the full-browser failure history; the latest focused onboarding recheck passed but the full suite has not been rerun on the final test commit. The [acceptance ledger](../deployment/guest-acceptance.md) records the exact scope and open gates.
+
+Test-only `44b562b` bounds the same-context isolation journey by six phases; its focused two-browser check passed. The subsequent captured full browser run failed two other Firefox journeys. The [acceptance ledger](../deployment/guest-acceptance.md) retains the failure and timing qualifications.

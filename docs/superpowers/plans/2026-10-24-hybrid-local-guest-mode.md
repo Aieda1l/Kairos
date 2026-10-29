@@ -178,3 +178,5 @@ Before S1, a narrow SEC1 maintenance task updates the existing locked Next 16.4.
 Implementation corrections are at `db8c0c0`. The [acceptance ledger](../../deployment/guest-acceptance.md) records the fresh clean-source native receipt and the final captured browser run's two unresolved Firefox failures. Earlier A2/A3 receipts are historical for the changed source. Scoped controller re-review and external activation gates remain open.
 
 Test-only commits `3495428` and `6990ba4` followed that receipt. The latest captured full browser run still failed two Firefox cases; the exact onboarding response predicate subsequently passed a focused two-browser run, with no final full-suite rerun. See the [acceptance ledger](../../deployment/guest-acceptance.md).
+
+Test-only `44b562b` introduced six bounded isolation phases; the focused run passed both browsers, while the subsequent captured full browser run failed two other Firefox journeys. See the [acceptance ledger](../../deployment/guest-acceptance.md); review and activation remain open.
