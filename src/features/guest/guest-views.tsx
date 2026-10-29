@@ -18,7 +18,7 @@ export function GuestViews({view}:{view:"upcoming"|"assignments"|"calendar"|"sou
   const {timeZone,filters,sort}=snapshot.preferences;
   const assignments=projectGuestAssignments(snapshot);
   const changeFilters=(value:typeof filters)=>{void guest.savePreferences({filters:value});};
-  return <div className="space-y-5">
+  return <div key={snapshot.datasetId} className="space-y-5">
     <div><h1 className="text-2xl font-semibold capitalize">{view}</h1><p className="mt-1 text-sm text-[var(--muted)]">Times shown in {timeZone}</p></div>
     {guest.actionError&&<p role="alert" className="rounded-xl border border-[var(--border)] p-4">{guest.actionError}</p>}
     {view==="upcoming"&&<AssignmentExplorer assignments={assignments} timeZone={timeZone} canvasConnected={snapshot.connections.some(c=>c.kind==="canvas"&&c.enabled)} syncControls={<GuestSyncControls/>} sourcesHref="/guest/sources" filters={filters} onFiltersChange={changeFilters}/>}

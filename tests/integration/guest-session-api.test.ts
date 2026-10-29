@@ -20,7 +20,7 @@ function setup(){
   return {...database,runtime,fetchImpl,getRuntime,handlers:createGuestSessionHandlers({isEnabled:async()=>true,getRuntime})};
 }
 async function error(response:Response,status:number,code:string){
-  expect(response.status).toBe(status);expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(response.status).toBe(status);expect(response.headers.get('cache-control')).toBe('no-store, private');
   const result=await response.json();expect(guestApiErrorSchema.safeParse(result).success).toBe(true);expect(result.code).toBe(code);
   expect(response.headers.get('set-cookie')).toBeNull();
 }
@@ -36,7 +36,7 @@ describe('guest session API',()=>{
     expect((await verifyGuestCapability(value,runtime,now)).iatMs).toBe(now);
     expect(sqlite.prepare('SELECT count(*) AS n FROM users').get()).toEqual({n:0});
     expect(sqlite.prepare('SELECT count(*) AS n FROM abuse_rate_events WHERE user_id IS NULL').get()).toEqual({n:1});
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('cache-control')).toBe('no-store, private');
   });
   it('rejects disabled entry before runtime validation and D1',async()=>{
     const getRuntime=vi.fn(async()=>{throw new Error('private config');});
@@ -67,9 +67,9 @@ describe('guest session API',()=>{
   });
   it('rejects auth proof and maps verifier failures to fixed guest errors',async()=>{
     const {handlers,fetchImpl}=setup();fetchImpl.mockResolvedValueOnce(Response.json({success:true,hostname:'kairos.example',action:'auth_sign_in'}));
-    await error(await handlers.start(request()),400,'GUEST_CHALLENGE_FAILED');
+    await error(await handlers.start(request()),403,'GUEST_CHALLENGE_FAILED');
     fetchImpl.mockRejectedValueOnce(new Error('secret upstream body'));await error(await handlers.start(request()),503,'GUEST_CHALLENGE_UNAVAILABLE');
-    const before=fetchImpl.mock.calls.length;await error(await handlers.start(request({...body,turnstileToken:'x'.repeat(2049)})),400,'GUEST_CHALLENGE_FAILED');expect(fetchImpl.mock.calls).toHaveLength(before);
+    const before=fetchImpl.mock.calls.length;await error(await handlers.start(request({...body,turnstileToken:'x'.repeat(2049)})),403,'GUEST_CHALLENGE_FAILED');expect(fetchImpl.mock.calls).toHaveLength(before);
   });
   it('never verifies a proof after admission denial or storage failure',async()=>{
     const {handlers,fetchImpl,sqlite}=setup();for(let i=0;i<10;i++)expect((await handlers.start(request())).status).toBe(200);
@@ -86,7 +86,7 @@ describe('guest session API',()=>{
     await error(await handlers.end(request({},{origin:'https://other.example'})),403,'UNTRUSTED_ORIGIN');
     const response=await handlers.end(request({},{cookie:'authjs.session-token=hosted'}));expect(response.status).toBe(200);
     expect(response.headers.get('set-cookie')).toBe('__Host-kairos-guest-sync=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
-    expect(response.headers.get('cache-control')).toBe('no-store');expect(await response.json()).toEqual({ok:true});
+    expect(response.headers.get('cache-control')).toBe('no-store, private');expect(await response.json()).toEqual({ok:true});
     expect(sqlite.prepare('SELECT count(*) AS n FROM abuse_rate_events').get()).toEqual({n:1});expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,12 @@
 "use client";
 import {useEffect,useId,useRef,useState} from "react";
+import Link from "next/link";
 import {Button} from "@/components/ui/button";
 import {Label} from "@/components/ui/label";
 import {MemoryInput} from "@/features/onboarding/private-drafts";
 import type {SourceCourse,SourceKind} from "@/lib/sources/types";
 import type {GuestConnection} from "@/lib/guest/types";
+import {guestSafeMessage} from "@/lib/guest/errors";
 import {useGuest,useGuestStoreLifecycle} from "./guest-provider";
 import {useGuestSources} from "./guest-sources-provider";
 
@@ -55,11 +57,19 @@ function SourceCard({kind,connection,courses,onDisconnected}:{kind:SourceKind;co
   const count=guest.phase==="ready"?guest.snapshot.assignments.filter(a=>a.sourceConnectionId===connection?.id).length:0;
   return <section aria-labelledby={heading} data-source-kind={kind} tabIndex={-1} className="min-w-0 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
     <div><h2 id={heading} className="text-lg font-semibold">{name}</h2><p className="mt-1 text-sm text-[var(--muted)]">{connection?"Connected in this browser":kind==="gradescope"?"Open Gradescope in a signed-in tab with the Kairos extension to discover your courses.":kind==="canvas"?"Import your UW Canvas calendar feed. The extension adds live submission status.":"Use your Ed API token to discover and select courses. No extension is needed."}</p></div>
+    {kind==="gradescope"&&<p className="text-sm text-[var(--muted)]">Use the intended signed-in Gradescope tab and browser profile. Disconnect this source before switching profiles.</p>}
+    {kind==="canvas"&&<p className="text-sm text-[var(--muted)]">For Canvas status, use the intended signed-in Canvas tab and browser profile. Disconnect this source before switching accounts.</p>}
+    {connection&&guest.phase==="ready"&&guest.snapshot.syncStates.filter(s=>s.sourceConnectionId===connection.id).map(s=><div key={s.stage} className="text-sm text-[var(--muted)]">
+      <p>{s.stage==="canvas-feed"?"Canvas feed":s.stage==="canvas-status"?"Canvas status":name} last attempt: {s.lastAttemptedAt?new Date(s.lastAttemptedAt).toLocaleString(undefined,{timeZone:guest.snapshot.preferences.timeZone}):"Not yet checked"}</p>
+      <p>Previous successful check: {s.lastSuccessfulAt?new Date(s.lastSuccessfulAt).toLocaleString(undefined,{timeZone:guest.snapshot.preferences.timeZone}):"None"}</p>
+      {s.lastAttemptedAt&&<p>{s.hasSuccessfulCheck?(s.failedCount||s.lastErrorCode?"Partial result":"Successful check"):(s.lastErrorCode?"Check failed":"No successful result")}: {s.updatedCount} updated; {s.failedCount} failed.</p>}
+      {s.lastErrorCode&&!sources.report?.outcomes.some(o=>o.stage===s.stage&&o.code===s.lastErrorCode)&&<p>{guestSafeMessage(s.lastErrorCode)}</p>}
+    </div>)}
     {kind!=="gradescope"&&<CredentialForm key={`credential:${sources.draftEpoch}`} kind={kind} connection={connection}/>}
     {kind==="gradescope"&&!connection&&<Button type="button" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.connectGradescope();}}>Connect Gradescope</Button>}
     {connection&&kind!=="canvas"&&<CourseSelection key={`courses:${connection.generation}`} connection={connection} courses={courses}/>}
     {connection&&<div className="flex flex-wrap gap-3"><Button type="button" variant="secondary" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.run({sources:[kind]});}}>Sync {name}</Button><Button ref={disconnectRef} type="button" variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>setConfirming(true)}>Disconnect {name}</Button></div>}
-    {connection&&confirming&&<div ref={confirmRef} tabIndex={-1} className="space-y-3 rounded-xl border border-[var(--border)] p-4"><p>Remove {name}, its credential, {courses.length} courses and {count} assignments from this browser? Other sources and original provider records stay.</p><div className="flex flex-wrap gap-3"><Button variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.disconnect(connection.id).then(result=>{if(result.status==="success"){setConfirming(false);onDisconnected(kind);}});}}>Confirm disconnect {name}</Button><Button variant="secondary" disabled={sources.busy} onClick={()=>{setConfirming(false);disconnectRef.current?.focus();}}>Cancel disconnect</Button></div></div>}
+    {connection&&confirming&&<div ref={confirmRef} tabIndex={-1} className="space-y-3 rounded-xl border border-[var(--border)] p-4"><p>Remove {name}, its credential, {courses.length} courses and {count} assignments from this browser? Other sources and original provider records stay.</p><p><Link className="underline" href="/guest/settings">Back up your coursework in guest settings</Link> before disconnecting.</p><div className="flex flex-wrap gap-3"><Button variant="danger" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.disconnect(connection.id).then(result=>{if(result.status==="success"){setConfirming(false);onDisconnected(kind);}});}}>Confirm disconnect {name}</Button><Button variant="secondary" disabled={sources.busy} onClick={()=>{setConfirming(false);disconnectRef.current?.focus();}}>Cancel disconnect</Button></div></div>}
   </section>;
 }
 export function GuestSourceCards(){

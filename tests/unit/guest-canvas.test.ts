@@ -28,6 +28,11 @@ describe("bounded guest Canvas reader",()=>{
       expect(result.assignments).toHaveLength(expected);
     }
   });
+  it("accepts marker text inside event values at the event limit",async()=>{
+    const feed=canvasFeed(Array.from({length:5000},(_,i)=>canvasEvent(i+1,{ordinary:true}).replace("END:VEVENT","DESCRIPTION:literal BEGIN:VEVENT text\nEND:VEVENT")));
+    const result=await readGuestCanvas(input,sourceContext(async()=>textResponse(feed)));
+    expect(result.assignments).toEqual([]);expect(result.report.skippedCount).toBe(5000);
+  });
   it("rejects a feed containing only malformed assignments but accepts ordinary events",async()=>{
     await expect(readGuestCanvas(input,sourceContext(async()=>textResponse(canvasFeed(["BEGIN:VEVENT\nUID:event-assignment-1\nEND:VEVENT"]))))).rejects.toMatchObject({code:"INVALID_ICAL"});
     expect((await readGuestCanvas(input,sourceContext(async()=>textResponse(canvasFeed([canvasEvent(1,{ordinary:true})]))))).assignments).toEqual([]);

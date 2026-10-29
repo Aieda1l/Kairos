@@ -49,6 +49,18 @@ const items:Assignment[]=[
   {...item("6","No date",null),dueAt:null},
 ];
 
+it("updates an open detail from current data and closes it when its assignment disappears",async()=>{
+  const props={timeZone:"America/Los_Angeles",initialMonth:new Date("2026-10-01T12:00:00Z")};
+  const view=render(<AssignmentCalendar {...props} assignments={items}/>);
+  await userEvent.click(screen.getByRole("button",{name:/Submitted HW/}));
+  view.rerender(<AssignmentCalendar {...props} assignments={[{...items[0],title:"Updated title"}]}/>);
+  expect(screen.getByRole("dialog")).toHaveTextContent("Updated title");
+  view.rerender(<AssignmentCalendar {...props} assignments={[]}/>);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  view.rerender(<AssignmentCalendar {...props} assignments={items}/>);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
 it("places due assignments on the configured-timezone calendar day and excludes no-due items",async()=>{
   const user=userEvent.setup();
   render(<AssignmentCalendar assignments={items} timeZone="America/Los_Angeles" initialMonth={new Date("2026-10-01T12:00:00Z")}/>);

@@ -5,6 +5,50 @@ import {finishGuestVerification,resetGuestAdmission,sealGuestJourney} from "./fi
 import {connectCanvas,holdCanvasStatus,installLifecycleSources,localData,privateData,releaseCanvasStatus} from "./fixtures/guest-lifecycle";
 
 test.beforeEach(async({context})=>{await resetGuestAdmission(context);});
+test("Stop waiting aborts a held server read and ignores a late verification rejection",async({page})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page);
+  await page.addInitScript(()=>{const original=window.fetch;window.fetch=(input,init)=>{if(String(input).includes("/api/guest/sources/canvas/feed"))init?.signal?.addEventListener("abort",()=>sessionStorage.setItem("guest-server-aborted","yes"));return original(input,init);};});
+  await page.goto("/guest/sources");await connectCanvas(page);const before=await localData(page);
+  let release!:()=>void;let seen!:()=>void;
+  const held=new Promise<void>(resolve=>{release=resolve;}),received=new Promise<void>(resolve=>{seen=resolve;});
+  await page.route("**/api/guest/sources/canvas/feed",async route=>{seen();await held;await route.fulfill({status:401,json:{ok:false,code:"GUEST_SESSION_REQUIRED",message:"Guest verification is required."}}).catch(()=>{});});
+  await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();await received;
+  await page.getByRole("button",{name:"Stop waiting"}).click();await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem("guest-server-aborted"))).toBe("yes");
+  await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();release();await page.unroute("**/api/guest/sources/canvas/feed");
+  expect((await localData(page)).assignments).toEqual(before.assignments);await expect(page.getByRole("region",{name:"Guest verification"})).toHaveCount(0);
+  await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();expect(capture.forbidden).toEqual([]);
+});
+test("Stop waiting fences a held extension reply and permits a fresh sync",async({page})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);
+  await holdCanvasStatus(page);const before=await localData(page);
+  await page.getByRole("button",{name:"Stop waiting"}).click();
+  await expect(page.getByText(/extension read may continue/i)).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();
+  await expect(page.getByText(/sync incomplete/i).first()).toBeVisible();
+  const stopped=await localData(page);expect(stopped.assignments).toEqual(before.assignments);
+  await releaseCanvasStatus(page);expect(await localData(page)).toEqual(stopped);
+  await expect(page.getByRole("region",{name:"Guest verification"})).toHaveCount(0);
+  await page.evaluate(()=>sessionStorage.removeItem("guest-status-mode"));
+  await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();
+  expect(capture.forbidden).toEqual([]);
+});
+
+for(const view of ["assignments","calendar"] as const)for(const replacement of ["reset","import","source"] as const)test(`open ${view} detail closes after another tab ${replacement}`,async({page,context})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page,new Date().toISOString());await page.goto("/guest/sources");await connectCanvas(page);
+  await page.goto(`/guest/${view}`);
+  await page.getByRole("button",{name:/View .*details|View .* due/}).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const other=await context.newPage();const otherCapture=await sealGuestJourney(other);await installLifecycleSources(other);
+  if(replacement==="source"){
+    await other.goto("/guest/sources");await other.getByRole("button",{name:"Disconnect Canvas",exact:true}).click();await other.getByRole("button",{name:"Confirm disconnect Canvas"}).click();
+  }else{
+    await other.goto("/guest/settings");
+    if(replacement==="reset"){await other.getByRole("button",{name:"Clear guest data"}).click();await other.getByRole("button",{name:"Confirm clear guest data"}).click();}
+    else {await other.getByLabel("Import guest backup").setInputFiles({name:"backup.json",mimeType:"application/json",buffer:Buffer.from(serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z"))});await other.getByRole("button",{name:"Replace local data"}).click();}
+  }
+  await expect(page.getByRole("dialog")).toHaveCount(0);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);await other.close();
+});
 test("complete guest flow survives reload and rejects a late reset result",async({page,context})=>{
   const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);
   await page.getByRole("button",{name:"Connect Gradescope",exact:true}).click();await page.getByLabel("GS 123").check();await page.getByRole("button",{name:"Save Gradescope courses"}).click();

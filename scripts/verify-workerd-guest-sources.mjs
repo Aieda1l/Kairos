@@ -158,6 +158,14 @@ try {
   const compiled=(await build({entryPoints:[join(root,'dist/server/index.js')],bundle:true,write:false,format:'esm',platform:'browser',external:['node:*','cloudflare:*'],logLevel:'silent'})).outputFiles[0].text;
   report.compiled={entry:'dist/server/index.js',bundledSha256:createHash('sha256').update(compiled).digest('hex'),authIdentityCalendarCredentialBindings:false,fixtureFlags:false};
   const compiledPhase=await startPhase('compiled-anonymous-routes',{app:instrumentCompiledGuest(compiled),fixture:scripts.fixture});
+  currentCase='compiled:wrong-origin';
+  const beforeOrigin=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+  const originResponse=await compiledPhase.mf.dispatchFetch('https://guest.invalid/api/guest/session',{method:'POST',headers:{'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://forged.invalid'},body:JSON.stringify({schemaVersion:1,requestId:fixtureRequestId,turnstileToken:'synthetic-proof'})});
+  const originMetrics=JSON.parse(originResponse.headers.get('x-probe-metrics')??'null'),originBody=await originResponse.json();
+  const afterOrigin=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+  check(currentCase+' guest envelope and private no-store',originResponse.status===403&&originResponse.headers.get('cache-control')==='no-store, private'&&schemas.guestApiErrorSchema.safeParse(originBody).success&&originBody.code==='UNTRUSTED_ORIGIN');
+  check(currentCase+' no D1 account or upstream work',originMetrics!==null&&originMetrics.statements===0&&originMetrics.accountStatements===0&&originMetrics.protectedWriteStatements===0&&afterOrigin.providerRequests===beforeOrigin.providerRequests&&afterOrigin.challengeRequests===beforeOrigin.challengeRequests,{metrics:originMetrics});
+  if(originMetrics)compiledPhase.metrics.push(originMetrics);
   let compiledCookie;
   for(const [path,fields,member] of [
     ['/api/guest/session',{turnstileToken:'synthetic-guest-'+crypto.randomUUID()},null],

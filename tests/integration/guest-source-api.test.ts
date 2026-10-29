@@ -38,14 +38,14 @@ async function setup(){
   return {...database,runtime,fetchImpl,getRuntime,cookie,request,handler:(operation:typeof operations[number]='ed-courses')=>createGuestSourceHandler(operation,getRuntime)};
 }
 async function error(response:Response,status:number,code:string){
-  expect(response.status).toBe(status);expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(response.status).toBe(status);expect(response.headers.get('cache-control')).toBe('no-store, private');
   const value=await response.json();expect(guestApiErrorSchema.safeParse(value).success).toBe(true);expect(value.code).toBe(code);
   expect(response.headers.get('set-cookie')).toBeNull();return value;
 }
 describe('transient guest source API',()=>{
   it.each(operations)('reads %s with a guest capability and validates the public DTO',async operation=>{
     const {handler,request,fetchImpl}=await setup();const response=await handler(operation)(request(operation));
-    expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store, private');
     const result=await response.json();expect(schemas[operation].safeParse(result).success).toBe(true);
     expect(result.requestId).toBe(requestId);expect(JSON.stringify(result)).not.toContain(token);expect(JSON.stringify(result)).not.toContain(feedUrl);
     expect(fetchImpl).toHaveBeenCalledTimes(1);

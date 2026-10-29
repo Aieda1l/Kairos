@@ -29,6 +29,9 @@ export function proxy(request:NextRequest){
     const site=request.headers.get("sec-fetch-site");
     if((origin!==null&&origin!==expected)
       ||(origin===null&&(site==="cross-site"||site==="same-site"))){
+      if(pathname==="/api/guest"||pathname.startsWith("/api/guest/"))return NextResponse.json({
+        ok:false,code:"UNTRUSTED_ORIGIN",message:"This request origin is not allowed.",
+      },{status:403,headers:{"cache-control":"no-store, private"}});
       return NextResponse.json({
         code:"UNTRUSTED_ORIGIN",message:"This request must originate from Kairos.",
       },{status:403,headers:{"cache-control":"no-store"}});

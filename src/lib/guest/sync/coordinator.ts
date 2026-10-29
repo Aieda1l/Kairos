@@ -15,7 +15,7 @@ type Context={lease:GuestRunLease;registry:GuestRequestRegistry;abort:AbortContr
 const stages:GuestStage[]=["canvas-feed","canvas-status","gradescope","ed"];
 const sourceOf=(stage:GuestOperation):SourceKind=>stage.startsWith("canvas")?"canvas":stage.startsWith("gradescope")?"gradescope":"ed";
 const safeCode=(error:unknown):GuestSafeCode=>error instanceof GuestDataError?error.code:"INVALID_RESULT";
-const haltsQueue=(code:GuestSafeCode)=>["RATE_LIMITED","ED_RATE_LIMITED","EXTENSION_TIMEOUT","GUEST_RUN_TIMEOUT","GUEST_RUN_LIMIT","GUEST_SUPERSEDED","GUEST_INTERRUPTED"].includes(code);
+const haltsQueue=(code:GuestSafeCode)=>["RATE_LIMITED","ED_RATE_LIMITED","GUEST_SESSION_REQUIRED","ED_AUTH_INVALID","EXTENSION_TIMEOUT","GUEST_RUN_TIMEOUT","GUEST_RUN_LIMIT","GUEST_SUPERSEDED","GUEST_INTERRUPTED"].includes(code);
 const emptyMembers=():GuestRegisteredRequest["members"]=>({canvas:[],courseIds:[]});
 const EXTENSION_RETRY_DELAY_MS=60_000;
 function reportsExtensionTimeout(read:GuestValidatedRead):boolean{

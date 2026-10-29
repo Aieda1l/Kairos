@@ -26,6 +26,16 @@ function Preferences(){
   if(guest.phase!=="ready")return <p>{guest.phase}</p>;
   return <><input aria-label="Preference search" value={guest.snapshot.preferences.filters.search} onChange={e=>{void guest.savePreferences({filters:{...guest.snapshot.preferences.filters,search:e.target.value}});}}/><span>{guest.snapshot.preferences.timeZone}</span>{guest.actionError&&<p role="alert">{guest.actionError}</p>}</>;
 }
+it.each(["slow","refused","throws","unsupported"] as const)("keeps accepted preference saves independent of %s persistence",async mode=>{
+  const persist=vi.fn(()=>{if(mode==="throws")throw Error("unavailable");return mode==="slow"?new Promise<boolean>(()=>{}):Promise.resolve(false);});
+  Object.defineProperty(navigator,"storage",{configurable:true,value:mode==="unsupported"?undefined:{persist}});
+  const fake=guestStoreFake();render(<GuestProvider storeFactory={async()=>fake.store}><Preferences/></GuestProvider>);
+  await userEvent.type(await screen.findByLabelText("Preference search"),"x");
+  await waitFor(async()=>expect((await fake.store.read()).preferences.filters.search).toBe("x"));
+  if(mode!=="unsupported")expect(persist).toHaveBeenCalled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  Object.defineProperty(navigator,"storage",{configurable:true,value:undefined});
+});
 
 it("subscribes before hydration, skips lease-only reads, and notices a new dataset at the same revision",async()=>{
   const fake=guestStoreFake();

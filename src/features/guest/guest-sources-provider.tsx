@@ -1,6 +1,7 @@
 "use client";
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from "react";
 import {createGuestCredentials} from "@/lib/guest/credentials";
+import {requestGuestPersistence} from "@/lib/guest/persistence";
 import {GuestDataError,type GuestSafeCode} from "@/lib/guest/errors";
 import {createGuestBridgeReader} from "@/lib/guest/sync/bridge-reader";
 import {createGuestSyncCoordinator,type GuestRunOptions} from "@/lib/guest/sync/coordinator";
@@ -23,7 +24,7 @@ type SourceContext=SourceState & {
   setEnabledCourses:(id:string,ids:string[])=>Promise<GuestSourceActionOutcome>;
   forgetCredential:(id:string)=>Promise<GuestSourceActionOutcome>;
   disconnect:(id:string)=>Promise<GuestSourceActionOutcome>;
-  verify:(proof:string)=>Promise<void>;cancelVerification:()=>void;
+  verify:(proof:string)=>Promise<void>;cancelVerification:()=>void;stop:()=>void;
 };
 type Owned={coordinator:Coordinator;active:boolean;busy:boolean;pending:Action|null;verification:boolean;dispose:()=>void;availability:()=>Promise<void>;execute:(action:Action,retryable?:boolean)=>Promise<GuestSourceActionOutcome>;run:(options:GuestRunOptions)=>Promise<void>;verify:(proof:string)=>Promise<void>;cancel:(clearDrafts?:boolean)=>void};
 const Context=createContext<SourceContext|null>(null);
@@ -73,6 +74,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
       const version=verificationVersion;
       let result:GuestSourceActionOutcome;
       try{result=await action();}catch(error){result=failure(codeOf(error));}
+      if(result.status==="success")requestGuestPersistence();
       if(!current()){session.busy=false;return failure("GUEST_INTERRUPTED");}
       // Cancellation drops the private retry intent even if an already-started
       // operation later commits data or reports that it needs guest access.
@@ -92,6 +94,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
       const version=verificationVersion;
       try{
         const report=await coordinator.run(options);
+        if(report.outcomes.some(o=>o.status==="success"||o.status==="partial"))requestGuestPersistence();
         if(current()&&version===verificationVersion&&report.outcomes.some(o=>o.code==="GUEST_SESSION_REQUIRED")){session.verification=true;publish({verificationRequired:true});}
         publish({report});
       }catch(error){publish({actionOutcome:failure(codeOf(error))});}
@@ -145,6 +148,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
     restoreSecret:(id,choice)=>action(c=>c.restoreSecret(id,choice)),refreshCourses:id=>action(c=>c.refreshCourses(id)),setEnabledCourses:(id,ids)=>action(c=>c.setEnabledCourses(id,ids),false),
     forgetCredential:id=>action(c=>c.forgetCredential(id),false),disconnect:id=>action(c=>c.disconnect(id),false),
     verify:proof=>currentOwned()?.verify(proof)??Promise.resolve(),cancelVerification:()=>currentOwned()?.cancel(true),
+    stop:()=>{const session=currentOwned();if(session?.active){session.cancel(true);session.coordinator.stop();}},
   }}>{children}</Context.Provider>;
 }
 export function useGuestSources(){const value=useContext(Context);if(!value)throw Error("GuestSourcesProvider is required.");return value;}

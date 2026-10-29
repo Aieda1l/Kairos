@@ -103,6 +103,16 @@ describe("guest coordinator",()=>{
     expect(h.snapshot().syncStates[0].resumeKeys).toEqual(["101","102"]);
     h.calls.length=0;await h.coordinator.run({sources:["ed"]});expect(h.calls[0]).toBe("ed:101");
   });
+  it.each(["GUEST_SESSION_REQUIRED","ED_AUTH_INVALID"] as const)("halts Ed on %s and resumes pending work only on a fresh run",async code=>{
+    const h=harness(fixture(3));const ids:string[]=[],accepted=structuredClone(h.snapshot().assignments);
+    h.transient.edLessons=async r=>{h.calls.push(r.courseId);ids.push(r.requestId);throw new GuestDataError(code);};
+    const first=await h.coordinator.run({sources:["ed"]});
+    expect(h.calls).toEqual(["1"]);expect(first.outcomes[0]).toMatchObject({failedCount:1,pendingCount:2,code});
+    expect(h.snapshot().assignments).toEqual(accepted);
+    expect(h.snapshot().syncStates.find(s=>s.stage==="ed")?.resumeKeys).toEqual(["2","3"]);
+    h.calls.length=0;await h.coordinator.run({sources:["ed"]});
+    expect(h.calls).toEqual(["2"]);expect(new Set(ids).size).toBe(2);
+  });
   it("preserves unprocessed members after rate limiting without retrying",async()=>{
     const h=harness(fixture(3));h.transient.edLessons=async r=>{h.calls.push(r.courseId);throw new GuestDataError("ED_RATE_LIMITED");};
     const report=await h.coordinator.run({sources:["ed"]});

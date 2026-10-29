@@ -44,7 +44,7 @@ it.each(["success","abort"])("retires vault, requests and verification before an
 });
 it("partial Canvas does not hide successful Ed or require a Kairos account",async()=>{
   mocks.run.mockResolvedValue(report([outcome("canvas-status",{status:"partial",code:"PARTIAL_SYNC",updatedCount:9,failedCount:1}),outcome("ed",{updatedCount:4})]));
-  mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));
+  mount();const button=await screen.findByRole("button",{name:"Sync sources"});await waitFor(()=>expect(button).toBeEnabled());await userEvent.click(button);
   expect(await screen.findByText(/9 of 10/)).toBeVisible();expect(screen.getByText(/Ed sync complete/)).toBeVisible();
   expect(screen.queryByText(/sign in to Kairos/i)).not.toBeInTheDocument();expect(mocks.refresh).not.toHaveBeenCalled();
 });
@@ -86,6 +86,18 @@ it("disables manual actions while busy and rejects completion from a retired dat
   const fake=mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));expect(screen.getByRole("button",{name:/syncing/i})).toBeDisabled();
   await act(async()=>fake.replace({...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}));
   await act(async()=>resolve(report([outcome("ed")])));expect(screen.queryByText(/Ed sync complete/)).not.toBeInTheDocument();
+});
+it("lets a user stop a held sync without reviving verification, then run again",async()=>{
+  let settle!:(value:unknown)=>void;
+  mocks.run.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
+  mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));
+  await userEvent.click(screen.getByRole("button",{name:"Stop waiting"}));
+  expect(mocks.stop).toHaveBeenCalled();
+  await act(async()=>settle(report([outcome("ed",{status:"cancelled",code:"GUEST_SESSION_REQUIRED"})])));
+  expect(screen.queryByRole("region",{name:"Guest verification"})).not.toBeInTheDocument();
+  mocks.run.mockResolvedValueOnce(report([outcome("ed")]));
+  await userEvent.click(screen.getByRole("button",{name:"Sync sources"}));
+  expect(await screen.findByText(/Ed sync complete/)).toBeVisible();
 });
 it("rejects callbacks captured by a retired dataset instead of dispatching them on the replacement",async()=>{
   let captured:ReturnType<typeof useGuestSources>|null=null;

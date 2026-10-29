@@ -22,7 +22,7 @@ export function GuestSyncControls(){
   const sources=useGuestSources(),outcomes=sources.report?.outcomes??[];
   return <section aria-label="Guest source sync" className="space-y-4">
     <div className="flex flex-wrap items-center gap-3"><Button type="button" disabled={!sources.ready||sources.busy} onClick={()=>{void sources.run();}}>{sources.busy?"Syncing sources…":"Sync sources"}</Button><p className="text-sm text-[var(--muted)]">Canvas feed and Ed refresh when you choose Sync. Automatic checks use open Canvas and Gradescope tabs.</p></div>
-    {sources.busy&&<p role="status">Reading sources. Previously saved coursework remains available.</p>}
+    {sources.busy&&<div><Button type="button" variant="secondary" onClick={sources.stop}>Stop waiting</Button><p role="status">Previously saved coursework remains available. An already-dispatched extension read may continue in the source tab.</p></div>}
     {sources.actionOutcome?.code&&<p role="alert">{guestSafeMessage(sources.actionOutcome.code)}</p>}
     {outcomes.length>0&&<div role="status" aria-live="polite" aria-atomic="true" className="rounded-xl border border-[var(--border)] p-4"><ul className="space-y-3">{outcomes.map(o=><Outcome key={o.stage} outcome={o}/>)}</ul>{outcomes.some(o=>o.status!=="success"&&o.code!=="GUEST_NOT_CONNECTED")&&<p className="mt-3 text-sm text-[var(--muted)]">Saved coursework is retained. Failed and pending items have not been updated by this run.</p>}</div>}
     {sources.verificationRequired&&<GuestVerification siteKey={sources.siteKey} busy={sources.busy} onProof={proof=>{void sources.verify(proof);}} onCancel={sources.cancelVerification}/>}

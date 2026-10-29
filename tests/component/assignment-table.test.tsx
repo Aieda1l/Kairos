@@ -40,3 +40,14 @@ it("renders submission status and sorts the status column by the nested Canvas s
   await user.click(screen.getAllByRole("button",{name:/View .* details/})[0]);
   expect(screen.getByRole("dialog")).toBeInTheDocument();
 });
+
+it("updates an open detail from current data and closes it when its assignment disappears",async()=>{
+  const view=render(<AssignmentTable assignments={items} timeZone="UTC"/>);
+  await userEvent.click(screen.getAllByRole("button",{name:"View Soon details"})[0]);
+  view.rerender(<AssignmentTable assignments={[{...items[1],title:"Updated title"}]} timeZone="UTC"/>);
+  expect(within(screen.getByRole("dialog")).getByText("Updated title")).toBeInTheDocument();
+  view.rerender(<AssignmentTable assignments={[]} timeZone="UTC"/>);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  view.rerender(<AssignmentTable assignments={items} timeZone="UTC"/>);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});

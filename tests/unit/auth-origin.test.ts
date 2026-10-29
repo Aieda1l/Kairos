@@ -83,3 +83,11 @@ describe("canonical auth origins and proxy fencing",()=>{
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
   });
 });
+
+ it("returns the guest envelope for proxy origin rejection without changing hosted errors",async()=>{
+  const guest=proxy(new NextRequest("https://mykairos.me/api/guest/session",{method:"POST",headers:{origin:"https://other.invalid"}}));
+  expect(guest.status).toBe(403);expect(guest.headers.get("cache-control")).toBe("no-store, private");
+  expect(await guest.json()).toEqual({ok:false,code:"UNTRUSTED_ORIGIN",message:"This request origin is not allowed."});
+  const hosted=proxy(new NextRequest("https://mykairos.me/api/sources/ed/sync",{method:"POST",headers:{origin:"https://other.invalid"}}));
+  expect(await hosted.json()).toEqual({code:"UNTRUSTED_ORIGIN",message:"This request must originate from Kairos."});
+ });

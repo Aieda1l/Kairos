@@ -8,7 +8,7 @@ import { CanvasSourceError } from "./errors";
 type ParseReport = { assignments: SourceAssignment[]; skipped: number; errors: string[] };
 const ASSIGNMENT_UID = /^event-(?:assignment|assignment-override|sub-assignment)-/i;
 
-function splitEvents(input:string): string[] { return input.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) ?? []; }
+function splitEvents(input:string): string[] { return input.match(/^BEGIN:VEVENT\r?$[\s\S]*?^END:VEVENT\r?$/gm) ?? []; }
 function assignmentLike(uid:string, rawUrl:string|null): boolean { return ASSIGNMENT_UID.test(uid) || /#assignment_\d+/i.test(rawUrl ?? ""); }
 function stableFallback(fields:string[]): string { return `fallback-${crypto.createHash("sha256").update(fields.join("\u001f")).digest("hex")}`; }
 function directCanvasUrl(raw:string|null): {url:string|null; courseId:string|null} {

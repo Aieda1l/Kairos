@@ -36,7 +36,7 @@ it('anonymous source reads persist only admission metadata',async()=>{
     expect(foreignOriginResponse.status).toBe(403);
     for(const handler of [canvasGet,edCoursesGet,edLessonsGet]){
       const response=await handler(new Request(env.KAIROS_APP_URL+'/api/guest/sources'));
-      expect(response.status).toBe(400);expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.status).toBe(400);expect(response.headers.get('cache-control')).toBe('no-store, private');
       expect((await response.json()).code).toBe('BAD_REQUEST');
     }
     const afterProtectedTables=snapshot();expect(afterProtectedTables).toEqual(beforeProtectedTables);

@@ -4,6 +4,11 @@ import { describe, expect, it } from "vitest";
 import { parseCanvasIcal } from "@/lib/sources/canvas-ical/parser";
 const fixture=(name:string)=>fs.readFileSync(path.join(process.cwd(),"tests/fixtures/canvas",name),"utf8");
 describe("Canvas iCal parser",()=>{
+ it.each(["\n","\r\n"])("ignores non-boundary markers and keeps folded values with %j line endings",newline=>{
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","X-NOTE:BEGIN:VEVENT", "BEGIN:VEVENT","UID:event-assignment-1","SUMMARY:Homework", "DESCRIPTION:folded literal", " BEGIN:VEVENT text", "END:VEVENT","END:VCALENDAR"];
+  const report=parseCanvasIcal(lines.join(newline));
+  expect(report.assignments).toHaveLength(1);expect(report.assignments[0].title).toBe("Homework");expect(report.errors).toEqual([]);
+ });
  it.each(["javascript:alert(1)","data:text/html,test","https://user:password@canvas.uw.edu/calendar"])("discards non-web or credential-bearing assignment links",raw=>{
   const report=parseCanvasIcal(`BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:event-assignment-1\nSUMMARY:Homework\nURL:${raw}\nEND:VEVENT\nEND:VCALENDAR`);
   expect(report.assignments).toHaveLength(1);

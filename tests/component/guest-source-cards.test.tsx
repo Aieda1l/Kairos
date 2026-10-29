@@ -24,6 +24,35 @@ function mount(snapshot=guestSnapshot(),extra?:React.ReactNode){
   const view=render(<GuestProvider storeFactory={factory}><GuestSourcesProvider siteKey="public-test"><GuestSources/>{extra}</GuestSourcesProvider></GuestProvider>);
   return {...fake,...view};
 }
+it("shows saved stage health after reload including failures, partial and empty successes",async()=>{
+  const snapshot=guestSnapshot();
+  snapshot.connections=[{id:"c",kind:"canvas",enabled:true,generation:1,createdAt:"",updatedAt:""},{id:"e",kind:"ed",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  const base={updatedCount:0,failedCount:0,resumeKeys:[],lastErrorCode:null,hasSuccessfulCheck:true};
+  snapshot.syncStates=[
+    {...base,sourceConnectionId:"c",stage:"canvas-feed",lastAttemptedAt:"2026-10-25T00:00:00.000Z",lastSuccessfulAt:"2026-10-24T00:00:00.000Z",hasSuccessfulCheck:false,failedCount:1,lastErrorCode:"NETWORK_ERROR"},
+    {...base,sourceConnectionId:"c",stage:"canvas-status",lastAttemptedAt:"2026-10-26T00:00:00.000Z",lastSuccessfulAt:"2026-10-26T00:00:00.000Z",updatedCount:2,failedCount:1,lastErrorCode:"PARTIAL_SYNC"},
+    {...base,sourceConnectionId:"e",stage:"ed",lastAttemptedAt:"2026-10-27T00:00:00.000Z",lastSuccessfulAt:"2026-10-27T00:00:00.000Z"},
+  ];
+  const view=mount(snapshot);await screen.findByRole("button",{name:"Disconnect Ed"});
+  const canvas=screen.getByRole("region",{name:"Canvas"});expect(within(canvas).getByText(/Canvas feed last attempt/)).toHaveTextContent("10/25/2026, 9:00:00 AM");expect(within(canvas).getByText(/Canvas status last attempt/)).toBeVisible();expect(within(canvas).getAllByText(/previous.*success/i)).toHaveLength(2);expect(within(canvas).getByText(/Partial result/)).toBeVisible();
+  expect(within(screen.getByRole("region",{name:"Ed"})).getByText(/0 updated.*0 failed/)).toBeVisible();
+  view.unmount();mount(snapshot);expect(await screen.findByText(/Canvas feed last attempt/)).toBeVisible();
+});
+it("offers a backup before disconnect and identifies the intended Gradescope profile",async()=>{
+  const snapshot=guestSnapshot();snapshot.connections=[{id:"g",kind:"gradescope",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  mount(snapshot);await userEvent.click(await screen.findByRole("button",{name:"Disconnect Gradescope"}));
+  expect(screen.getByRole("link",{name:/back up/i})).toHaveAttribute("href","/guest/settings");
+  expect(within(screen.getByRole("region",{name:"Gradescope"})).getByText(/intended signed-in.*profile/i)).toBeVisible();expect(within(screen.getByRole("region",{name:"Gradescope"})).getByText(/disconnect.*switch/i)).toBeVisible();
+  expect(within(screen.getByRole("region",{name:"Canvas"})).getByText(/intended signed-in.*profile/i)).toBeVisible();
+});
+it("shows one current error and retains saved health and its explanation after reload",async()=>{
+  const snapshot=guestSnapshot();snapshot.connections=[{id:"e",kind:"ed",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  snapshot.syncStates=[{sourceConnectionId:"e",stage:"ed",lastAttemptedAt:"2026-10-25T00:00:00.000Z",lastSuccessfulAt:"2026-10-24T00:00:00.000Z",lastErrorCode:"ED_AUTH_INVALID",updatedCount:0,failedCount:1,resumeKeys:[],hasSuccessfulCheck:false}];
+  mocks.coordinator.run.mockResolvedValue({run:{},mode:"manual",outcomes:[{runId:"r",stage:"ed",status:"failed",code:"ED_AUTH_INVALID",updatedCount:0,failedCount:1,ignoredCount:0,pendingCount:0,attemptedAt:"2026-10-25T00:00:00.000Z",completedAt:"2026-10-25T00:00:00.000Z"}]});
+  const view=mount(snapshot);const sync=await screen.findByRole("button",{name:"Sync Ed"});await waitFor(()=>expect(sync).toBeEnabled());await userEvent.click(sync);
+  expect(screen.getAllByText(/update your Ed API token/i)).toHaveLength(1);expect(screen.getByText(/Ed last attempt/)).toBeVisible();expect(screen.getByText(/Previous successful check/)).toBeVisible();expect(screen.getByText(/Check failed/)).toBeVisible();
+  view.unmount();mount(snapshot);expect(await screen.findByText(/update your Ed API token/i)).toBeVisible();expect(screen.getByText(/Ed last attempt/)).toBeVisible();
+});
 it("connects each source with private memory fields, explicit remembering, and no account dependency",async()=>{
   mount();
   const feed=await screen.findByLabelText("Canvas calendar feed URL");
