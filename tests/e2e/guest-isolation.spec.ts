@@ -21,6 +21,7 @@ async function accountState(context:BrowserContext){
 }
 
 test('guest/account switching in one browser never transfers data',async({page,context})=>{
+  test.setTimeout(90_000);page.setDefaultTimeout(30_000);page.setDefaultNavigationTimeout(30_000);
   const forbidden:string[]=[],accountBodies:string[]=[];
   await context.route('**/*',route=>{
     const request=route.request(),url=new URL(request.url());

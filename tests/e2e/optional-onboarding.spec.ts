@@ -17,7 +17,9 @@ test('optional setup keeps private input in memory, defers, resumes and finishes
   expect((await context.request.get('/api/settings/submission-status')).ok()).toBe(true);
   expect(await (await context.request.get('/api/settings/submission-status')).json()).toEqual({enabled:false});
   await page.goto('/onboarding');await waitForAppHydration(page);
-  await page.getByLabel('Display timezone').fill('Asia/Kathmandu');await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByLabel('Display timezone').fill('Asia/Kathmandu');
+  const progress=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/settings/onboarding'&&response.request().method()==='PATCH');
+  await page.getByRole('button',{name:'Continue',exact:true}).click();expect((await progress).ok()).toBe(true);
   await expect(page.getByRole('heading',{name:'Firefox',exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Install from Mozilla Add-ons'})).toHaveAttribute('href','https://addons.mozilla.org/en-US/firefox/addon/kairos-bridge/');
   await page.getByRole('button',{name:'Check extension'}).click();await expect(page.getByText(/not detected.*continue/)).toBeVisible();
