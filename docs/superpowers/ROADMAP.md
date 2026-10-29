@@ -200,3 +200,5 @@ These remain intentionally deferred until the core aggregation/integration workf
 ## Cross-source behavior
 
 As additional sources arrive, Kairos should preserve each source record independently. Potential duplicates may be linked, and conflicting due dates should be shown explicitly; Kairos should not silently invent a canonical deadline or destructively merge records.
+
+October 29 guest review corrections are committed at `db8c0c0`; the [acceptance ledger](../deployment/guest-acceptance.md) records the fresh 81-check native receipt and two unresolved failures in the final captured browser run. Earlier A2/A3 evidence above is historical. Scoped re-review, exact Linux CI and activation gates remain open.

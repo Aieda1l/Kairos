@@ -12,6 +12,14 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
+## October 29 final-review fix evidence
+
+The runtime fix commit is `db8c0c09aed11ba5181210f6e6b4d517cb8db977`. The A2/A3 receipts and suites below remain historical and do not transfer to this changed source. The scoped controller re-review, exact-source Linux CI and all external activation gates remain **OPEN**. Guest remains default-off.
+
+The fresh clean-source local native receipt `artifacts/guest-source-capacity/2026-10-29T21-45-38-209Z-native/receipt.json` has SHA-256 `ad112a7977e73bfbf7465ea7b9419f0affd6c2b2fdf2a9eb1fe10d637c5218f8`: 81/81 checks in five phases; all 120 recorded input hashes match. Its input `dist/server/index.js` SHA-256 is `87de1eeef90a857f9f91044a6080bb929a25a5b40b158e9f8eb4a07e7d5de67f`; the separately rebundled probe SHA-256 is `946fa8d211c7c6bf083e0932d54a33a46ab5984ce4a93de165236d278cf4069d`. The actual compiled wrong-origin guest request returned the strict private/no-store envelope with zero D1/account statements and zero fixture upstream requests. This is sealed synthetic local evidence, not hosted capacity, physical retention, or live-provider acceptance.
+
+Final-source Vitest passed 193 files and 2,121 tests (two files and 46 tests skipped); `artifacts/final-fix/unit-final.stdout.log` SHA-256 `440bde67fddc9eed45f02c768fe67d649a8e33a4820f3ca4fbbfa52963bc6a6b`. Typecheck, lint (seven reviewed warnings), Next/Vinext builds, compiled provider and iCloud checks, dynamic-route and production safety checks passed locally. The targeted two-browser stop and cross-tab dialog suite passed 16 cases. A later full diagnostic run passed 143 cases but lacked complete raw capture. The final captured standard full browser run **failed**: 141 passed, two Firefox failures. Guest/account isolation exhausted the overall 30-second test budget during a hosted assignments navigation; optional onboarding timed out its five-second heading assertion while a settings request lacked a completed response. Their causes remain unproven; traces and the full logs are under `artifacts/final-fix/browser-settled-results` and `browser-settled.stdout.log` / `browser-settled.stderr.log` (SHA-256 `f23d5e8a0b2a279785119508de6631504bbe3b4ed881e8e7df555664ed6fc199` / `09dcc250600c63c1107bd2a0364a74036ec7777f2680096673e37fd7fc25ccf5`). An earlier full run's complete log and traces were overwritten and are unavailable; its failure counts and diagnoses are recorded in the local fix report, not reconstructed. No test timeout or product deadline was increased.
+
 ## Evidence identities
 
 Evidence below was inspected on October 28, 2026. Artifact paths are repository

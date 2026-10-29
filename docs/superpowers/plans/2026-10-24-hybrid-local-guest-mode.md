@@ -172,3 +172,7 @@ Self-review coverage: spec §§1–4 → F4/U3; §§5–6 → F1–F3/U4; §7 �
 ### Implementation-discovered dependency maintenance
 
 Before S1, a narrow SEC1 maintenance task updates the existing locked Next 16.4.0 dependency to the vendor-patched 16.4.1 and verifies the existing suite/default build. The advisory was independently confirmed; CLI-printed upgrade instructions are not treated as authorization. This adds no package, production action or guest scope. The shared external dependency junction must remain unmodified; any local layout replacement preserves the junction as a reversible worktree-owned entry and installs locked dependencies only inside this worktree. Source/runtime applicability and production remediation are distinct from this branch-local patch. SEC1's brief, filesystem journal and review are recorded in the same SDD ledger.
+
+### October 29 review-fix evidence
+
+Implementation corrections are at `db8c0c0`. The [acceptance ledger](../../deployment/guest-acceptance.md) records the fresh clean-source native receipt and the final captured browser run's two unresolved Firefox failures. Earlier A2/A3 receipts are historical for the changed source. Scoped controller re-review and external activation gates remain open.
