@@ -73,7 +73,8 @@ Use the same browser context to test guest/account switching. Real IndexedDB tra
 
 A3 local native/diff/link/safety verification is recorded in the
 [acceptance ledger](../../deployment/guest-acceptance.md) and ignored task report.
-Step 4 remains unchecked for the controller-owned fresh whole-branch review and
-exact integrated-source repository CI; neither is inferred from local passes.
+The whole-branch and scoped fix reviews are accepted with all eight findings
+addressed. Step 4 remains unchecked for exact integrated-source repository CI
+before release; that external gate is not inferred from local passes.
 Implementation/evidence handoff behind the flag can complete before these release
 gates, hosted capacity, physical retention and real-provider acceptance close.

@@ -33,7 +33,7 @@ raw provider errors.
 
 ## Current final-review fix receipt
 
-Clean runtime commit `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57` has native receipt `artifacts/guest-source-capacity/2026-11-01T12-06-43-463Z-native/receipt.json`, SHA-256 `9dea53f1f70eeee38b6d71a86bdf346a7cfba9d73d1f2ef0d75b7fe355176971`: 81/81 checks across five phases, all 120 input hashes matching. Next/Vinext builds and sealed provider/iCloud/dynamic/safety checks passed. M1 persistence ownership changes mean the older receipt below does not transfer to current source. The standard full browser run on this commit failed with 141 passed and two Firefox failures; subsequent test-only commit `2277c14` passed the four affected cases in both browsers, without changing runtime or the isolation test's 180-second outer ceiling. All 143 distinct cases have passing coverage across separate runs; this is not one full green suite on the final test commit. Native input hashes and the compiled server bundle still match. The [acceptance ledger](guest-acceptance.md) records exact identities, retained traces and qualifications. Scoped re-review, exact-source Linux CI required before release, hosted capacity and activation remain OPEN.
+Clean runtime commit `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57` has native receipt `artifacts/guest-source-capacity/2026-11-01T12-06-43-463Z-native/receipt.json`, SHA-256 `9dea53f1f70eeee38b6d71a86bdf346a7cfba9d73d1f2ef0d75b7fe355176971`: 81/81 checks across five phases, all 120 input hashes matching. Next/Vinext builds and sealed provider/iCloud/dynamic/safety checks passed. M1 persistence ownership changes mean the older receipt below does not transfer to current source. The standard full browser run on this commit failed with 141 passed and two Firefox failures; subsequent test-only commit `2277c14` passed the four affected cases in both browsers, without changing runtime or the isolation test's 180-second outer ceiling. All 143 distinct cases have passing coverage across separate runs; this is not one full green suite on the final test commit. Native input hashes and the compiled server bundle still match. The [acceptance ledger](guest-acceptance.md) records exact identities, retained traces and qualifications. Scoped re-review is accepted with no open findings; exact-source Linux CI required before release, hosted capacity and activation remain OPEN.
 
 ## Historical final-review fix receipt
 
@@ -163,7 +163,8 @@ not a claim that the local fixtures meet Free capacity.
 | Gate | Status | Required evidence |
 | --- | --- | --- |
 | Local native transport/admission/compiled routes | **PASS, local** | Fresh clean `2688f9b` receipt: 81/81 checks; 120 input hashes match; browser gate remains open; no hosted capacity inference |
-| Exact integrated-source Linux CI and controller whole-branch review | **OPEN** | Actual run URL/revision/conclusions and fresh controller review; local Windows checks cannot replace them |
+| Implementation task, whole-branch and scoped fix reviews | **ACCEPTED** | All eight findings addressed; this does not approve public activation |
+| Exact integrated-source Linux CI | **OPEN** | Actual run URL/revision/conclusions; local Windows checks cannot replace them |
 | Hosted Worker CPU | **OPEN** | Deployed per-request CPU for near-cap success, parse failure, redirect, admission denial and bootstrap paths |
 | Shared-isolate memory | **OPEN** | Hosted peak memory and failures under bounded concurrent near-cap traffic |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |

@@ -1,8 +1,8 @@
 # Hybrid guest implementation and activation evidence
 
-Guest implementation is present behind the default-off flag. Local acceptance
-has passing evidence; controller task/whole-branch review and public activation
-are separate gates. **Guest activation and overall public beta acceptance remain
+Guest implementation and its independent reviews are accepted behind the
+default-off flag. Exact-source CI and public activation remain separate gates.
+**Guest activation and overall public beta acceptance remain
 incomplete.** No deployment, remote migration, billing change, new key, cleanup
 activation or real provider check was performed for this record.
 
@@ -31,7 +31,13 @@ The last full-suite result remains **141/143, exit 1**. A subsequent test-only r
 
 `artifacts/final-fix/local-changed-list` exit 0 enumerates exactly four cases. `local-changed-focused` exit 0 records 4/4 in 2.6 minutes; stdout/stderr SHA-256 values are `51b0824ee29a533ac44d99278c7e53a892bf7bdfc425f63651abeb8c3807994b` / `1f2c419686f3f9bf7f8b30558ce8626c293647341526813b4c61f53a9b4a8535`. Successful traces are under `local-changed-focused-results`; isolation phase durations range from 0.422–9.433 seconds in Chromium and 0.782–2.007 seconds in Firefox. Affected typecheck/lint passed and required next-env bytes were restored. `local-changed-identity.json` confirms 120 matching native input hashes, no source/configuration changes and a read-only full server rebundle matching `bb87284ae17764e49465d81c1168bd7582eb6c4b10aca0868188811eb26931c1`. The native receipt remains measured at clean `2688f9b`; it was not rerun or relabeled.
 
-The last full 141/143 result followed by affected 4/4 provides passing coverage of **all 143 distinct cases across separate runs**, with two overlapping Chromium successes. It is **not one passing full suite on the final test commit**; no further full run was performed for a cosmetic green result. The one scoped I1–I4/M1–M4 re-review has not yet run. **Exact-source Linux CI is still required before release**, and it and every external activation gate remain **OPEN**, with guest default-off. Earlier captures below are historical. The first failed full-browser run's raw log/traces were lost; that exception remains explicit. Later unique captures are retained. Passing local probes establish neither hosted capacity nor real-provider acceptance.
+The last full 141/143 result followed by affected 4/4 provides passing coverage of **all 143 distinct cases across separate runs**, with two overlapping Chromium successes. It is **not one passing full suite on the final test commit**; no further full run was performed for a cosmetic green result. The independent scoped I1–I4/M1–M4 re-review accepted all eight findings with no new Critical/Important breakage. **Exact-source Linux CI is still required before release**, and it and every external activation gate remain **OPEN**, with guest default-off. Earlier captures below are historical. The first failed full-browser run's raw log/traces were lost; that exception remains explicit. Later unique captures are retained. Passing local probes establish neither hosted capacity nor real-provider acceptance.
+
+### Independent review acceptance
+
+The whole-branch review covered `ce844f8..ce9b683` and required four Important and four Minor corrections. Its single scoped re-review covered `ce9b683..008a60e` and found I1–I4/M1–M4 **ADDRESSED**, with no new Critical/Important breakage. Full review reports and evidence remain in the local SDD workspace. This accepts implementation behind the disabled flag; it does not authorize integration, claim a final aggregate browser pass, or close release gates.
+
+The Canvas marker-count limitation is fixed. Prior registry-lifetime, verification, focus and hydration observations are resolved with their recorded evidence. Native cancellation observation remains limited to timed rejection plus separately tested cleanup attempts. Existing lint/build/runtime diagnostics and historical click/close/network causes remain qualified; the upload canary covers non-guest API bodies, not every URL or non-API body. These retained limits are nonblocking for the scoped implementation verdict, not stronger production guarantees.
 
 ## October 29 historical final-review fix evidence
 
@@ -132,20 +138,21 @@ different release. **Exact integrated-source Linux CI is OPEN.** Record the run
 URL, tested head/merge SHA, complete job conclusions, totals and retained native
 receipt before claiming release CI. Reconcile the final merge/main SHA as well.
 
-Controller A3 task review is approved; the fresh whole-branch review remains **OPEN** here.
-The final reviewer must triage every retained observation in the ignored SDD
+Controller A3 task review, whole-branch review and the scoped fix re-review are
+accepted for implementation behind the disabled flag. The reviews triaged the
+retained observations in the ignored SDD
 `progress.md`: conservative Canvas `BEGIN:VEVENT` substring false positives,
 native cancellation observation coverage, script/render/network/auth/eval/color/
 build/compatibility/strict-mode/lint diagnostics, and the narrower upload detector.
 The U1 registry-lifetime observation has reviewed per-run ownership evidence;
 A1 fixed delayed verification revival, one-time disconnect focus and post-reset
 hydration. Preserve those dispositions and their failure traces; do not silently
-drop them or describe final review as passed from task approvals.
+drop them or infer a release approval from implementation review.
 
 ## Operator-controlled release sequence — not executed
 
-1. Finish controller reviews, triage retained observations and freeze the
-   reviewed revision. Obtain exact-source Linux CI and retain receipt hashes.
+1. Freeze the reviewed revision and retain the observation dispositions. Obtain
+   exact-source Linux CI and retain receipt hashes.
    A local pass allows implementation handoff behind the flag, not activation.
 2. Prepare an isolated hosted candidate with synthetic data/credentials, fresh
    disposable D1, explicit ingress/origin, separate guest HMAC/challenge config,
@@ -198,7 +205,7 @@ drop them or describe final review as passed from task approvals.
 
 | Remaining gate | Status |
 | --- | --- |
-| Controller task and whole-branch review | **OPEN** |
+| Controller task, whole-branch and scoped fix reviews | **ACCEPTED behind disabled flag** |
 | Exact integrated-source Linux CI | **OPEN** |
 | Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **OPEN** |
 | Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
