@@ -201,7 +201,7 @@ These remain intentionally deferred until the core aggregation/integration workf
 
 As additional sources arrive, Kairos should preserve each source record independently. Potential duplicates may be linked, and conflicting due dates should be shown explicitly; Kairos should not silently invent a canonical deadline or destructively merge records.
 
-Current guest review corrections are committed at `2688f9b`; the [acceptance ledger](../deployment/guest-acceptance.md) records the November 1 clean 81-check native receipt and the captured full browser result: 141 passes, two unresolved Firefox failures. Earlier `db8c0c0` and A2/A3 evidence is historical for the changed runtime. Browser integration, scoped re-review, exact Linux CI and activation gates remain open.
+Guest runtime corrections are at `2688f9b`, with final test refinements at `2277c14`. The [acceptance ledger](../deployment/guest-acceptance.md) records the clean 81-check native receipt, last full browser result of 141/143 and subsequent affected 4/4 pass. All 143 distinct cases have passing coverage across runs, not one final full-suite green. Earlier `db8c0c0` and A2/A3 evidence is historical for the changed runtime. Scoped re-review, exact-source Linux CI required before release and activation gates remain open.
 
 Test-only follow-ups `3495428` and `6990ba4` retain the full-browser failure history; the latest focused onboarding recheck passed but the full suite has not been rerun on the final test commit. The [acceptance ledger](../deployment/guest-acceptance.md) records the exact scope and open gates.
 

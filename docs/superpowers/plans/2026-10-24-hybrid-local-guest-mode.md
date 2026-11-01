@@ -175,7 +175,7 @@ Before S1, a narrow SEC1 maintenance task updates the existing locked Next 16.4.
 
 ### October 29 review-fix evidence
 
-Current implementation/test corrections are at `2688f9b`. The [acceptance ledger](../../deployment/guest-acceptance.md) records the November 1 clean-source native receipt (81/81, 120 input hashes) and the captured full browser result (141 passes, two unresolved Firefox failures). M1 persistence ownership changes invalidate transfer of the older `db8c0c0` receipt; earlier A2/A3 receipts are also historical. Browser integration, the single scoped controller re-review and external activation gates remain open.
+Current runtime corrections are at `2688f9b`, with final test refinements at `2277c14`. The [acceptance ledger](../../deployment/guest-acceptance.md) records the clean-source native receipt (81/81, 120 input hashes), last full browser result (141/143) and subsequent affected 4/4 pass. All 143 distinct cases have passing coverage across runs, not one final full-suite green. The runtime/input hashes and full compiled server bundle remain unchanged by the test refinements. The older `db8c0c0` and A2/A3 receipts remain historical. The single scoped controller re-review, exact-source Linux CI required before release and external activation gates remain open.
 
 Test-only commits `3495428` and `6990ba4` followed that receipt. The latest captured full browser run still failed two Firefox cases; the exact onboarding response predicate subsequently passed a focused two-browser run, with no final full-suite rerun. See the [acceptance ledger](../../deployment/guest-acceptance.md).
 
