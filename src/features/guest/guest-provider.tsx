@@ -113,7 +113,7 @@ export function GuestProvider({children,storeFactory=openGuestStore}:{children:R
       if(!current.active||epoch!==current.epoch)return false;
       try{
         const saved=await current.store.savePreferences(pending.patch,pending.datasetId);
-        requestGuestPersistence();
+        if(current.active&&epoch===current.epoch&&current.identity?.datasetId===saved.datasetId)requestGuestPersistence();
         // A read/notification may already have observed a newer revision or dataset.
         if(current.active&&epoch===current.epoch&&current.identity?.datasetId===saved.datasetId&&saved.revision>=current.identity.revision){
           current.readVersion++;current.readFailed=false;
@@ -144,8 +144,8 @@ export function GuestProvider({children,storeFactory=openGuestStore}:{children:R
       await current.writes;
       if(!current.active)return false;
       const saved=backup?await current.store.replaceDataset(backup,datasetId):await current.store.clear(datasetId);
-      if(backup)requestGuestPersistence();
       if(!current.active)return false;
+      if(backup)requestGuestPersistence();
       current.snapshot=saved;current.identity={datasetId:saved.datasetId,revision:saved.revision};current.readFailed=false;accepted=true;
     }catch{
       if(current.active)setActionError("Local data could not be changed. Your last saved dataset was retained. Check browser storage and try again.");

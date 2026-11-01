@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import {expect,it,vi} from "vitest";
 import {GuestProvider,useGuest,useGuestStoreLifecycle,useGuestDatasetChange} from "@/features/guest/guest-provider";
 import {guestSnapshot,guestStoreFake} from "../helpers/guest-store-fake";
+import {parseGuestBackup,serializeGuestBackup} from "@/lib/guest/backup";
 
 it("publishes only the owned hydrated store and retires consumers before dataset replacement and close",async()=>{
   const fake=guestStoreFake();const events:string[]=[];const handles:unknown[]=[];
@@ -26,6 +27,31 @@ function Preferences(){
   if(guest.phase!=="ready")return <p>{guest.phase}</p>;
   return <><input aria-label="Preference search" value={guest.snapshot.preferences.filters.search} onChange={e=>{void guest.savePreferences({filters:{...guest.snapshot.preferences.filters,search:e.target.value}});}}/><span>{guest.snapshot.preferences.timeZone}</span>{guest.actionError&&<p role="alert">{guest.actionError}</p>}</>;
 }
+it.each(["preferences","import"] as const)("does not prompt after an accepted %s write outlives its provider",async mode=>{
+  const persist=vi.fn(()=>Promise.resolve(false));
+  Object.defineProperty(navigator,"storage",{configurable:true,value:{persist}});
+  try{
+    const initial=guestSnapshot(),fake=guestStoreFake(initial);
+    let finish!:(value:typeof initial)=>void;
+    const held=new Promise<typeof initial>(resolve=>{finish=resolve;});
+    fake.store.savePreferences=vi.fn(()=>held);fake.store.replaceDataset=vi.fn(()=>held);
+    let save!:ReturnType<typeof useGuest>["savePreferences"],change!:ReturnType<typeof useGuestDatasetChange>,ready=false;
+    function Harness(){const guest=useGuest(),replace=useGuestDatasetChange();useEffect(()=>{save=guest.savePreferences;change=replace;ready=guest.phase==="ready";},[guest,replace]);return null;}
+    const factory=async()=>fake.store;
+    const view=render(<GuestProvider storeFactory={factory}><Harness/></GuestProvider>);
+    await waitFor(()=>expect(ready).toBe(true));
+    let pending!:Promise<boolean>;
+    await act(async()=>{pending=mode==="preferences"?save({timeZone:"UTC"}):change(parseGuestBackup(serializeGuestBackup(initial,"2026-10-24T12:00:00.000Z")),initial.datasetId);});
+    await waitFor(()=>expect(mode==="preferences"?fake.store.savePreferences:fake.store.replaceDataset).toHaveBeenCalledOnce());
+    view.unmount();
+    const saved=mode==="preferences"
+      ?{...initial,revision:1,preferences:{...initial.preferences,timeZone:"UTC"}}
+      :{...initial,datasetId:"22222222-2222-4222-8222-222222222222"};
+    await act(async()=>{fake.replace(saved);finish(saved);await pending;});
+    expect(await fake.store.read()).toEqual(saved);
+    expect(persist).not.toHaveBeenCalled();
+  }finally{Object.defineProperty(navigator,"storage",{configurable:true,value:undefined});}
+});
 it.each(["slow","refused","throws","unsupported"] as const)("keeps accepted preference saves independent of %s persistence",async mode=>{
   const persist=vi.fn(()=>{if(mode==="throws")throw Error("unavailable");return mode==="slow"?new Promise<boolean>(()=>{}):Promise.resolve(false);});
   Object.defineProperty(navigator,"storage",{configurable:true,value:mode==="unsupported"?undefined:{persist}});

@@ -74,11 +74,11 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
       const version=verificationVersion;
       let result:GuestSourceActionOutcome;
       try{result=await action();}catch(error){result=failure(codeOf(error));}
-      if(result.status==="success")requestGuestPersistence();
       if(!current()){session.busy=false;return failure("GUEST_INTERRUPTED");}
       // Cancellation drops the private retry intent even if an already-started
       // operation later commits data or reports that it needs guest access.
       if(version!==verificationVersion){session.busy=false;publish({busy:false});void availability();return failure("GUEST_INTERRUPTED");}
+      if(result.status==="success")requestGuestPersistence();
       if(current()){
         if(result.code==="GUEST_SESSION_REQUIRED"){
           session.pending=retryable?action:null;session.verification=true;
@@ -94,7 +94,7 @@ export function GuestSourcesProvider({children,siteKey}:{children:ReactNode;site
       const version=verificationVersion;
       try{
         const report=await coordinator.run(options);
-        if(report.outcomes.some(o=>o.status==="success"||o.status==="partial"))requestGuestPersistence();
+        if(!options.automatic&&current()&&version===verificationVersion&&report.outcomes.some(o=>o.status==="success"||o.status==="partial"))requestGuestPersistence();
         if(current()&&version===verificationVersion&&report.outcomes.some(o=>o.code==="GUEST_SESSION_REQUIRED")){session.verification=true;publish({verificationRequired:true});}
         publish({report});
       }catch(error){publish({actionOutcome:failure(codeOf(error))});}

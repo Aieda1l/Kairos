@@ -35,11 +35,19 @@ test("Stop waiting fences a held extension reply and permits a fresh sync",async
 });
 
 for(const view of ["assignments","calendar"] as const)for(const replacement of ["reset","import","source"] as const)test(`open ${view} detail closes after another tab ${replacement}`,async({page,context})=>{
+  const phaseTimeout=30_000;test.setTimeout(3*phaseTimeout);context.setDefaultTimeout(30_000);context.setDefaultNavigationTimeout(30_000);
+  const capture=await test.step("Connect Canvas and create the shared guest dataset",async()=>{
   const capture=await sealGuestJourney(page);await installLifecycleSources(page,new Date().toISOString());await page.goto("/guest/sources");await connectCanvas(page);
+  return capture;
+  },{timeout:phaseTimeout});
+  const {other,otherCapture}=await test.step("Open the detail and prepare the sealed peer tab",async()=>{
   await page.goto(`/guest/${view}`);
   await page.getByRole("button",{name:/View .*details|View .* due/}).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   const other=await context.newPage();const otherCapture=await sealGuestJourney(other);await installLifecycleSources(other);
+  return {other,otherCapture};
+  },{timeout:phaseTimeout});
+  await test.step("Replace data in the peer and verify the original detail closes",async()=>{
   if(replacement==="source"){
     await other.goto("/guest/sources");await other.getByRole("button",{name:"Disconnect Canvas",exact:true}).click();await other.getByRole("button",{name:"Confirm disconnect Canvas"}).click();
   }else{
@@ -47,27 +55,48 @@ for(const view of ["assignments","calendar"] as const)for(const replacement of [
     if(replacement==="reset"){await other.getByRole("button",{name:"Clear guest data"}).click();await other.getByRole("button",{name:"Confirm clear guest data"}).click();}
     else {await other.getByLabel("Import guest backup").setInputFiles({name:"backup.json",mimeType:"application/json",buffer:Buffer.from(serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z"))});await other.getByRole("button",{name:"Replace local data"}).click();}
   }
-  await expect(page.getByRole("dialog")).toHaveCount(0);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);await other.close();
+  await expect(page.getByRole("dialog")).toHaveCount(0);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);
+  // The supplied context fixture disposes both tabs and reports teardown failures.
+  },{timeout:phaseTimeout});
 });
 test("complete guest flow survives reload and rejects a late reset result",async({page,context})=>{
+  const phaseTimeout=30_000;test.setTimeout(5*phaseTimeout);context.setDefaultTimeout(30_000);context.setDefaultNavigationTimeout(30_000);
+  const capture=await test.step("Connect Canvas",async()=>{
   const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);
+  return capture;
+  },{timeout:phaseTimeout});
+  await test.step("Connect Gradescope and Ed",async()=>{
   await page.getByRole("button",{name:"Connect Gradescope",exact:true}).click();await page.getByLabel("GS 123").check();await page.getByRole("button",{name:"Save Gradescope courses"}).click();
   await page.getByLabel("Ed API token").fill("fixture-guest-ed-token-never-echo");await page.getByLabel("Remember Ed credential on this device").check();await page.getByRole("button",{name:"Connect Ed",exact:true}).click();await finishGuestVerification(page);
   await page.getByLabel("CSE 331").check();await page.getByRole("button",{name:"Save Ed courses"}).click();
+  },{timeout:phaseTimeout});
+  const saved=await test.step("Sync and verify all source data after reload",async()=>{
   await page.getByRole("button",{name:"Sync sources",exact:true}).click();await expect(page.getByText(/9 of 10/)).toBeVisible();await expect(page.getByText("Ed sync complete",{exact:true})).toBeVisible();await expect(page.getByText("Gradescope sync complete",{exact:true})).toBeVisible();
   const saved=await localData(page);expect(saved.assignments.filter(a=>a.source==="canvas")).toHaveLength(10);expect(saved.assignments.some(a=>a.source==="ed")).toBe(true);expect(saved.assignments.some(a=>a.source==="gradescope")).toBe(true);expect(saved.statuses).toHaveLength(10);
   await page.getByRole("link",{name:"Assignments",exact:true}).click();await expect(page.getByRole("button",{name:"View Guest Gradescope Homework details",exact:true})).toBeVisible();await page.reload();await expect(page.getByRole("button",{name:"View Guest Gradescope Homework details",exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"View Ed Dated Lesson details",exact:true})).toBeVisible();
   expect((await localData(page)).assignments).toEqual(saved.assignments);
+  return saved;
+  },{timeout:phaseTimeout});
+  const {afterReset,privateReset}=await test.step("Hold a status read and reset the dataset",async()=>{
   await page.getByRole("link",{name:"Sources",exact:true}).click();await holdCanvasStatus(page);
   await page.getByRole("link",{name:"Settings",exact:true}).click();await page.getByRole("button",{name:"Clear guest data",exact:true}).click();await page.getByRole("button",{name:"Confirm clear guest data"}).click();await expect(page.getByText(/Guest data cleared/)).toBeVisible();
   const afterReset=await localData(page),privateReset=await privateData(page);expect(afterReset.datasetId).not.toBe(saved.datasetId);
+  return {afterReset,privateReset};
+  },{timeout:phaseTimeout});
+  await test.step("Release the late result and verify the reset",async()=>{
   await releaseCanvasStatus(page);await page.getByRole("link",{name:"Sources",exact:true}).click();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();const afterLateResponse=await localData(page);expect(afterLateResponse.datasetId).toBe(afterReset.datasetId);expect(afterLateResponse).toEqual(afterReset);expect(await privateData(page)).toEqual(privateReset);
   expect(afterLateResponse.assignments).toEqual([]);expect(privateReset.credentials).toEqual([]);expect(privateReset.requests).toEqual([]);expect(privateReset.metadata[0]).toMatchObject({lease:null});
   const hostedSourceRequests=capture.forbidden;expect(hostedSourceRequests).toEqual([]);expect((await context.cookies()).some(c=>/authjs|session-token/.test(c.name))).toBe(false);
+  },{timeout:phaseTimeout});
 });
 
 for(const replacement of ["import","source"] as const)test(`late source response cannot mutate confirmed ${replacement} replacement`,async({page,context})=>{
+  const phaseTimeout=30_000;test.setTimeout(3*phaseTimeout);context.setDefaultTimeout(30_000);context.setDefaultNavigationTimeout(30_000);
+  const capture=await test.step("Prepare and hold a status read",async()=>{
   const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);if(replacement==="source")await page.clock.install();await holdCanvasStatus(page);
+  return capture;
+  },{timeout:phaseTimeout});
+  const {otherCapture,accepted,privateAccepted}=await test.step("Replace the data in the sealed peer tab",async()=>{
   const before=await localData(page),other=await context.newPage(),otherCapture=await sealGuestJourney(other);await installLifecycleSources(other);
   if(replacement==="import"){
     await other.goto("/guest/settings");await other.getByLabel("Import guest backup").setInputFiles({name:"backup.json",mimeType:"application/json",buffer:Buffer.from(serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z"))});
@@ -80,8 +109,13 @@ for(const replacement of ["import","source"] as const)test(`late source response
     await page.clock.runFor(30001);await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();await connectCanvas(other);
   }
   const accepted=await localData(other),privateAccepted=await privateData(other);expect(accepted.connections[0].id).not.toBe(before.connections[0].id);
+  return {otherCapture,accepted,privateAccepted};
+  },{timeout:phaseTimeout});
+  await test.step("Release the late result and verify accepted data",async()=>{
   await releaseCanvasStatus(page);await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();await expect.poll(async()=>(await localData(page)).connections[0]?.id).toBe(accepted.connections[0].id);
-  expect(await localData(page)).toEqual(accepted);expect(await privateData(page)).toEqual(privateAccepted);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);await other.close();
+  expect(await localData(page)).toEqual(accepted);expect(await privateData(page)).toEqual(privateAccepted);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);
+  // The supplied context fixture disposes both tabs and reports teardown failures.
+  },{timeout:phaseTimeout});
 });
 
 test("empty selected courses and a rate-limited read retain coursework and permit an explicit retry",async({page})=>{

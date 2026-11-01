@@ -19,7 +19,9 @@ vi.mock("next/script",()=>({default:()=>null}));
 const outcome=(stage:GuestStage,patch:Partial<GuestStageOutcome>={}):GuestStageOutcome=>({runId:"r",stage,status:"success",code:null,updatedCount:1,failedCount:0,ignoredCount:0,pendingCount:0,attemptedAt:new Date().toISOString(),completedAt:new Date().toISOString(),...patch});
 const report=(outcomes:GuestStageOutcome[])=>({run:{},mode:"manual",outcomes});
 beforeEach(()=>{
+  for(const mock of Object.values(mocks))mock.mockReset();
   vi.stubGlobal("fetch",vi.fn(()=>{throw Error("Unexpected network");}));
+  Object.defineProperty(navigator,"storage",{configurable:true,value:undefined});
   mocks.factory.mockReturnValue({run:mocks.run,stop:mocks.stop,connectCanvas:mocks.connectCanvas,restoreSecret:mocks.restoreSecret});mocks.run.mockResolvedValue(report([]));
   mocks.connectCanvas.mockResolvedValue({status:"success",code:null,connectionId:"c"});
   mocks.restoreSecret.mockResolvedValue({status:"success",code:null,connectionId:"c"});
@@ -28,6 +30,47 @@ function mount(snapshot=guestSnapshot(),children=<GuestSyncControls/>){
   const fake=guestStoreFake(snapshot);const factory=async()=>fake.store;
   return {...fake,...render(<StrictMode><GuestProvider storeFactory={factory}><GuestSourcesProvider siteKey="public-test">{children}</GuestSourcesProvider></GuestProvider></StrictMode>)};
 }
+async function clickReady(name:string){
+  const button=await screen.findByRole("button",{name});
+  await waitFor(()=>expect(button).toBeEnabled());
+  await userEvent.click(button);
+  return button;
+}
+
+it("requests persistence after a manual saved result rather than an automatic check",async()=>{
+  const persist=vi.fn(()=>Promise.resolve(false));
+  Object.defineProperty(navigator,"storage",{configurable:true,value:{persist}});
+  let sources!:ReturnType<typeof useGuestSources>;
+  function Harness(){const value=useGuestSources();useEffect(()=>{sources=value;},[value]);return <GuestSyncControls/>;}
+  const snapshot=guestSnapshot();
+  snapshot.connections=[{id:"c",kind:"canvas",enabled:true,generation:1,createdAt:"",updatedAt:""}];
+  mocks.run.mockResolvedValue(report([outcome("canvas-status")]));
+  mount(snapshot,<Harness/>);
+  await waitFor(()=>{expect(sources?.report).not.toBeNull();expect(sources?.busy).toBe(false);});
+  expect(mocks.run).toHaveBeenCalledWith({automatic:true,sources:["canvas"]});
+  expect(persist).not.toHaveBeenCalled();
+  await act(async()=>{await sources.run();});
+  expect(persist).toHaveBeenCalledOnce();
+});
+
+it.each(["pagehide","replacement"] as const)("does not request persistence after a saved result loses its owner through %s",async cause=>{
+  const persist=vi.fn(()=>Promise.resolve(false));
+  Object.defineProperty(navigator,"storage",{configurable:true,value:{persist}});
+  let sources!:ReturnType<typeof useGuestSources>,settle!:(value:unknown)=>void;
+  function Harness(){const value=useGuestSources();useEffect(()=>{sources=value;},[value]);return <GuestSyncControls/>;}
+  mocks.run.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
+  const fake=mount(guestSnapshot(),<Harness/>);
+  await waitFor(()=>expect(sources?.ready).toBe(true));
+  let pending!:Promise<void>;
+  await act(async()=>{pending=sources.run();});
+  await act(async()=>{
+    if(cause==="pagehide")window.dispatchEvent(new Event("pagehide"));
+    else fake.replace({...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"});
+  });
+  if(cause==="replacement")await waitFor(()=>expect(mocks.stop).toHaveBeenCalled());
+  await act(async()=>{settle(report([outcome("ed")]));await pending;});
+  expect(persist).not.toHaveBeenCalled();
+});
 it.each(["success","abort"])("retires vault, requests and verification before an owned reset: %s",async result=>{
   let sources!:ReturnType<typeof useGuestSources>,change!:ReturnType<typeof useGuestDatasetChange>,lifecycle!:ReturnType<typeof useGuestStoreLifecycle>;
   let proofSignal!:AbortSignal,finishProof!:(value:unknown)=>void;
@@ -50,18 +93,18 @@ it("partial Canvas does not hide successful Ed or require a Kairos account",asyn
 });
 it("shows distinct failed and pending courses rather than a false assignment denominator, and replaces current outcomes",async()=>{
   mocks.run.mockResolvedValueOnce(report([outcome("ed",{status:"partial",code:"RATE_LIMITED",updatedCount:8,failedCount:1,pendingCount:2})])).mockResolvedValueOnce(report([outcome("ed",{status:"failed",code:"ED_AUTH_INVALID",updatedCount:0,failedCount:1})]));
-  mount();const button=await screen.findByRole("button",{name:"Sync sources"});await userEvent.click(button);
+  mount();const button=await clickReady("Sync sources");
   expect(await screen.findByText(/8 assignments updated.*1 failed course.*2 pending courses/i)).toBeVisible();
   await userEvent.click(button);expect(await screen.findByText(/update your Ed API token/i)).toBeVisible();expect(screen.queryByText(/8 assignments updated/)).not.toBeInTheDocument();expect(screen.queryByText(/Ed sync complete/)).not.toBeInTheDocument();
 });
 it("includes unchanged accepted status members in the Canvas denominator",async()=>{
   mocks.run.mockResolvedValue(report([outcome("canvas-status",{updatedCount:0,ignoredCount:10})]));
-  mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));
+  mount();await clickReady("Sync sources");
   expect(await screen.findByText(/0 of 10 statuses updated.*10 unchanged/)).toBeVisible();
 });
 it.each(["EXTENSION_UNAVAILABLE","CANVAS_TAB_UNAVAILABLE","CANVAS_SIGNED_OUT","GRADESCOPE_TAB_UNAVAILABLE","GRADESCOPE_SIGNED_OUT"] as const)("retains data and explains %s while feed and Ed can still succeed",async code=>{
   mocks.run.mockResolvedValue(report([outcome("canvas-feed"),outcome("canvas-status",{status:"failed",code,updatedCount:0,failedCount:2}),outcome("ed")]));
-  mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));
+  mount();await clickReady("Sync sources");
   expect(await screen.findByText(/Ed sync complete/)).toBeVisible();expect(screen.getByText(/Saved coursework is retained/)).toBeVisible();
   expect(screen.getByText(guestSafeMessage(code))).toBeVisible();
   expect(screen.queryByText(/Canvas status sync complete/)).not.toBeInTheDocument();
@@ -83,14 +126,14 @@ it("uses the 15 minute successful-check rule, and retires the vault and coordina
 });
 it("disables manual actions while busy and rejects completion from a retired dataset",async()=>{
   let resolve!:(value:unknown)=>void;mocks.run.mockReturnValue(new Promise(r=>{resolve=r;}));
-  const fake=mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));expect(screen.getByRole("button",{name:/syncing/i})).toBeDisabled();
+  const fake=mount();await clickReady("Sync sources");expect(screen.getByRole("button",{name:/syncing/i})).toBeDisabled();
   await act(async()=>fake.replace({...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}));
   await act(async()=>resolve(report([outcome("ed")])));expect(screen.queryByText(/Ed sync complete/)).not.toBeInTheDocument();
 });
 it("lets a user stop a held sync without reviving verification, then run again",async()=>{
   let settle!:(value:unknown)=>void;
   mocks.run.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
-  mount();await userEvent.click(await screen.findByRole("button",{name:"Sync sources"}));
+  mount();await clickReady("Sync sources");
   await userEvent.click(screen.getByRole("button",{name:"Stop waiting"}));
   expect(mocks.stop).toHaveBeenCalled();
   await act(async()=>settle(report([outcome("ed",{status:"cancelled",code:"GUEST_SESSION_REQUIRED"})])));
@@ -191,6 +234,8 @@ it.each(["pagehide","cancel"] as const)("does not revive verification from a del
   expect(sources.verified).toBe(true);expect(mocks.run).toHaveBeenCalledTimes(2);
 });
 it("retains accepted store data after cancellation without publishing a successful action or retry",async()=>{
+  const persist=vi.fn(()=>Promise.resolve(false));
+  Object.defineProperty(navigator,"storage",{configurable:true,value:{persist}});
   let sources!:ReturnType<typeof useGuestSources>,snapshot:GuestSnapshot|null=null,settle!:(value:unknown)=>void;
   mocks.connectCanvas.mockReturnValueOnce(new Promise(resolve=>{settle=resolve;}));
   function Harness(){const value=useGuestSources(),guest=useGuest();useEffect(()=>{sources=value;if(guest.phase==="ready")snapshot=guest.snapshot;},[value,guest]);return <GuestSyncControls/>;}
@@ -199,26 +244,26 @@ it("retains accepted store data after cancellation without publishing a successf
   await act(async()=>window.dispatchEvent(new Event("pagehide")));
   const accepted={...guestSnapshot(),revision:1,connections:[{id:"accepted",kind:"canvas" as const,enabled:true,generation:1,createdAt:"",updatedAt:""}]};
   await act(async()=>{fake.replace(accepted);settle({status:"success",code:null,connectionId:"accepted"});});
-  expect(snapshot!.connections).toEqual(accepted.connections);expect(await pending).toEqual({status:"failed",code:"GUEST_INTERRUPTED",connectionId:null});expect(sources.actionOutcome).toBeNull();expect(sources.verificationRequired).toBe(false);
+  expect(snapshot!.connections).toEqual(accepted.connections);expect(await pending).toEqual({status:"failed",code:"GUEST_INTERRUPTED",connectionId:null});expect(sources.actionOutcome).toBeNull();expect(sources.verificationRequired).toBe(false);expect(persist).not.toHaveBeenCalled();
 });
 it("bootstraps only after fresh proof and deliberate continue, then retries rejected setup with the coordinator",async()=>{
   mocks.connectCanvas.mockResolvedValueOnce({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null}).mockResolvedValueOnce({status:"success",code:null,connectionId:"c"});mocks.bootstrap.mockResolvedValue({ok:true});
-  function Harness(){const s=useGuestSources();return <><button onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button onClick={()=>{void s.verify("fixture-proof");}}>proof and continue</button>{s.verificationRequired&&<p>needs verification</p>}</>;}
-  mount(guestSnapshot(),<Harness/>);await userEvent.click(await screen.findByText("setup"));await screen.findByText("needs verification");expect(mocks.bootstrap).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByText("proof and continue"));await waitFor(()=>expect(mocks.connectCanvas).toHaveBeenCalledTimes(2));
+  function Harness(){const s=useGuestSources();return <><button disabled={!s.ready||s.busy} onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button disabled={!s.verificationRequired||s.busy} onClick={()=>{void s.verify("fixture-proof");}}>proof and continue</button>{s.verificationRequired&&<p>needs verification</p>}</>;}
+  mount(guestSnapshot(),<Harness/>);await clickReady("setup");await screen.findByText("needs verification");expect(mocks.bootstrap).not.toHaveBeenCalled();
+  await clickReady("proof and continue");await waitFor(()=>expect(mocks.connectCanvas).toHaveBeenCalledTimes(2));
   expect(mocks.bootstrap).toHaveBeenCalledWith(expect.objectContaining({schemaVersion:1,turnstileToken:"fixture-proof",requestId:expect.any(String)}),expect.any(AbortSignal));expect(mocks.refresh).not.toHaveBeenCalled();
 });
 it("does not retry an uncertain failure or replay a mixed run after proof",async()=>{
   mocks.connectCanvas.mockRejectedValueOnce(new GuestDataError("SERVICE_UNAVAILABLE"));
   mocks.run.mockResolvedValue(report([outcome("canvas-feed",{status:"failed",code:"GUEST_SESSION_REQUIRED"}),outcome("canvas-status")]));mocks.bootstrap.mockResolvedValue({ok:true});
-  function Harness(){const s=useGuestSources();return <><button onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button onClick={()=>{void s.run();}}>run</button><button onClick={()=>{void s.verify("proof");}}>verify</button></>;}
-  mount(guestSnapshot(),<Harness/>);await userEvent.click(await screen.findByText("setup"));expect(mocks.connectCanvas).toHaveBeenCalledOnce();
-  await userEvent.click(screen.getByText("run"));await userEvent.click(screen.getByText("verify"));expect(mocks.run).toHaveBeenCalledOnce();expect(mocks.connectCanvas).toHaveBeenCalledOnce();
+  function Harness(){const s=useGuestSources();return <><button disabled={!s.ready||s.busy} onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button disabled={!s.ready||s.busy} onClick={()=>{void s.run();}}>run</button><button disabled={!s.verificationRequired||s.busy} onClick={()=>{void s.verify("proof");}}>verify</button></>;}
+  mount(guestSnapshot(),<Harness/>);await clickReady("setup");expect(mocks.connectCanvas).toHaveBeenCalledOnce();
+  await clickReady("run");await clickReady("verify");expect(mocks.run).toHaveBeenCalledOnce();expect(mocks.connectCanvas).toHaveBeenCalledOnce();
 });
 it("keeps a safely rejected setup available for a new proof after challenge failure",async()=>{
   mocks.connectCanvas.mockResolvedValueOnce({status:"failed",code:"GUEST_SESSION_REQUIRED",connectionId:null}).mockResolvedValueOnce({status:"success",code:null,connectionId:"c"});
   mocks.bootstrap.mockRejectedValueOnce(new GuestDataError("GUEST_CHALLENGE_FAILED")).mockResolvedValueOnce({ok:true});
-  function Harness(){const s=useGuestSources();return <><button disabled={!s.ready||s.busy} onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button onClick={()=>{void s.verify("fixture-guest-"+crypto.randomUUID());}}>verify</button></>;}
-  mount(guestSnapshot(),<Harness/>);await waitFor(()=>expect(screen.getByText("setup")).toBeEnabled());await userEvent.click(screen.getByText("setup"));await userEvent.click(screen.getByText("verify"));await userEvent.click(screen.getByText("verify"));
+  function Harness(){const s=useGuestSources();return <><button disabled={!s.ready||s.busy} onClick={()=>{void s.connectCanvas({value:"private",remember:false});}}>setup</button><button disabled={!s.verificationRequired||s.busy} onClick={()=>{void s.verify("fixture-guest-"+crypto.randomUUID());}}>verify</button></>;}
+  mount(guestSnapshot(),<Harness/>);await clickReady("setup");await clickReady("verify");await clickReady("verify");
   expect(mocks.bootstrap).toHaveBeenCalledTimes(2);expect(mocks.connectCanvas).toHaveBeenCalledTimes(2);
 });
