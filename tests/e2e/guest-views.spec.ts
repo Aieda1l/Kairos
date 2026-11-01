@@ -4,7 +4,8 @@ test("account-free guest views persist local preferences and use only guest navi
   const accountRequests:string[]=[];
   page.on("request",request=>{if(/\/api\/(auth|settings|sources|assignments|sync-all)/.test(request.url()))accountRequests.push(request.url());});
   await page.goto("/");
-  await page.getByRole("link",{name:"Try without an account"}).click();
+  const guestNavigation=page.waitForURL(/\/guest\/upcoming$/);
+  await Promise.all([guestNavigation,page.getByRole("link",{name:"Try without an account"}).click()]);
   await expect(page).toHaveURL(/\/guest\/upcoming$/);
   await expect(page.getByText("Saved in this browser")).toBeVisible();
   await expect(page.getByText("No assignments yet")).toBeVisible();

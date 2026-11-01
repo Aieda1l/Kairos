@@ -21,7 +21,7 @@ async function accountState(context:BrowserContext){
 }
 
 test('guest/account switching in one browser never transfers data',async({page,context})=>{
-  const phaseTimeout=30_000;test.setTimeout(6*phaseTimeout);page.setDefaultTimeout(30_000);page.setDefaultNavigationTimeout(30_000);
+  const phaseTimeout=30_000;test.setTimeout(180_000);page.setDefaultTimeout(30_000);page.setDefaultNavigationTimeout(30_000);
   const {forbidden,accountBodies,guestBefore}=await test.step("Import guest backup and save the private credential",async()=>{
   const forbidden:string[]=[],accountBodies:string[]=[];
   await context.route('**/*',route=>{
@@ -39,28 +39,33 @@ test('guest/account switching in one browser never transfers data',async({page,c
   const guestBefore=await localData(page);
   return {forbidden,accountBodies,guestBefore};
   },{timeout:phaseTimeout});
-  const {alice,aliceBefore}=await test.step("Verify Alice isolation and guest capability rejection",async()=>{
+  const {alice,aliceBefore}=await test.step("Prepare Alice and verify her account isolation",async()=>{
   // Account preparation is intentionally limited to this same-context isolation test.
   await prepareFixtureUser(context,'alice');
   const aliceSeed=await context.request.post('/api/test-fixtures/tenant-state');expect(aliceSeed.ok()).toBe(true);const alice=await aliceSeed.json();
   expect((await context.request.put('/api/settings/timezone',{data:{timeZone:'Europe/London'}})).ok()).toBe(true);
   const aliceBefore=await accountState(context);
   await page.goto('/assignments');await waitForAppHydration(page);await expect(page.getByText(alice.assignmentTitle).first()).toBeVisible();await expect(page.getByText('Guest private homework')).toHaveCount(0);
+  return {alice,aliceBefore};
+  },{timeout:phaseTimeout});
+  await test.step("Reject missing guest capability and verify Alice's return to guest",async()=>{
   const withoutCapability=await context.request.post('/api/guest/sources/ed/courses',{headers:{origin},data:{schemaVersion:1,requestId:crypto.randomUUID(),token:'fixture-guest-ed-token-never-echo'}});
   expect(withoutCapability.status()).toBe(401);expect((await withoutCapability.json()).code).toBe('GUEST_SESSION_REQUIRED');
   await page.goto('/guest/settings');await expect(page.getByLabel('Display timezone')).toHaveValue('Asia/Tokyo');expect(await localData(page)).toEqual(guestBefore);
 
-  return {alice,aliceBefore};
   },{timeout:phaseTimeout});
-  const {bob,bobBefore,bobCookie}=await test.step("Verify Bob isolation and capture his session",async()=>{
+  const {bob,bobBefore}=await test.step("Prepare Bob and verify his account isolation",async()=>{
   await prepareFixtureUser(context,'bob');
   const bobSeed=await context.request.post('/api/test-fixtures/tenant-state');expect(bobSeed.ok()).toBe(true);const bob=await bobSeed.json();
   expect((await context.request.put('/api/settings/timezone',{data:{timeZone:'America/New_York'}})).ok()).toBe(true);
   const bobBefore=await accountState(context);
   await page.goto('/assignments');await waitForAppHydration(page);await expect(page.getByText(bob.assignmentTitle).first()).toBeVisible();await expect(page.getByText(alice.assignmentTitle)).toHaveCount(0);await expect(page.getByText('Guest private homework')).toHaveCount(0);
+  return {bob,bobBefore};
+  },{timeout:phaseTimeout});
+  const bobCookie=await test.step("Verify Bob's return to guest and capture his session",async()=>{
   await page.goto('/guest/settings');expect(await localData(page)).toEqual(guestBefore);
   const bobCookie=(await context.cookies()).find(c=>c.name==='authjs.session-token');expect(bobCookie).toBeDefined();
-  return {bob,bobBefore,bobCookie};
+  return bobCookie;
   },{timeout:phaseTimeout});
   const guestBeforeAccountDeletion=await test.step("Clear and reimport guest data while preserving Bob",async()=>{
   await page.getByRole('button',{name:'Clear guest data',exact:true}).click();await page.getByRole('button',{name:'Confirm clear guest data'}).click();await expect(page.getByText(/Guest data cleared/)).toBeVisible();
