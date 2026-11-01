@@ -31,7 +31,11 @@ those input hashes without claiming a new runtime build. Receipts contain counts
 timings and hashes, never credentials, cookies, capabilities, coursework bodies or
 raw provider errors.
 
-## Final-review fix receipt
+## Current final-review fix receipt
+
+Clean runtime/test commit `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57` has fresh native receipt `artifacts/guest-source-capacity/2026-11-01T12-06-43-463Z-native/receipt.json`, SHA-256 `9dea53f1f70eeee38b6d71a86bdf346a7cfba9d73d1f2ef0d75b7fe355176971`: 81/81 checks across five phases, all 120 input hashes matching. Next/Vinext builds and sealed provider/iCloud/dynamic/safety checks passed. M1 persistence ownership changes mean the older receipt below does not transfer to current source. The standard full browser run on this commit failed with 141 passed and two Firefox failures (bounded Bob-isolation phase and initial guest-entry URL); their causes remain unproven. The [acceptance ledger](guest-acceptance.md) records exact identities, retained traces and qualifications. Browser integration, scoped re-review, Linux CI, hosted capacity and activation remain OPEN.
+
+## Historical final-review fix receipt
 
 The fresh clean implementation commit `db8c0c09aed11ba5181210f6e6b4d517cb8db977` has a local native receipt at `artifacts/guest-source-capacity/2026-10-29T21-45-38-209Z-native/receipt.json` (SHA-256 `ad112a7977e73bfbf7465ea7b9419f0affd6c2b2fdf2a9eb1fe10d637c5218f8`). It passed 81/81 checks across five phases, with 120 matching measured input hashes. The compiled guest wrong-origin denial made zero D1/account statements and zero fixture upstream calls. The [acceptance ledger](guest-acceptance.md) records the separate bundle identities, later test-only commits and unresolved full-browser failures. This is local synthetic evidence; hosted capacity, retention and live-provider gates remain OPEN. The A2/A3 observations below are historical.
 
@@ -158,7 +162,7 @@ not a claim that the local fixtures meet Free capacity.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local native transport/admission/compiled routes | **PASS, local** | Fresh clean `db8c0c0` receipt: 81/81 checks; 120 input hashes match; no hosted capacity inference |
+| Local native transport/admission/compiled routes | **PASS, local** | Fresh clean `2688f9b` receipt: 81/81 checks; 120 input hashes match; browser gate remains open; no hosted capacity inference |
 | Exact integrated-source Linux CI and controller whole-branch review | **OPEN** | Actual run URL/revision/conclusions and fresh controller review; local Windows checks cannot replace them |
 | Hosted Worker CPU | **OPEN** | Deployed per-request CPU for near-cap success, parse failure, redirect, admission denial and bootstrap paths |
 | Shared-isolate memory | **OPEN** | Hosted peak memory and failures under bounded concurrent near-cap traffic |

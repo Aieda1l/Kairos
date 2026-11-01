@@ -12,7 +12,24 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
-## October 29 final-review fix evidence
+## November 1 current final-fix evidence
+
+The current runtime/test commit is `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57`. Browser persistence is requested once per document StorageManager after an accepted, still-owned user save or manual result; automatic checks and retired/cancelled owners cannot prompt. Requests remain best-effort and do not block accepted saves. These M1 changes invalidate transfer of the older `db8c0c0` native receipt. They are not a proven fix for historical Firefox click, close or network delays.
+
+The actual standard full browser run on this commit **failed: 141 passed, two Firefox failures** (15.3 minutes, exit 1). Complete UTF-8 logs/exit metadata and unique failure traces are retained under `artifacts/final-fix/local-settled-full*`; stdout/stderr SHA-256 values are `624cd233a76f8ba1f47bc64c285d38c6ceda47284012113e4aef39c25611da35` / `210ef5e2a8c06a66358d618c9e69ce5e3d9890a211cafe5052a324557c8e2914`.
+
+- The Bob-isolation phase exceeded its existing 30-second bound: fixture/settings calls took about 15.16 seconds, the assignments navigation 7.30 seconds, and the final guest-settings navigation had about 7.44 seconds before expiry. Its document returned HTTP 200 while development-module requests remained incomplete. This does not establish an IndexedDB fault or a 30-second navigation timeout.
+- Guest views failed the initial five-second URL assertion after clicking “Try without an account.” The guest-upcoming RSC response returned HTTP 200 in 3.35 seconds, but the URL remained `/`. The failure preceded guest storage/save checks. The cause is not established.
+
+All modified lifecycle and optional-onboarding cases passed in this full run, including both engines' exact Resume response/state checks. Earlier focused coverage was 21/22 followed by the corrected journey passing 2/2; these are separate captures, not a single 22/22 run. Named workflow phases retain 30-second bounds and five-second assertions. Their derived overall budgets are genuine timing relaxations, not performance evidence. Terminal peer cleanup is owned by the supplied context fixture after every assertion; disposal errors still fail the test. No further timeout increase or lucky full-suite rerun followed the two failures.
+
+Fresh Next and Vinext builds passed. The clean-source native receipt `artifacts/guest-source-capacity/2026-11-01T12-06-43-463Z-native/receipt.json` has SHA-256 `9dea53f1f70eeee38b6d71a86bdf346a7cfba9d73d1f2ef0d75b7fe355176971`: **81/81 checks, five phases, all 120 input hashes matching**, measured on clean `2688f9b`. The input `dist/server/index.js` hash is `7751b9d3189a1a218271ca7b03d1bbe744e747b8e78cf368d9417993619229ef`; the separately rebundled probe hash is `bb87284ae17764e49465d81c1168bd7582eb6c4b10aca0868188811eb26931c1`. Compiled wrong-origin denial retained its strict private/no-store envelope and made zero D1/account/upstream calls. Sealed provider and iCloud probes, dynamic-route and production-safety checks passed; no real provider requests were made.
+
+Full Vitest on the M1 runtime passed 2,130 tests in 194 files, with 46 existing test skips and two skipped files. Subsequent fixture-only corrections passed all 49 focused persistence/provider/control cases. Final typecheck and affected-file lint passed; full lint retained seven existing warnings. Required `next-env.d.ts` bytes were restored. `artifacts/final-fix/local-verification-manifest.json` records command exits and raw-log hashes. These ignored local artifacts are not published CI evidence.
+
+The full-browser gate remains **FAILED/OPEN**. The one scoped I1–I4/M1–M4 re-review has not yet run; exact-source Linux CI and every external activation gate remain **OPEN**, with guest default-off. Earlier captures below are historical. The first failed full-browser run's raw log/traces were lost; that exception remains explicit. Later unique captures are retained. Passing local probes establish neither hosted capacity nor real-provider acceptance.
+
+## October 29 historical final-review fix evidence
 
 The runtime fix commit is `db8c0c09aed11ba5181210f6e6b4d517cb8db977`. The A2/A3 receipts and suites below remain historical and do not transfer to this changed source. The scoped controller re-review, exact-source Linux CI and all external activation gates remain **OPEN**. Guest remains default-off.
 
