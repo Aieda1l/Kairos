@@ -175,6 +175,8 @@ Implementation plan:
 
 ## Local guest mode — Implemented behind a disabled flag; activation open
 
+Integration is proceeding through [PR 53](https://github.com/Aieda1l/Kairos/pull/53). The additional ECC review's malformed-Canvas-event finding was corrected in `be6b762` and independently verified with 98 focused tests. Protected CI must pass for the final PR head before merge; previous local receipts retain their original source qualification. Merge does not enable guest mode or deploy production.
+
 User selected this follow-up on October 14, 2026. On October 24 the user confirmed live Canvas, Gradescope and Ed syncing in its first release and chose a hybrid architecture so people can use Kairos without creating or signing into a Kairos account. Assignments/preferences are stored locally; Canvas feed and Ed credentials/responses may pass transiently through the server. Canvas statuses and Gradescope retain their existing Firefox/provider-session requirements.
 
 The user approved the [hybrid guest design](specs/2026-10-24-hybrid-local-guest-mode-design.md) and selected subagent-driven execution of its [implementation plan](plans/2026-10-24-hybrid-local-guest-mode.md) on October 24. Local storage/views, bounded anonymous transport, all agreed source workflows, lifecycle recovery, backup/reset and same-browser account separation are implemented. Local A2 verification passed 2,105 tests (46 existing skips) and 127 standard browser cases; the fresh clean-source native guest receipt passes 79 checks across five phases, including compiled default routes. Seven lint warnings and existing build/runtime diagnostics remain disclosed. Base and production `KAIROS_GUEST_ENABLED` remain `false`.

@@ -12,9 +12,17 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
-## November 1 current final-fix evidence
+## PR 53 ECC integration correction
 
-The current runtime commit is `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57`; the final test refinement is `2277c14a76f52b82c76511dcee63e750df116a18`. Browser persistence is requested once per document StorageManager after an accepted, still-owned user save or manual result; automatic checks and retired/cancelled owners cannot prompt. Requests remain best-effort and do not block accepted saves. These M1 changes invalidate transfer of the older `db8c0c0` native receipt. They are not a proven fix for historical Firefox click, close or network delays.
+The user authorized publishing, an ECC review and merge in [PR 53](https://github.com/Aieda1l/Kairos/pull/53). The additional ECC pass found one medium issue: unterminated Canvas assignment events could be omitted while a guest read reported complete or legitimate empty success. Commit `be6b76232db49a44972131c2be016236942f2c43` adds shared bounded structural scanning, truthful malformed/partial accounting and recovery of valid siblings. A feed with no valid assignment after structural errors is rejected. Existing DTOs, limits, fixed diagnostics and valid hosted-feed behavior remain covered.
+
+The focused correction had 13 expected RED failures, then 98/98 passing reader/parser/hosted/API regressions, passing types and strict focused lint. Independent ECC fix verification accepted the finding with no new actionable issue, including both original cases and malformed-before-valid recovery. It did not establish hosted resource capacity. The final PR head must pass protected exact-source Linux CI before merge. This is integration approval, not deployment or activation approval; both guest defaults remain false.
+
+The source changed after the local receipts below. Their recorded input hashes and 81-check result apply to their measured commits and **must not be transferred to this parser correction**. Fresh compiled/native verification is part of the final PR CI graph. The earlier pre-correction PR CI passed its complete Linux graph, including all 143 browser cases; it does not approve the later correction or replace its new exact-head run. Full ECC reports and focused logs are retained in the local SDD/artifact workspace.
+
+## November 1 pre-ECC implementation evidence
+
+The pre-ECC runtime commit is `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57`; its final test refinement is `2277c14a76f52b82c76511dcee63e750df116a18`. Browser persistence is requested once per document StorageManager after an accepted, still-owned user save or manual result; automatic checks and retired/cancelled owners cannot prompt. Requests remain best-effort and do not block accepted saves. These M1 changes invalidate transfer of the older `db8c0c0` native receipt. They are not a proven fix for historical Firefox click, close or network delays.
 
 The actual standard full browser run on this commit **failed: 141 passed, two Firefox failures** (15.3 minutes, exit 1). Complete UTF-8 logs/exit metadata and unique failure traces are retained under `artifacts/final-fix/local-settled-full*`; stdout/stderr SHA-256 values are `624cd233a76f8ba1f47bc64c285d38c6ceda47284012113e4aef39c25611da35` / `210ef5e2a8c06a66358d618c9e69ce5e3d9890a211cafe5052a324557c8e2914`.
 

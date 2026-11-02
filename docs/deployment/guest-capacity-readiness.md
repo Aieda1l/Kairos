@@ -31,7 +31,11 @@ those input hashes without claiming a new runtime build. Receipts contain counts
 timings and hashes, never credentials, cookies, capabilities, coursework bodies or
 raw provider errors.
 
-## Current final-review fix receipt
+## PR 53 source change and measurement boundary
+
+The ECC integration correction `be6b762` changes Canvas structural parsing and malformed-result accounting. Its focused 98-test suite and independent fix review passed; the final PR head requires fresh Linux CI, including the compiled/native check, before merge. The local receipts below remain tied to their measured source and do not transfer to this correction. No deployed CPU/memory/D1 billing, physical-retention or live-provider evidence was added; guest activation remains off. See the [acceptance ledger](guest-acceptance.md).
+
+## Prior implementation-review receipt (before PR 53 ECC)
 
 Clean runtime commit `2688f9b053c5d4adcf7b27f7384b3510c2f1ea57` has native receipt `artifacts/guest-source-capacity/2026-11-01T12-06-43-463Z-native/receipt.json`, SHA-256 `9dea53f1f70eeee38b6d71a86bdf346a7cfba9d73d1f2ef0d75b7fe355176971`: 81/81 checks across five phases, all 120 input hashes matching. Next/Vinext builds and sealed provider/iCloud/dynamic/safety checks passed. M1 persistence ownership changes mean the older receipt below does not transfer to current source. The standard full browser run on this commit failed with 141 passed and two Firefox failures; subsequent test-only commit `2277c14` passed the four affected cases in both browsers, without changing runtime or the isolation test's 180-second outer ceiling. All 143 distinct cases have passing coverage across separate runs; this is not one full green suite on the final test commit. Native input hashes and the compiled server bundle still match. The [acceptance ledger](guest-acceptance.md) records exact identities, retained traces and qualifications. Scoped re-review is accepted with no open findings; exact-source Linux CI required before release, hosted capacity and activation remain OPEN.
 
