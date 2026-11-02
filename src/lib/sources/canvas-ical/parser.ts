@@ -8,7 +8,37 @@ import { CanvasSourceError } from "./errors";
 type ParseReport = { assignments: SourceAssignment[]; skipped: number; errors: string[] };
 const ASSIGNMENT_UID = /^event-(?:assignment|assignment-override|sub-assignment)-/i;
 
-function splitEvents(input:string): string[] { return input.match(/^BEGIN:VEVENT\r?$[\s\S]*?^END:VEVENT\r?$/gm) ?? []; }
+/** A null record accounts for one unreadable event without retaining its fields. */
+export function* splitCanvasEvents(input:string): Generator<string|null> {
+  const boundaries=/^(BEGIN|END):([A-Z0-9-]+)\r?$/gm;
+  let start=-1; let abandoned=0; let malformed=false;
+  const children:string[]=[];
+  for(const boundary of input.matchAll(boundaries)) {
+    const [,direction,component]=boundary;
+    if(component==="VEVENT") {
+      if(direction==="BEGIN") {
+        // Resynchronize at the next event so a truncated sibling cannot consume it.
+        if(start!==-1) { yield null; abandoned++; }
+        start=boundary.index; children.length=0; malformed=false;
+      } else if(start!==-1) {
+        yield malformed||children.length>0 ? null : input.slice(start,boundary.index+boundary[0].length);
+        start=-1; children.length=0;
+      } else if(abandoned>0) {
+        // Its abandoned BEGIN was already counted; do not count the outer END twice.
+        abandoned--;
+      } else {
+        yield null;
+      }
+    } else if(component==="VCALENDAR") {
+      if(start!==-1) { yield null; start=-1; children.length=0; }
+      abandoned=0;
+    } else if(start!==-1) {
+      if(direction==="BEGIN") children.push(component);
+      else if(children.pop()!==component) malformed=true;
+    }
+  }
+  if(start!==-1) yield null;
+}
 function assignmentLike(uid:string, rawUrl:string|null): boolean { return ASSIGNMENT_UID.test(uid) || /#assignment_\d+/i.test(rawUrl ?? ""); }
 function stableFallback(fields:string[]): string { return `fallback-${crypto.createHash("sha256").update(fields.join("\u001f")).digest("hex")}`; }
 function directCanvasUrl(raw:string|null): {url:string|null; courseId:string|null} {
@@ -41,8 +71,14 @@ function parseOne(block:string): SourceAssignment | "ignored" {
 export function parseCanvasIcal(input:string): ParseReport {
   if(!input.trim()) throw new CanvasSourceError("EMPTY_FEED","The Canvas calendar feed is empty.");
   if(!/BEGIN:VCALENDAR/i.test(input)) throw new CanvasSourceError("INVALID_ICAL","Canvas returned an invalid calendar feed.");
-  const blocks=splitEvents(input); if(blocks.length===0) throw new CanvasSourceError("EMPTY_FEED","The Canvas calendar feed has no events.");
-  const assignments:SourceAssignment[]=[]; const errors:string[]=[]; let skipped=0;
-  for(const block of blocks) { try { const parsed=parseOne(block); if(parsed==="ignored") skipped++; else assignments.push(parsed); } catch { skipped++; errors.push("Skipped one malformed Canvas assignment event."); } }
+  const assignments:SourceAssignment[]=[]; const errors:string[]=[]; let skipped=0; let eventCount=0;
+  for(const block of splitCanvasEvents(input)) {
+    eventCount++;
+    try {
+      if(block===null) throw new Error("malformed VEVENT boundaries");
+      const parsed=parseOne(block); if(parsed==="ignored") skipped++; else assignments.push(parsed);
+    } catch { skipped++; errors.push("Skipped one malformed Canvas assignment event."); }
+  }
+  if(eventCount===0) throw new CanvasSourceError("EMPTY_FEED","The Canvas calendar feed has no events.");
   return {assignments,skipped,errors};
 }

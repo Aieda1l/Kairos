@@ -2,7 +2,7 @@ import "server-only";
 import {normalizeSourceAssignment} from "@/lib/assignments/normalize";
 import {BoundedBodyError,readBoundedUtf8} from "@/lib/http/bounded-body";
 import {CanvasSourceError} from "@/lib/sources/canvas-ical/errors";
-import {parseCanvasIcal} from "@/lib/sources/canvas-ical/parser";
+import {parseCanvasIcal,splitCanvasEvents} from "@/lib/sources/canvas-ical/parser";
 import {fetchCanvasFeedResponse} from "@/lib/sources/canvas-ical/transport";
 import {CanvasFeedUrlError,validateCanvasFeedUrl} from "@/lib/sources/canvas-ical/validate-url";
 import {GUEST_MAX_UPSTREAM_BYTES,GUEST_CANVAS_MAX_EVENT_BLOCKS,GUEST_CANVAS_MAX_ASSIGNMENTS,GUEST_CANVAS_MAX_OUTPUT_BYTES,guestJsonBytes} from "../limits";
@@ -22,8 +22,8 @@ export async function readGuestCanvas(input:GuestCanvasFeedRequest,context:Guest
       if(!response.ok)throw new GuestSourceError("NETWORK_ERROR");
       const body=await readBoundedUtf8(response.body,{maxBytes:GUEST_MAX_UPSTREAM_BYTES,signal:scope.signal});
       scope.check();
-      let eventCount=0;const eventStart=/^BEGIN:VEVENT\r?$/gm;
-      while(eventStart.exec(body)!==null){
+      let eventCount=0;const events=splitCanvasEvents(body);
+      while(!events.next().done){
         if(++eventCount>GUEST_CANVAS_MAX_EVENT_BLOCKS)throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
       }
       scope.check();

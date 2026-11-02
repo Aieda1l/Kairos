@@ -42,6 +42,26 @@ describe("bounded guest Canvas reader",()=>{
     expect(result.assignments).toHaveLength(1);
     expect(result.report).toEqual({skippedCount:1,malformedCount:1,partial:true});
   });
+  it.each(["\n","\r\n"])("reports an unterminated assignment after a valid sibling with %j lines",async newline=>{
+    const feed=canvasFeed([canvasEvent(1),canvasEvent(2).replace("\nEND:VEVENT","")]).replaceAll("\n",newline);
+    const result=await readGuestCanvas(input,sourceContext(async()=>textResponse(feed)));
+    expect(result.assignments.map(row=>row.externalId)).toEqual(["event-assignment-1"]);
+    expect(result.report).toEqual({skippedCount:1,malformedCount:1,partial:true});
+  });
+  it.each([false,true])("rejects an unterminated assignment without a valid assignment (ordinary sibling: %s)",async ordinary=>{
+    const events=ordinary?[canvasEvent(1,{ordinary:true})]:[];
+    events.push(canvasEvent(2).replace("\nEND:VEVENT",""));
+    await expect(readGuestCanvas(input,sourceContext(async()=>textResponse(canvasFeed(events))))).rejects.toMatchObject({code:"INVALID_ICAL"});
+  });
+  it.each(["\n","\r\n"])("recovers valid siblings before and after a missing event end with %j lines",async newline=>{
+    const feed=canvasFeed([canvasEvent(1),canvasEvent(2).replace("\nEND:VEVENT",""),canvasEvent(3)]).replaceAll("\n",newline);
+    const result=await readGuestCanvas(input,sourceContext(async()=>textResponse(feed)));
+    expect(result.assignments.map(row=>row.externalId)).toEqual(["event-assignment-1","event-assignment-3"]);
+    expect(result.report).toEqual({skippedCount:1,malformedCount:1,partial:true});
+  });
+  it("bounds orphan event endings as structural records",async()=>{
+    await expect(readGuestCanvas(input,sourceContext(async()=>textResponse(canvasFeed(Array(5001).fill("END:VEVENT")))))).rejects.toMatchObject({code:"SOURCE_RESULT_TOO_LARGE"});
+  });
   it.each([undefined,"1"])("enforces actual bytes with Content-Length %s",async length=>{
     await expect(readGuestCanvas(input,sourceContext(async()=>textResponse("x".repeat(2*1024*1024+1),length?{"content-length":length}:{})))).rejects.toMatchObject({code:"SOURCE_RESULT_TOO_LARGE"});
   });
