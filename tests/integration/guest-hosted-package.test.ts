@@ -339,4 +339,30 @@ describe('fresh original package', () => {
     })).rejects.toThrow('GUEST_SOURCE_DRIFT');
     await writeFile(sourcePath, sourceRaw);
   }, 30000);
+  it('rejects a recomputed inventory for a tampered wrapper derived from owned source', async () => {
+    const root = dirname(prepared.manifestPath),
+      manifestRaw = await readFile(prepared.manifestPath, 'utf8'),
+      target = join(root, 'prelude.mjs'),
+      original = await readFile(target),
+      changed = Buffer.concat([original, Buffer.from('\n// tampered-wrapper')]);
+    const manifest = JSON.parse(manifestRaw),
+      entry = manifest.files.find((entry: {
+        path: string;
+      }) => entry.path === 'prelude.mjs');
+    entry.sha256 = sha256(changed);
+    entry.bytes = changed.length;
+    delete manifest.packageDigest;
+    manifest.packageDigest = sha256(canonical(manifest));
+    try {
+      await writeFile(target, changed);
+      await writeFile(prepared.manifestPath, JSON.stringify(manifest));
+      await expect(verifyGuestHostedPackage({
+        ...prepared,
+        inventory: inventory()
+      })).rejects.toThrow('GUEST_GENERATED_FILE_DRIFT');
+    } finally {
+      await writeFile(target, original);
+      await writeFile(prepared.manifestPath, manifestRaw);
+    }
+  });
 });

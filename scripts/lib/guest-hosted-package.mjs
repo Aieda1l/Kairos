@@ -35,6 +35,8 @@ export const GUEST_LIMITS = Object.freeze({
 });
 export const CANDIDATE_SECRET_NAMES = Object.freeze(['GUEST_OPERATOR_SECRET', 'KAIROS_ABUSE_KEY_V1', 'KAIROS_TURNSTILE_SITE_KEY', 'KAIROS_TURNSTILE_SECRET_KEY', 'GUEST_FIXTURE_CHALLENGE_TOKEN', 'GUEST_FIXTURE_ED_SMOKE_TOKEN', 'GUEST_FIXTURE_ED_NEAR_TOKEN']);
 export const FIXTURE_SECRET_NAMES = Object.freeze(['KAIROS_TURNSTILE_SECRET_KEY', 'GUEST_FIXTURE_CHALLENGE_TOKEN', 'GUEST_FIXTURE_ED_SMOKE_TOKEN', 'GUEST_FIXTURE_ED_NEAR_TOKEN']);
+const runtimeFiles = [['candidate-entry.mjs', 'entry.mjs'], ['prelude.mjs', 'prelude.mjs'], ['fixture-worker.mjs', 'fixture/worker.mjs'], ['control-schema.sql', 'fixture/control-schema.sql'], ['manifest.schema.json', 'manifest.schema.json']];
+const implementationFiles = ['scripts/prepare-guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.mjs', 'scripts/lib/guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.d.mts', 'scripts/lib/guest-hosted-package.d.mts', 'scripts/guest-hosted/fixture-worker.d.mts'];
 const identityKeys = ['version', 'runId', 'scenario', 'hostname', 'candidateName', 'fixtureName', 'appDatabaseName', 'fixtureDatabaseName', 'accountId', 'appDatabaseId', 'fixtureDatabaseId'];
 const frozenKeys = ['routes', 'limits', 'candidateBindings', 'fixtureBindings', 'candidateSecretNames', 'fixtureSecretNames', 'operations'];
 export function guestFixtureProtocol(identity) {
@@ -267,11 +269,11 @@ export async function prepareGuestHostedPackage({
   const protocol = guestFixtureProtocol(identity),
     bodies = generateBodies(protocol),
     implementationInputs = [];
-  for (const path of ['scripts/prepare-guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.mjs', 'scripts/lib/guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.d.mts', 'scripts/lib/guest-hosted-package.d.mts', 'scripts/guest-hosted/fixture-worker.d.mts']) implementationInputs.push({
+  for (const path of implementationFiles) implementationInputs.push({
     path,
     sha256: sha256(await readFile(join(workspaceRoot, path)))
   });
-  for (const [source, destination] of [['candidate-entry.mjs', 'entry.mjs'], ['prelude.mjs', 'prelude.mjs'], ['fixture-worker.mjs', 'fixture/worker.mjs'], ['control-schema.sql', 'fixture/control-schema.sql'], ['manifest.schema.json', 'manifest.schema.json']]) {
+  for (const [source, destination] of runtimeFiles) {
     const bytes = await readFile(join(workspaceRoot, 'scripts/guest-hosted', source));
     implementationInputs.push({
       path: 'scripts/guest-hosted/' + source,
@@ -377,6 +379,37 @@ export async function verifyGuestHostedPackage({
   if (manifest.applicationRevision !== receipt.applicationRevision || manifest.sourceInputsSha256 !== sha256(canonical(receipt.sourceInputs)) || manifest.lockSha256 !== receipt.lockSha256 || canonical(manifest.graph) !== canonical(receipt.graph)) fail('GUEST_SOURCE_DRIFT');
   for (const component of ['candidate', 'fixture']) if (canonical(JSON.parse(await readFile(join(root, `wrangler.${component}.json`), 'utf8'))) !== canonical(configuration(identity, verified, component))) fail('GUEST_CONFIG_DRIFT');
   for (const item of [...receipt.graph.modules, ...receipt.graph.data]) if (sha256(await readFile(join(root, 'app/server', item.path))) !== item.sha256) fail('GUEST_MODULE_DRIFT');
+  const protocol = guestFixtureProtocol(identity),
+    bodies = generateBodies(protocol);
+  const expectedGenerated = {
+    'fixture/data.mjs': `export const scenario=${canonical(protocol)};\nconst raw=${canonical(bodies)};\nexport const bodies=Object.fromEntries(Object.entries(raw).map(([key,body])=>[key,new TextEncoder().encode(body)]));\n`,
+    'fixture/entry.mjs': "import {handleFixtureRequest} from './worker.mjs';\nimport {scenario,bodies} from './data.mjs';\nexport default {fetch(request,env){return handleFixtureRequest(request,env,scenario,bodies);}};\n",
+    'fixture/setup.sql': protocol.operations.map(op => `INSERT INTO fixture_operation(run_id,scenario,operation,call_cap) VALUES('${identity.runId}','${identity.scenario}','${op.key}',${op.cap});`).join('\n') + '\n'
+  };
+  for (const [source, destination] of runtimeFiles) {
+    const raw = await readFile(join(workspaceRoot, 'scripts/guest-hosted', source), 'utf8');
+    expectedGenerated[destination] = raw.replace(/\/\* GUEST_HOSTED_PROTOCOL \*\/\s*null/, canonical(protocol)).replace(/\/\* GUEST_HOSTED_INGRESS \*\/\s*null/, canonical({
+      hostname: identity.hostname,
+      routes: identity.routes
+    }));
+  }
+  for (const [path, expected] of Object.entries(expectedGenerated)) if (sha256(await readFile(join(root, path))) !== sha256(expected)) fail('GUEST_GENERATED_FILE_DRIFT');
+  const migrations = receipt.sourceInputs.filter(item => /^migrations\/\d+.*\.sql$/.test(item.path));
+  for (const item of migrations) if (sha256(await readFile(join(root, item.path))) !== item.sha256) fail('GUEST_SOURCE_DRIFT');
+  const expectedFiles = [...receipt.graph.modules, ...receipt.graph.data].map(item => 'app/server/' + item.path).concat(Object.keys(expectedGenerated), migrations.map(item => item.path), ['wrangler.candidate.json', 'wrangler.fixture.json', 'build-receipt.json']).sort();
+  if (canonical(expectedFiles) !== canonical(manifest.files.map(item => item.path).sort())) fail('GUEST_PACKAGE_FILES_DRIFT');
+  const expectedInputs = [];
+  for (const path of implementationFiles.concat(runtimeFiles.map(([source]) => 'scripts/guest-hosted/' + source))) expectedInputs.push({
+    path,
+    sha256: sha256(await readFile(join(workspaceRoot, path)))
+  });
+  if (canonical(manifest.implementationInputs) !== canonical(expectedInputs)) fail('GUEST_IMPLEMENTATION_DRIFT');
+  const expectedBodies = Object.entries(bodies).map(([key, body]) => ({
+    key,
+    bytes: new TextEncoder().encode(body).length,
+    sha256: sha256(body)
+  }));
+  if (canonical(expectedBodies) !== canonical(manifest.fixtureBodies) || manifest.unresolved !== ['accountId', 'appDatabaseId', 'fixtureDatabaseId'].some(key => identity[key] === null) || manifest.buildReceiptSha256 !== sha256(await readFile(join(root, 'build-receipt.json'))) || canonical(manifest.environmentKeys) !== canonical(receipt.environment.keys) || canonical(manifest.toolchain) !== canonical(receipt.toolchain)) fail('GUEST_MANIFEST_DRIFT');
   for (const input of manifest.implementationInputs) if (sha256(await readFile(join(workspaceRoot, input.path))) !== input.sha256) fail('GUEST_IMPLEMENTATION_DRIFT');
   return {
     manifestPath: resolve(manifestPath),
