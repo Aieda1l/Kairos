@@ -1,7 +1,7 @@
 # Guest capacity readiness
 
-Status: guest behavior is implemented behind the disabled guest flag; controller
-review and release gates remain separate. Hosted capacity and launch acceptance
+Status: guest behavior is merged and exact-main CI has passed behind the disabled
+guest flag. Hosted capacity and launch acceptance
 are **OPEN**. These local checks do not authorize guest
 activation, deployment, maintenance, new keys, billing changes or real provider
 traffic. Base and production `KAIROS_GUEST_ENABLED` defaults remain `false`.
@@ -31,9 +31,13 @@ those input hashes without claiming a new runtime build. Receipts contain counts
 timings and hashes, never credentials, cookies, capabilities, coursework bodies or
 raw provider errors.
 
-## PR 53 source change and measurement boundary
+## Current CI and PR 53 measurement boundary
 
-The ECC integration correction `be6b762` changes Canvas structural parsing and malformed-result accounting. Its focused 98-test suite and independent fix review passed; the final PR head requires fresh Linux CI, including the compiled/native check, before merge. The local receipts below remain tied to their measured source and do not transfer to this correction. No deployed CPU/memory/D1 billing, physical-retention or live-provider evidence was added; guest activation remains off. See the [acceptance ledger](guest-acceptance.md).
+PR 53 merged as `0a44c6a`. Its required PR CI and automatic [exact-main CI run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) passed, including 2,197 unit tests, all 143 browser cases, builds and 81 sealed native guest checks. The ECC integration correction `be6b762` changes Canvas structural parsing and malformed-result accounting; its focused 98-test suite and independent fix review passed, followed by the new integrated CI. The [acceptance ledger](guest-acceptance.md) records exact identities and the native receipt's dirty-source qualification. Older local receipts below remain tied to their measured source and do not transfer to the correction.
+
+The [disposable local retention probe](guest-retention-validation.md) now checks actual deletion and preservation with the real helper and migrations. It does not establish hosted cost, a sustainable cadence, maximum retention or recovery-history erasure. No deployed CPU/memory/D1 billing or live-provider acceptance evidence was added; guest activation remains off.
+
+The hosted workload harness is not yet prepared. Miniflare's outbound routing does not become platform-enforced blocking merely by adding a deployed service binding. Cloudflare's [Dynamic Workers egress control](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/) offers one stronger boundary, but [requires Workers Paid](https://developers.cloudflare.com/dynamic-workers/pricing/); that is not evidence that the guest application itself requires Paid. A Free-compatible candidate-only transport substitution would need an explicitly reviewed measurement design, honest derivative-bundle/ingress limits and concurrency-safe observation before build/upload. No billing or production configuration changed.
 
 ## Prior implementation-review receipt (before PR 53 ECC)
 
@@ -166,13 +170,13 @@ not a claim that the local fixtures meet Free capacity.
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Local native transport/admission/compiled routes | **PASS, local** | Fresh clean `2688f9b` receipt: 81/81 checks; 120 input hashes match; browser gate remains open; no hosted capacity inference |
+| Local native transport/admission/compiled routes | **PASS, local** | Main `0a44c6a` CI run 782: 81 checks plus full browser graph; older receipts below remain historical; no hosted capacity inference |
 | Implementation task, whole-branch and scoped fix reviews | **ACCEPTED** | All eight findings addressed; this does not approve public activation |
-| Exact integrated-source Linux CI | **OPEN** | Actual run URL/revision/conclusions; local Windows checks cannot replace them |
+| Exact integrated-source Linux CI | **PASS** | Exact-main run 782 linked above; 2,197 unit and 143 browser cases, full graph successful |
 | Hosted Worker CPU | **OPEN** | Deployed per-request CPU for near-cap success, parse failure, redirect, admission denial and bootstrap paths |
 | Shared-isolate memory | **OPEN** | Hosted peak memory and failures under bounded concurrent near-cap traffic |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |
-| Cleanup capacity | **OPEN** | Cleanup cadence, deletion/index write cost, backlog and recovery evidence without exceeding capacity |
+| Cleanup capacity | **OPEN** | Local bounded drain/preservation probe passes; hosted cadence, deletion/index cost, sustained backlog/recovery still need evidence |
 | Physical retention | **OPEN** | Verified physical deletion mechanism/cadence and retention bounds; `purge_after_ms` alone does not prove deletion |
 | Operator live acceptance | **OPEN** | Separately authorized Canvas, Gradescope and Ed acceptance, ingress configuration and operational review |
 
