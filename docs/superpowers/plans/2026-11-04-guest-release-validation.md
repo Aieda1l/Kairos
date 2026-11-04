@@ -4,6 +4,8 @@
 
 **Goal:** Prepare and execute reproducible local-native anonymous-retention validation while retaining the remaining hosted release gates.
 
+**Status:** Local validation and independent task/whole-branch review accepted. The measured native source is `e69a9fa`; later changes are documentation only. This does not close hosted capacity, sustained retention, live-provider or activation gates.
+
 **Architecture:** Exercise the existing `maintainAbuseState` helper through an injected adapter against fresh disposable local D1 containing every real migration. Use synthetic fixtures and full-table preservation snapshots; save only counts, timings and source/schema hashes. This implements the already specified cleanup-preparation portion of the operator sequence, independently of the not-yet-prepared hosted capacity harness.
 
 **Tech Stack:** Existing Node 22, Miniflare/workerd, D1, Vitest; no new dependencies.
@@ -42,11 +44,11 @@
 
 **Produces:** `node scripts/verify-workerd-guest-retention.mjs` / `npm run verify:guest-retention`, which needs no Cloudflare credentials, uses no remote binding, and writes a count/hash-only UTF-8 receipt under ignored `artifacts/guest-retention/<UTC>-native/receipt.json`. It exits nonzero with a fixed diagnostic on failure and cannot emit success after an assertion failure.
 
-- [ ] **Step 1:** Add meaningful failing tests for the new probe's safety/receipt/preservation contracts. Include controlled wrong deletion/preservation or exceeded-bound evidence and reject it, rather than asserting function spelling. Record expected RED before implementation.
-- [ ] **Step 2:** Implement isolated native D1 setup with all real migrations and no outbound internet. Seed more than 100 expired null-user rate rows plus unexpired anonymous, account-associated and protected/control sentinels. Protected fixtures must survive unless explicitly documented as eligible cleanup fixtures; do not imply the helper preserves all expired account rows by policy.
-- [ ] **Step 3:** Run the real helper dry-run and prove unchanged full snapshots. Apply once and prove at most 100 eligible rate deletions, exact expected table differences and all preservation checks. Repeat with a finite maximum until the finite synthetic backlog drains, verify actual absence, then prove an idempotent final apply. Record per-invocation and other-table counts separately. Use database time for eligibility; do not race the cutoff boundary.
-- [ ] **Step 4:** Verify focused GREEN plus lint/types appropriate to added files; run the actual standalone native probe once and retain receipt/log/exit evidence and hashes. A source change requires affected rechecking, not a repeated broad suite for cosmetic evidence.
-- [ ] **Step 5:** Document actual results and explicit limits. Self-review and commit only owned files. Independent task review must accept spec and quality; root reconciles automatic main CI and remaining hosted gates before completion.
+- [x] **Step 1:** Add meaningful failing tests for the new probe's safety/receipt/preservation contracts. Include controlled wrong deletion/preservation or exceeded-bound evidence and reject it, rather than asserting function spelling. Record expected RED before implementation.
+- [x] **Step 2:** Implement isolated native D1 setup with all real migrations and no outbound internet. Seed more than 100 expired null-user rate rows plus unexpired anonymous, account-associated and protected/control sentinels. Protected fixtures must survive unless explicitly documented as eligible cleanup fixtures; do not imply the helper preserves all expired account rows by policy.
+- [x] **Step 3:** Run the real helper dry-run and prove unchanged full snapshots. Apply once and prove at most 100 eligible rate deletions, exact expected table differences and all preservation checks. Repeat with a finite maximum until the finite synthetic backlog drains, verify actual absence, then prove an idempotent final apply. Record per-invocation and other-table counts separately. Use database time for eligibility; do not race the cutoff boundary.
+- [x] **Step 4:** Verify focused GREEN plus lint/types appropriate to added files; run the actual standalone native probe once and retain receipt/log/exit evidence and hashes. A source change requires affected rechecking, not a repeated broad suite for cosmetic evidence.
+- [x] **Step 5:** Document actual results and explicit limits. Self-review and commit only owned files. Independent task review must accept spec and quality; root reconciles automatic main CI and remaining hosted gates before completion.
 
 ## Controller ruling and external boundary
 
