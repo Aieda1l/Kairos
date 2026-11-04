@@ -4,7 +4,7 @@
 
 **Goal:** Prepare and execute reproducible local-native anonymous-retention validation while retaining the remaining hosted release gates.
 
-**Status:** Local validation and independent task/whole-branch review accepted. The measured native source is `e69a9fa`; later changes are documentation only. This does not close hosted capacity, sustained retention, live-provider or activation gates.
+**Status:** Local validation and independent task/whole-branch review accepted. The measured native source is `e69a9fa`; its recorded retention-probe/helper/configuration/migration/package inputs remain unchanged. Subsequent fixture-startup test and documentation changes have separate evidence. This does not close hosted capacity, sustained retention, live-provider or activation gates.
 
 **Architecture:** Exercise the existing `maintainAbuseState` helper through an injected adapter against fresh disposable local D1 containing every real migration. Use synthetic fixtures and full-table preservation snapshots; save only counts, timings and source/schema hashes. This implements the already specified cleanup-preparation portion of the operator sequence, independently of the not-yet-prepared hosted capacity harness.
 

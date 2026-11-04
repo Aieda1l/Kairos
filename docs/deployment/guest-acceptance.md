@@ -22,6 +22,12 @@ The [local retention validation](guest-retention-validation.md) exercises actual
 
 The dated implementation sections below preserve their original failures and open-gate state. They are historical evidence, not the current CI verdict.
 
+## PR 54 fixture-startup follow-up
+
+The local retention increment's initial [CI run 783](https://github.com/Aieda1l/Kairos/actions/runs/41801192844) passed 2,206 unit tests, lint and types, then failed two Firefox assignments-dialog cases (141 browser cases passed). Both first clicks overlapped an automatic Canvas busy-to-partial-report layout expansion above the table. The traces show the movement but do not record native down/up targets or selection state; the precise lost-click mechanism remains unproven. The peer reset/import stage was never reached in those failures.
+
+Test-only `593eac7` makes assignments cases observe the current fixture's completed partial 9/10 Canvas status report and enabled Sync sources control before the same real row click. All existing dialog-open/close, peer reset/import/source, context, privacy and timing assertions remain. All six affected cases passed once across Chromium/Firefox with success traces, followed by focused lint/types. This is local test-setup evidence; the new final head still requires the normal full protected CI before merge. It does not repair or establish production clicks during a changing report. Include that interaction in operator live acceptance. Application code and the recorded retention-probe inputs remain unchanged.
+
 ## PR 53 ECC integration correction
 
 The user authorized publishing, an ECC review and merge in [PR 53](https://github.com/Aieda1l/Kairos/pull/53). The additional ECC pass found one medium issue: unterminated Canvas assignment events could be omitted while a guest read reported complete or legitimate empty success. Commit `be6b76232db49a44972131c2be016236942f2c43` adds shared bounded structural scanning, truthful malformed/partial accounting and recovery of valid siblings. A feed with no valid assignment after structural errors is rejected. Existing DTOs, limits, fixed diagnostics and valid hosted-feed behavior remain covered.
