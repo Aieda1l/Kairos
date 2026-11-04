@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 import {expect,it} from 'vitest';
-const yaml=createRequire(import.meta.url)('js-yaml') as {load:(text:string)=>{jobs:Record<string,{if?:string;needs?:string;environment?:string;permissions?:Record<string,string>;steps:Array<{run?:string;uses?:string;with?:Record<string,unknown>}>}>}};
+const yaml=createRequire(import.meta.url)('js-yaml') as {load:(text:string)=>{jobs:Record<string,{if?:string;needs?:string;environment?:string;permissions?:Record<string,string>;steps:Array<{run?:string;uses?:string;env?:Record<string,string>;with?:Record<string,unknown>}>}>}};
 it('rejects production mutation before exact-main CI, artifact build and staged health',()=>{
  const text=fs.readFileSync('.github/workflows/deploy-production.yml','utf8');
  const workflow=yaml.load(text),preflight=workflow.jobs.preflight,deploy=workflow.jobs.deploy;
@@ -27,4 +28,34 @@ it('keeps status-write authority out of repository/PR execution',()=>{
  expect(split).toBeGreaterThan(-1);expect(text.slice(0,split)).not.toContain('statuses: write');
  expect(text.slice(split)).toContain('statuses: write');expect(text.slice(split)).not.toContain('actions/checkout');
  expect(text.slice(0,split)).toContain('persist-credentials: false');expect(text).toContain('- main');
+});
+
+const mergeSha='a'.repeat(40),prHeadSha='b'.repeat(40);
+it.each([
+ ['pull_request','success',prHeadSha,'success'],
+ ['pull_request','failure',prHeadSha,'failure'],
+ ['pull_request','cancelled',prHeadSha,'failure'],
+ ['pull_request','skipped',prHeadSha,'failure'],
+ ['push','success',mergeSha,'success'],
+ ['workflow_dispatch','success',mergeSha,'success'],
+])('publishes %s verification result %s on its corresponding source commit',async(eventName,result,expectedSha,state)=>{
+ const workflow=yaml.load(fs.readFileSync('.github/workflows/milestone-2-ci.yml','utf8'));
+ const publish=workflow.jobs['publish-status'];
+ expect(publish.needs).toBe('verify');expect(publish.if).toBe('always()');
+ const step=publish.steps.find(step=>step.uses==='actions/github-script@v7');
+ expect(step?.env?.VERIFY_RESULT).toBe('${{ needs.verify.result }}');
+ expect(typeof step?.with?.script).toBe('string');
+ const statuses:Array<Record<string,unknown>>=[];
+ // Execute the shipped script; replace only the GitHub API boundary and event inputs.
+ await runInNewContext(`(async()=>{${step!.with!.script}})()`,{
+  github:{rest:{repos:{createCommitStatus:async(status:Record<string,unknown>)=>{statuses.push(status);}}}},
+  context:{eventName,repo:{owner:'owner',repo:'Kairos'},sha:mergeSha,runId:42,
+   payload:{pull_request:{head:{sha:prHeadSha}}}},
+  process:{env:{VERIFY_RESULT:result}},
+ });
+ expect(statuses).toEqual([{
+  owner:'owner',repo:'Kairos',sha:expectedSha,state,
+  context:'kairos-feature-ci',description:`Kairos verification: ${result}`,
+  target_url:'https://github.com/owner/Kairos/actions/runs/42',
+ }]);
 });
