@@ -42,6 +42,11 @@ for(const view of ["assignments","calendar"] as const)for(const replacement of [
   },{timeout:phaseTimeout});
   const {other,otherCapture}=await test.step("Open the detail and prepare the sealed peer tab",async()=>{
   await page.goto(`/guest/${view}`);
+  if(view==="assignments"){
+    await expect(page.getByText("Canvas status partially updated",{exact:true})).toBeVisible();
+    await expect(page.getByText(/9 of 10 statuses updated/)).toBeVisible();
+    await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();
+  }
   await page.getByRole("button",{name:/View .*details|View .* due/}).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   const other=await context.newPage();const otherCapture=await sealGuestJourney(other);await installLifecycleSources(other);
