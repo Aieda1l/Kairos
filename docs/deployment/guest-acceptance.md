@@ -1,7 +1,7 @@
 # Hybrid guest implementation and activation evidence
 
 Guest implementation and its independent reviews are accepted behind the
-default-off flag. Exact-source CI and public activation remain separate gates.
+default-off flag. Exact-source main CI has passed; public activation is separate.
 **Guest activation and overall public beta acceptance remain
 incomplete.** No deployment, remote migration, billing change, new key, cleanup
 activation or real provider check was performed for this record.
@@ -12,11 +12,21 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
+## Current release status — November 4, 2026
+
+[PR 53](https://github.com/Aieda1l/Kairos/pull/53) merged as `0a44c6adb87fe69a2e15b64d736648222cdd73da`. Required PR CI [run 781](https://github.com/Aieda1l/Kairos/actions/runs/41775786896) passed on head `ebfae4a`, testing combined revision `0b8add1`; the actual merge has the same tree. Automatic exact-main CI [run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) then passed: 2,197 unit tests in 196 files, all 143 Chromium/Firefox browser cases, types/lint/database checks, Next/Vinext builds, 81 sealed native guest checks and the remaining compiled/provider/iCloud/safety graph. The required status on main is successful. ECC's Canvas finding and the focused navigation/date and status-publisher corrections have accepted reviews with no remaining actionable finding.
+
+The main native probe records source `0a44c6a`, `dirty:true`, input `dist/server/index.js` and rebundled SHA-256 `8f2bc5f58d664556e49d7601d188e55f6eb4a274b515e8007bf4ecd40f924f1c`; this is not a clean-working-tree claim. The actual decoded main verification log is retained locally at `artifacts/guest-release-validation/main-ci-41777091070.log`, SHA-256 `78912f18b573ba21fbc8777aba3b0f584c29629a3c147610fe78a26df0e105e4`. The later main run closes the CI gate without transferring older local receipts to changed source.
+
+The [local retention validation](guest-retention-validation.md) exercises actual cleanup against disposable native D1 and records bounded deletion, backlog drain and preservation. It is preparation evidence, not hosted billing, a sustainable retention cadence or recovery-history erasure. Public read-only baseline checks returned health HTTP 200 with `status:ok` and `/guest` HTTP 404. These checks neither deployed nor enabled the merged guest implementation. Hosted capacity, physical retention, live-provider acceptance and concrete deployment/activation review remain open; both guest defaults stay false.
+
+The dated implementation sections below preserve their original failures and open-gate state. They are historical evidence, not the current CI verdict.
+
 ## PR 53 ECC integration correction
 
 The user authorized publishing, an ECC review and merge in [PR 53](https://github.com/Aieda1l/Kairos/pull/53). The additional ECC pass found one medium issue: unterminated Canvas assignment events could be omitted while a guest read reported complete or legitimate empty success. Commit `be6b76232db49a44972131c2be016236942f2c43` adds shared bounded structural scanning, truthful malformed/partial accounting and recovery of valid siblings. A feed with no valid assignment after structural errors is rejected. Existing DTOs, limits, fixed diagnostics and valid hosted-feed behavior remain covered.
 
-The focused correction had 13 expected RED failures, then 98/98 passing reader/parser/hosted/API regressions, passing types and strict focused lint. Independent ECC fix verification accepted the finding with no new actionable issue, including both original cases and malformed-before-valid recovery. It did not establish hosted resource capacity. The final PR head must pass protected exact-source Linux CI before merge. This is integration approval, not deployment or activation approval; both guest defaults remain false.
+The focused correction had 13 expected RED failures, then 98/98 passing reader/parser/hosted/API regressions, passing types and strict focused lint. Independent ECC fix verification accepted the finding with no new actionable issue, including both original cases and malformed-before-valid recovery. It did not establish hosted resource capacity. The protected PR/main CI condition was subsequently met by runs 781/782 above. This is integration approval, not deployment or activation approval; both guest defaults remain false.
 
 The source changed after the local receipts below. Their recorded input hashes and 81-check result apply to their measured commits and **must not be transferred to this parser correction**. Fresh compiled/native verification is part of the final PR CI graph. The earlier pre-correction PR CI passed its complete Linux graph, including all 143 browser cases; it does not approve the later correction or replace its new exact-head run. Full ECC reports and focused logs are retained in the local SDD/artifact workspace.
 
@@ -139,12 +149,11 @@ checks. The guest check is after the Workers build. Existing
 configuration, disallows guest ownership imports and requires this check/order.
 No new A3 runtime entrypoint needs an additional guard.
 
-This branch has no matching push trigger; a PR targeting `main` or authorized
-manual dispatch is needed. No external CI was triggered or inspected for a final
-guest revision during this task. The old deployed 1,776/65 result in README is a
-different release. **Exact integrated-source Linux CI is OPEN.** Record the run
-URL, tested head/merge SHA, complete job conclusions, totals and retained native
-receipt before claiming release CI. Reconcile the final merge/main SHA as well.
+During A3 preparation the feature branch had no matching push trigger and final
+external CI remained open. PR 53 and the automatic main run have since closed
+that gate; their exact revisions, conclusions, totals and retained native output
+are recorded above. The old deployed 1,776/65 result in README remains a different
+release. Passing CI does not establish deployed capacity or guest activation.
 
 Controller A3 task review, whole-branch review and the scoped fix re-review are
 accepted for implementation behind the disabled flag. The reviews triaged the
@@ -157,7 +166,7 @@ A1 fixed delayed verification revival, one-time disconnect focus and post-reset
 hydration. Preserve those dispositions and their failure traces; do not silently
 drop them or infer a release approval from implementation review.
 
-## Operator-controlled release sequence — not executed
+## Operator-controlled release sequence — activation not executed
 
 1. Freeze the reviewed revision and retain the observation dispositions. Obtain
    exact-source Linux CI and retain receipt hashes.
@@ -214,7 +223,7 @@ drop them or infer a release approval from implementation review.
 | Remaining gate | Status |
 | --- | --- |
 | Controller task, whole-branch and scoped fix reviews | **ACCEPTED behind disabled flag** |
-| Exact integrated-source Linux CI | **OPEN** |
+| Exact integrated-source Linux CI | **PASS** — exact-main run 782 above |
 | Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **OPEN** |
 | Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
 | Real Canvas, Gradescope, Ed operator acceptance and ingress review | **OPEN** |
