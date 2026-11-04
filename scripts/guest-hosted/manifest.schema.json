@@ -1,0 +1,483 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kairos:guest-hosted-test-package:1",
+  "title": "Guest hosted diagnostic prepared package v1",
+  "description": "Offline templates only. Runtime verifier additionally enforces exact resource identities, routes, operations, secrets, file hashes, source/config/module provenance and no cloud authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "state",
+    "deployable",
+    "cloudActionAuthorized",
+    "inventory",
+    "applicationRevision",
+    "buildReceiptSha256",
+    "sourceInputsSha256",
+    "lockSha256",
+    "toolchain",
+    "environmentKeys",
+    "implementationInputs",
+    "graph",
+    "files",
+    "uploadFiles",
+    "fixtureBodies",
+    "unresolved",
+    "assetPolicy",
+    "limitations",
+    "packageDigest"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "guest-hosted-test-package"
+    },
+    "state": {
+      "const": "prepared-only"
+    },
+    "deployable": {
+      "const": false
+    },
+    "cloudActionAuthorized": {
+      "const": false
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "runId",
+        "scenario",
+        "hostname",
+        "candidateName",
+        "fixtureName",
+        "appDatabaseName",
+        "fixtureDatabaseName",
+        "accountId",
+        "appDatabaseId",
+        "fixtureDatabaseId",
+        "routes",
+        "limits",
+        "candidateBindings",
+        "fixtureBindings",
+        "candidateSecretNames",
+        "fixtureSecretNames",
+        "operations"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^h[0-9a-z][0-9a-z-]{5,38}$"
+        },
+        "scenario": {
+          "const": "bounded-v1"
+        },
+        "hostname": {
+          "const": "guest-diagnostic.mykairos.me"
+        },
+        "candidateName": {
+          "type": "string"
+        },
+        "fixtureName": {
+          "type": "string"
+        },
+        "appDatabaseName": {
+          "type": "string"
+        },
+        "fixtureDatabaseName": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appDatabaseId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fixtureDatabaseId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "routes": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "method",
+              "path"
+            ],
+            "properties": {
+              "method": {
+                "enum": [
+                  "GET",
+                  "POST"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "appRequests",
+            "concurrent",
+            "requestTimeoutMs",
+            "dispatchDeadlineMs",
+            "fixtureAdmissions",
+            "retries",
+            "redirects"
+          ],
+          "properties": {
+            "appRequests": {
+              "const": 64
+            },
+            "concurrent": {
+              "const": 6
+            },
+            "requestTimeoutMs": {
+              "const": 20000
+            },
+            "dispatchDeadlineMs": {
+              "const": 300000
+            },
+            "fixtureAdmissions": {
+              "const": 128
+            },
+            "retries": {
+              "const": 0
+            },
+            "redirects": {
+              "const": 0
+            }
+          }
+        },
+        "candidateBindings": {
+          "const": [
+            "DB",
+            "GUEST_FIXTURE",
+            "ASSETS"
+          ]
+        },
+        "fixtureBindings": {
+          "const": [
+            "FIXTURE_DB"
+          ]
+        },
+        "candidateSecretNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixtureSecretNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "method",
+              "url",
+              "cap",
+              "body",
+              "contentType"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "method": {
+                "enum": [
+                  "GET",
+                  "POST"
+                ]
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 128
+              },
+              "body": {
+                "type": "string"
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "credentialBinding": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "applicationRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "buildReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sourceInputsSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "lockSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "toolchain": {
+      "type": "object"
+    },
+    "environmentKeys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "implementationInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modules",
+        "data",
+        "edges",
+        "computedExceptions",
+        "dynamicCodeCapabilities",
+        "externalCapabilities",
+        "limitations"
+      ],
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "bytes",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "data": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "bytes",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "kind"
+            ],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "module",
+                  "external"
+                ]
+              }
+            }
+          }
+        },
+        "computedExceptions": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "object"
+          }
+        },
+        "dynamicCodeCapabilities": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "externalCapabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "uploadFiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fixtureBodies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "boolean"
+    },
+    "assetPolicy": {
+      "type": "string"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "packageDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}
