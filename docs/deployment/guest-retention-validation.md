@@ -2,7 +2,7 @@
 
 Run `npm run verify:guest-retention` (equivalently,
 `node scripts/verify-workerd-guest-retention.mjs`) from the repository root with
-the installed Node22 dependencies. The command needs no Cloudflare credentials,
+the installed Node 22 dependencies. The command needs no Cloudflare credentials,
 private environment file, built application or deployed database. It imports the
 actual `maintainAbuseState` helper and injects a disposable local Miniflare/workerd
 D1 adapter after applying every real migration. It never invokes the remote
@@ -10,7 +10,7 @@ maintenance CLI. Cloudflare metadata fetching and telemetry are disabled; worker
 outbound traffic goes to a rejecting local sink. Miniflare disposes its owned
 ephemeral database on success and failure. Existing artifacts are retained.
 
-The probe seeds205 expired null-user rate events, one explicitly eligible expired
+The probe seeds 205 expired null-user rate events, one explicitly eligible expired
 account rate event, three recent anonymous and two recent account events. Other
 synthetic fixtures cover an expired idle-owner run (and its cascading step),
 OAuth request and consumed matching-owner bridge request. Recent metadata,
@@ -27,9 +27,9 @@ counts. Actual SQL absence checks verify the expired backlog drained. Internal
 `sqlite_*` and D1-reserved `_cf_METADATA` tables are excluded.
 
 The rate backlog drains with a maximum of four cleanup invocations and a final
-idempotent apply. Every helper result must report an integer between0 and100
-**per cleanup table**. This is not a total bound of100: the first actual apply
-deleted100 rate events plus one parent in each of the three other cleanup tables,
+idempotent apply. Every helper result must report an integer between 0 and 100
+**per cleanup table**. This is not a total bound of 100: the first actual apply
+deleted 100 rate events plus one parent in each of the three other cleanup tables,
 and the run deletion cascaded to one step. Expired account rate events are eligible
 under the existing helper policy; preservation claims concern the explicitly
 ineligible sentinels, not all expired account metadata.
@@ -45,23 +45,23 @@ receipt. A successful receipt is published only after disposal.
 
 ## Recorded run
 
-One actual standalone native run completed on2026-11-04 at05:20:22–05:20:25UTC,
+One actual standalone native run completed on 2026-11-04 at 05:20:22–05:20:25 UTC,
 using clean source `e69a9fa426f9a0024064731a8da2ce194fd1381f` (`dirty:false`),
-Node22.23.2, Windows x64, seven real migrations and22 application tables.
-The command exited0. Documentation added after this run does not change its
+Node 22.23.2, Windows x64, seven real migrations and 22 application tables.
+The command exited 0. Documentation added after this run does not change its
 measured source inputs.
 
 | Invocation | Rate events | Runs | OAuth requests | Bridge requests |
 | --- | ---: | ---: | ---: | ---: |
 | Dry-run, snapshots unchanged | 100 | 1 | 1 | 1 |
-| Apply1 | 100 | 1 | 1 | 1 |
-| Apply2 | 100 | 0 | 0 | 0 |
-| Apply3 | 6 | 0 | 0 | 0 |
+| Apply 1 | 100 | 1 | 1 | 1 |
+| Apply 2 | 100 | 0 | 0 | 0 |
+| Apply 3 | 6 | 0 | 0 | 0 |
 | Final idempotent apply | 0 | 0 | 0 | 0 |
 
-All205 expired anonymous events and the explicitly eligible expired account event
+All 205 expired anonymous events and the explicitly eligible expired account event
 were absent afterward. Five live rate rows remained. Protected contents matched
-exactly after every invocation. Outbound sink attempts were0.
+exactly after every invocation. Outbound sink attempts were 0.
 
 | Retained evidence | Identity |
 | --- | --- |
@@ -72,14 +72,14 @@ exactly after every invocation. Outbound sink attempts were0.
 | Actual helper SHA-256 | `bc0757c9c02a00a0ed2c3901e0040e2713061617afc5fd282e0b72d07617e2c1` |
 | Native command log | `.superpowers/sdd/2026-11-04-guest-release-validation/task-1-native-20261103T212021524.log` |
 | Native log SHA-256 | `bc8113bb1f7fd98ff8c78f3a607950097637af761172fd6154cac206ddd19aa6` |
-| Command exit receipt | Same log path plus `.exit.json` (exit0, command/ref/log hash) |
+| Command exit receipt | Same log path plus `.exit.json` (exit 0, command/ref/log hash) |
 
 These local artifacts are ignored rather than committed; retain them with the
 worktree or archive them before retiring it. The implementation report in that
 SDD directory indexes focused RED/GREEN, lint and TypeScript logs. Nine focused
 behavioral contracts passed, including controlled wrong deletion, preservation
 mutation, fabricated counts, exceeded bounds, no progress, outbound attempts and
-sanitized errors/disposal. Owned-file ESLint and `tsc --noEmit` exited0.
+sanitized errors/disposal. Owned-file ESLint and `tsc --noEmit` exited 0.
 
 ## Release limits
 
