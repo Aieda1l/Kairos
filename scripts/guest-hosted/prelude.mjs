@@ -1,3 +1,4 @@
+import { readChallengeBody } from './request-body.mjs';
 import { env } from 'cloudflare:workers';
 // Replaced only by the offline packager with the frozen version-1 operation inventory.
 const protocol = /* GUEST_HOSTED_PROTOCOL */null;
@@ -12,7 +13,12 @@ export async function fixtureFetch(input, init) {
     return deny();
   }
   if (!protocol || request.redirect !== 'manual') return deny();
-  request.signal.throwIfAborted();
+  if (request.signal.aborted) {
+    try {
+      void request.body?.cancel().catch(() => {});
+    } catch {}
+    return deny();
+  }
   const url = new URL(request.url);
   if (url.username || url.password || url.hash) return deny();
   let selected;
@@ -24,24 +30,11 @@ export async function fixtureFetch(input, init) {
     } else if (request.headers.has('authorization')) continue;
     if (operation.key === 'challenge') {
       if (typeof env.KAIROS_TURNSTILE_SECRET_KEY !== 'string' || !env.KAIROS_TURNSTILE_SECRET_KEY || typeof env.GUEST_FIXTURE_CHALLENGE_TOKEN !== 'string' || !env.GUEST_FIXTURE_CHALLENGE_TOKEN) return deny();
-      const reader = request.clone().body?.getReader();
-      if (!reader) return deny();
-      let text = '',
-        bytes = 0;
-      const decoder = new TextDecoder();
+      let text;
       try {
-        while (true) {
-          const next = await reader.read();
-          if (next.done) break;
-          bytes += next.value.byteLength;
-          if (bytes > 16384) return deny();
-          text += decoder.decode(next.value, {
-            stream: true
-          });
-        }
-        text += decoder.decode();
-      } finally {
-        void reader.cancel().catch(() => {});
+        text = await readChallengeBody(request);
+      } catch {
+        return deny();
       }
       const form = new URLSearchParams(text);
       if (form.get('secret') !== env.KAIROS_TURNSTILE_SECRET_KEY || form.get('response') !== env.GUEST_FIXTURE_CHALLENGE_TOKEN || [...form.keys()].some(key => !['secret', 'response'].includes(key))) return deny();
@@ -51,7 +44,12 @@ export async function fixtureFetch(input, init) {
   }
   if (!selected || !env.GUEST_FIXTURE || typeof env.GUEST_FIXTURE.fetch !== 'function') return deny();
   // No native reference is saved, exported, retried or restored. The Request owns its body/signal.
-  request.signal.throwIfAborted();
+  if (request.signal.aborted) {
+    try {
+      void request.body?.cancel().catch(() => {});
+    } catch {}
+    return deny();
+  }
   return env.GUEST_FIXTURE.fetch(request);
 }
 globalThis.fetch = fixtureFetch;

@@ -1,3 +1,4 @@
+import { readChallengeBody } from './request-body.mjs';
 // Private data plane only: no fetch/connect, configuration, reset or observer endpoint.
 const denied = () => new Response('GUEST_FIXTURE_DENIED', {
   status: 502
@@ -6,7 +7,12 @@ const unavailable = () => new Response('GUEST_FIXTURE_UNAVAILABLE', {
   status: 503
 });
 export async function matchFixtureOperation(request, env, scenario) {
-  request.signal.throwIfAborted();
+  if (request.signal.aborted) {
+    try {
+      void request.body?.cancel().catch(() => {});
+    } catch {}
+    throw new Error('GUEST_REQUEST_BODY_DENIED');
+  }
   if (!scenario || scenario.version !== 1 || request.redirect !== 'manual') return null;
   const url = new URL(request.url);
   if (url.username || url.password || url.hash) return null;
@@ -20,24 +26,12 @@ export async function matchFixtureOperation(request, env, scenario) {
       if (typeof env.KAIROS_TURNSTILE_SECRET_KEY !== 'string' || typeof env.GUEST_FIXTURE_CHALLENGE_TOKEN !== 'string') return null;
       const length = Number(request.headers.get('content-length') ?? 0);
       if (length > 16384) return null;
-      const reader = request.clone().body?.getReader();
-      if (!reader) return null;
-      let text = '',
-        bytes = 0;
-      const decoder = new TextDecoder();
+      let text;
       try {
-        while (true) {
-          const next = await reader.read();
-          if (next.done) break;
-          bytes += next.value.byteLength;
-          if (bytes > 16384) return null;
-          text += decoder.decode(next.value, {
-            stream: true
-          });
-        }
-        text += decoder.decode();
-      } finally {
-        void reader.cancel().catch(() => {});
+        text = await readChallengeBody(request);
+      } catch {
+        if (request.signal.aborted) throw new Error('GUEST_REQUEST_BODY_DENIED');
+        return null;
       }
       const form = new URLSearchParams(text);
       if (form.get('secret') !== env.KAIROS_TURNSTILE_SECRET_KEY || form.get('response') !== env.GUEST_FIXTURE_CHALLENGE_TOKEN || [...form.keys()].some(key => !['secret', 'response'].includes(key))) return null;
@@ -49,6 +43,7 @@ export async function matchFixtureOperation(request, env, scenario) {
 export async function handleFixtureRequest(request, env, scenario, bodies) {
   try {
     const operation = await matchFixtureOperation(request, env, scenario);
+    if (request.signal.aborted) throw new Error('GUEST_REQUEST_BODY_DENIED');
     if (!operation) return denied();
     if (!env.FIXTURE_DB || typeof env.FIXTURE_DB.prepare !== 'function') return unavailable();
     // One statement is the admission linearization point. No read/modify/write or isolate counters.

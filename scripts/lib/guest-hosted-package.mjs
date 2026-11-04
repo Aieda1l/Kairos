@@ -35,7 +35,7 @@ export const GUEST_LIMITS = Object.freeze({
 });
 export const CANDIDATE_SECRET_NAMES = Object.freeze(['GUEST_OPERATOR_SECRET', 'KAIROS_ABUSE_KEY_V1', 'KAIROS_TURNSTILE_SITE_KEY', 'KAIROS_TURNSTILE_SECRET_KEY', 'GUEST_FIXTURE_CHALLENGE_TOKEN', 'GUEST_FIXTURE_ED_SMOKE_TOKEN', 'GUEST_FIXTURE_ED_NEAR_TOKEN']);
 export const FIXTURE_SECRET_NAMES = Object.freeze(['KAIROS_TURNSTILE_SECRET_KEY', 'GUEST_FIXTURE_CHALLENGE_TOKEN', 'GUEST_FIXTURE_ED_SMOKE_TOKEN', 'GUEST_FIXTURE_ED_NEAR_TOKEN']);
-const runtimeFiles = [['candidate-entry.mjs', 'entry.mjs'], ['prelude.mjs', 'prelude.mjs'], ['fixture-worker.mjs', 'fixture/worker.mjs'], ['control-schema.sql', 'fixture/control-schema.sql'], ['manifest.schema.json', 'manifest.schema.json']];
+const runtimeFiles = [['candidate-entry.mjs', 'entry.mjs'], ['prelude.mjs', 'prelude.mjs'], ['fixture-worker.mjs', 'fixture/worker.mjs'], ['control-schema.sql', 'fixture/control-schema.sql'], ['manifest.schema.json', 'manifest.schema.json'], ['request-body.mjs', 'request-body.mjs'], ['request-body.mjs', 'fixture/request-body.mjs']];
 const implementationFiles = ['scripts/prepare-guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.mjs', 'scripts/lib/guest-hosted-package.mjs', 'scripts/lib/guest-hosted-build.d.mts', 'scripts/lib/guest-hosted-package.d.mts', 'scripts/guest-hosted/fixture-worker.d.mts'];
 const identityKeys = ['version', 'runId', 'scenario', 'hostname', 'candidateName', 'fixtureName', 'appDatabaseName', 'fixtureDatabaseName', 'accountId', 'appDatabaseId', 'fixtureDatabaseId'];
 const frozenKeys = ['routes', 'limits', 'candidateBindings', 'fixtureBindings', 'candidateSecretNames', 'fixtureSecretNames', 'operations'];
@@ -275,7 +275,7 @@ export async function prepareGuestHostedPackage({
   });
   for (const [source, destination] of runtimeFiles) {
     const bytes = await readFile(join(workspaceRoot, 'scripts/guest-hosted', source));
-    implementationInputs.push({
+    if (!implementationInputs.some(input => input.path === 'scripts/guest-hosted/' + source)) implementationInputs.push({
       path: 'scripts/guest-hosted/' + source,
       sha256: sha256(bytes)
     });
@@ -316,7 +316,7 @@ export async function prepareGuestHostedPackage({
     implementationInputs,
     graph: receipt.graph,
     files,
-    uploadFiles: files.filter(item => /^(?:app\/server\/|entry\.mjs$|prelude\.mjs$|fixture\/(?:entry|worker|data)\.mjs$)/.test(item.path)).map(item => item.path),
+    uploadFiles: files.filter(item => /^(?:app\/server\/|entry\.mjs$|prelude\.mjs$|request-body\.mjs$|fixture\/(?:entry|worker|data|request-body)\.mjs$)/.test(item.path)).map(item => item.path),
     fixtureBodies: Object.entries(bodies).map(([key, body]) => ({
       key,
       bytes: new TextEncoder().encode(body).length,
@@ -372,7 +372,7 @@ export async function verifyGuestHostedPackage({
     const bytes = await readFile(join(root, item.path));
     if (bytes.length !== item.bytes || sha256(bytes) !== item.sha256) fail('GUEST_PACKAGE_FILE_DRIFT');
   }
-  const expectedUploads = manifest.files.filter(item => /^(?:app\/server\/|entry\.mjs$|prelude\.mjs$|fixture\/(?:entry|worker|data)\.mjs$)/.test(item.path)).map(item => item.path);
+  const expectedUploads = manifest.files.filter(item => /^(?:app\/server\/|entry\.mjs$|prelude\.mjs$|request-body\.mjs$|fixture\/(?:entry|worker|data|request-body)\.mjs$)/.test(item.path)).map(item => item.path);
   if (canonical(manifest.uploadFiles) !== canonical(expectedUploads)) fail('GUEST_UPLOAD_INVENTORY_DRIFT');
   const receipt = JSON.parse(await readFile(join(root, 'build-receipt.json'), 'utf8')),
     verified = await validateBuild(receipt);
@@ -399,7 +399,7 @@ export async function verifyGuestHostedPackage({
   const expectedFiles = [...receipt.graph.modules, ...receipt.graph.data].map(item => 'app/server/' + item.path).concat(Object.keys(expectedGenerated), migrations.map(item => item.path), ['wrangler.candidate.json', 'wrangler.fixture.json', 'build-receipt.json']).sort();
   if (canonical(expectedFiles) !== canonical(manifest.files.map(item => item.path).sort())) fail('GUEST_PACKAGE_FILES_DRIFT');
   const expectedInputs = [];
-  for (const path of implementationFiles.concat(runtimeFiles.map(([source]) => 'scripts/guest-hosted/' + source))) expectedInputs.push({
+  for (const path of new Set(implementationFiles.concat(runtimeFiles.map(([source]) => 'scripts/guest-hosted/' + source)))) expectedInputs.push({
     path,
     sha256: sha256(await readFile(join(workspaceRoot, path)))
   });

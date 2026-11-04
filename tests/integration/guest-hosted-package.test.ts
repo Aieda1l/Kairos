@@ -1,14 +1,29 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, symlink, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { lstat, mkdir, mkdtemp, readFile, rename, symlink, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { buildGuestHostedApplication, canonical, inspectGuestHostedModules, sanitizedBuildEnvironment, sha256 } from '../../scripts/lib/guest-hosted-build.mjs';
 import { prepareGuestHostedPackage, validateGuestHostedInventory, verifyGuestHostedPackage } from '../../scripts/lib/guest-hosted-package.mjs';
 import { handleFixtureRequest } from '../../scripts/guest-hosted/fixture-worker.mjs';
 import Database from 'better-sqlite3';
+import { pathToFileURL } from 'node:url';
+import { guestFixtureProtocol } from '../../scripts/lib/guest-hosted-package.mjs';
 import { execFileSync } from 'node:child_process';
+const workerBindings = vi.hoisted(() => ({
+  env: {} as Record<string, unknown>
+}));
+vi.mock('cloudflare:workers', () => workerBindings);
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    readFile: vi.fn(actual.readFile)
+  };
+});
+const originalFetch = globalThis.fetch;
 const root = resolve('artifacts/guest-hosted');
 const databases: Database.Database[] = [];
 afterEach(() => {
+  globalThis.fetch = originalFetch;
   for (const db of databases.splice(0)) db.close();
 });
 async function temporary() {
@@ -364,5 +379,268 @@ describe('fresh original package', () => {
       await writeFile(target, original);
       await writeFile(prepared.manifestPath, manifestRaw);
     }
+  });
+  it('rejects an intermediate emitted-output junction before reading any module', async () => {
+    const dist = join(receipt.sourceRoot, 'dist'),
+      saved = join(receipt.outputRoot, 'dist-fix-round-1-saved'),
+      outside = await temporary();
+    for (const path of [dist, saved]) expect(relative(root, resolve(path)).startsWith('..')).toBe(false);
+    expect((await lstat(dist)).isSymbolicLink()).toBe(false);
+    await mkdir(join(outside, 'server'));
+    await writeFile(join(outside, 'server/index.js'), 'export default {};');
+    await rename(dist, saved);
+    try {
+      await symlink(outside, dist, 'junction');
+      vi.mocked(readFile).mockClear();
+      let failure: unknown;
+      try {
+        await prepareGuestHostedPackage({
+          buildReceipt: receipt,
+          inventory: inventory(),
+          outputRoot: join(await temporary(), 'junction-package')
+        });
+      } catch (error) {
+        failure = error;
+      }
+      const emittedReads = vi.mocked(readFile).mock.calls.filter(([path]) => String(path).startsWith(join(dist, 'server') + sep));
+      expect(emittedReads).toHaveLength(0);
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toBe('GUEST_PATH_UNSAFE');
+    } finally {
+      await unlink(dist);
+      await rename(saved, dist);
+    }
+  });
+  async function transport(target: 'prelude' | 'fixture') {
+    let dispatches = 0,
+      reservations = 0;
+    Object.assign(workerBindings.env, {
+      KAIROS_TURNSTILE_SECRET_KEY: 'contract-synthetic-secret',
+      GUEST_FIXTURE_CHALLENGE_TOKEN: 'contract-synthetic-challenge',
+      GUEST_FIXTURE: {
+        fetch: async (request: Request) => {
+          dispatches++;
+          return new Response(await request.text());
+        }
+      }
+    });
+    const protocol = guestFixtureProtocol(inventory());
+    const env = {
+      ...workerBindings.env,
+      FIXTURE_DB: {
+        prepare: () => ({
+          bind: () => ({
+            all: async () => {
+              reservations++;
+              return {
+                success: true,
+                results: [{
+                  calls: 1,
+                  call_cap: 16
+                }]
+              };
+            }
+          })
+        })
+      }
+    };
+    const prelude = target === 'prelude' ? await import(/* @vite-ignore */pathToFileURL(join(dirname(prepared.manifestPath), 'prelude.mjs')).href) : null;
+    return {
+      invoke: (request: Request): Promise<Response> => target === 'prelude' ? prelude.fixtureFetch(request) : handleFixtureRequest(request, env, protocol as unknown as Parameters<typeof handleFixtureRequest>[2], {
+        challenge: new TextEncoder().encode('challenge-ok')
+      }),
+      counts: () => ({
+        dispatches,
+        reservations
+      })
+    };
+  }
+  async function deadline<T>(promise: Promise<T>) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([promise.then(value => ({
+        kind: 'value' as const,
+        value
+      }), error => ({
+        kind: 'error' as const,
+        error
+      })), new Promise<{
+        kind: 'timeout';
+      }>(resolve => {
+        timer = setTimeout(() => resolve({
+          kind: 'timeout'
+        }), 150);
+      })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function challengeRequest(signal: AbortSignal, stalled = false) {
+    let controller!: ReadableStreamDefaultController<Uint8Array>,
+      cancellations = 0;
+    const form = 'secret=contract-synthetic-secret&response=contract-synthetic-challenge';
+    const body = new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+        if (!stalled) {
+          value.enqueue(new TextEncoder().encode(form));
+          value.close();
+        }
+      },
+      cancel() {
+        cancellations++;
+        if (stalled) return new Promise<void>(() => {});
+      }
+    });
+    const request = new Request('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      redirect: 'manual',
+      signal,
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      },
+      body,
+      duplex: 'half'
+    } as RequestInit & {
+      duplex: string;
+    });
+    return {
+      request,
+      form,
+      cleanup: () => {
+        if (!cancellations) try {
+          controller.error(new Error('CONTRACT_STREAM_CLEANUP'));
+        } catch {}
+      },
+      cancellations: () => cancellations
+    };
+  }
+  it.each(['prelude', 'fixture'] as const)('%s denies a pre-aborted challenge without dispatch/reservation or private reason', async target => {
+    const adapter = await transport(target),
+      controller = new AbortController();
+    controller.abort(new Error('private-abort-poison'));
+    const input = challengeRequest(controller.signal, true);
+    try {
+      const result = await deadline(adapter.invoke(input.request));
+      expect(result.kind).not.toBe('timeout');
+      if (target === 'prelude') {
+        expect(result.kind).toBe('error');
+        if (result.kind === 'error') expect(result.error.message).toBe('GUEST_TRANSPORT_DENIED');
+      } else {
+        expect(result.kind).toBe('value');
+        if (result.kind === 'value') {
+          expect(result.value.status).toBe(503);
+          expect(await result.value.text()).toBe('GUEST_FIXTURE_UNAVAILABLE');
+        }
+      }
+      expect(adapter.counts()).toEqual({
+        dispatches: 0,
+        reservations: 0
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(input.cancellations()).toBe(1);
+    } finally {
+      input.cleanup();
+    }
+  });
+  it.each(['prelude', 'fixture'] as const)('%s settles a stalled challenge when aborted mid-read with no dispatch/reservation', async target => {
+    const adapter = await transport(target),
+      controller = new AbortController(),
+      input = challengeRequest(controller.signal, true);
+    const added = vi.spyOn(input.request.signal, 'addEventListener'),
+      removed = vi.spyOn(input.request.signal, 'removeEventListener');
+    const pending = adapter.invoke(input.request);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    controller.abort(new Error('private-abort-poison'));
+    try {
+      const result = await deadline(pending);
+      expect(result.kind).not.toBe('timeout');
+      if (target === 'prelude') {
+        expect(result.kind).toBe('error');
+        if (result.kind === 'error') expect(result.error.message).toBe('GUEST_TRANSPORT_DENIED');
+      } else {
+        expect(result.kind).toBe('value');
+        if (result.kind === 'value') {
+          expect(result.value.status).toBe(503);
+          expect(await result.value.text()).toBe('GUEST_FIXTURE_UNAVAILABLE');
+        }
+      }
+      expect(adapter.counts()).toEqual({
+        dispatches: 0,
+        reservations: 0
+      });
+      if (target === 'fixture') expect(added.mock.calls.filter(([name]) => name === 'abort').some(([, listener]) => removed.mock.calls.some(([name, removedListener]) => name === 'abort' && removedListener === listener))).toBe(true);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(input.cancellations()).toBe(1);
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+      input.cleanup();
+      await pending.catch(() => {});
+    }
+  });
+  it.each(['prelude', 'fixture'] as const)('%s preserves accepted challenge body delivery', async target => {
+    const adapter = await transport(target),
+      input = challengeRequest(new AbortController().signal),
+      added = vi.spyOn(input.request.signal, 'addEventListener'),
+      removed = vi.spyOn(input.request.signal, 'removeEventListener');
+    try {
+      const result = await deadline(adapter.invoke(input.request));
+      expect(result.kind).toBe('value');
+      if (result.kind !== 'value') return;
+      expect(result.value.status).toBe(200);
+      if (target === 'prelude') expect(await result.value.text()).toBe(input.form);else expect(await input.request.text()).toBe(input.form);
+      expect(adapter.counts()).toEqual(target === 'prelude' ? {
+        dispatches: 1,
+        reservations: 0
+      } : {
+        dispatches: 0,
+        reservations: 1
+      });
+      if (target === 'fixture') expect(added.mock.calls.filter(([name]) => name === 'abort').some(([, listener]) => removed.mock.calls.some(([name, removedListener]) => name === 'abort' && removedListener === listener))).toBe(true);
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+      input.cleanup();
+    }
+  });
+  it.each(['prelude', 'fixture'] as const)('%s bounds an oversized open challenge without waiting for cancellation', async target => {
+    const adapter = await transport(target);
+    let cancellations = 0;
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(16385));
+      },
+      cancel() {
+        cancellations++;
+        return new Promise<void>(() => {});
+      }
+    });
+    const request = new Request('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      redirect: 'manual',
+      body,
+      duplex: 'half'
+    } as RequestInit & {
+      duplex: string;
+    });
+    const result = await deadline(adapter.invoke(request));
+    expect(result.kind).not.toBe('timeout');
+    if (target === 'prelude') {
+      expect(result.kind).toBe('error');
+      if (result.kind === 'error') expect(result.error.message).toBe('GUEST_TRANSPORT_DENIED');
+    } else {
+      expect(result.kind).toBe('value');
+      if (result.kind === 'value') {
+        expect(result.value.status).toBe(502);
+        expect(await result.value.text()).toBe('GUEST_FIXTURE_DENIED');
+      }
+    }
+    expect(adapter.counts()).toEqual({
+      dispatches: 0,
+      reservations: 0
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(cancellations).toBe(1);
   });
 });

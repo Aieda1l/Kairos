@@ -34,6 +34,11 @@ export async function ownedOutput(path, {
   return target;
 }
 export async function safeFiles(root) {
+  // Check every owned ancestor before readdir/readFile can traverse generated output.
+  // In particular, a normal server directory beneath a junctioned dist is unsafe.
+  await ownedOutput(resolve(root), {
+    fresh: false
+  });
   const files = [];
   async function walk(dir) {
     for (const entry of (await readdir(dir, {
