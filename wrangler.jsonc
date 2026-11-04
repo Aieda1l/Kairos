@@ -12,6 +12,7 @@
     "traces": {"enabled": false, "persist": false}
   },
   "vars": {
+    "KAIROS_GUEST_ENABLED": "false",
     "KAIROS_APP_URL": "http://127.0.0.1:3000",
     "AUTH_URL": "http://127.0.0.1:3000",
     "KAIROS_LOCAL_AUTH": "loopback",
@@ -36,6 +37,7 @@
     },
     "production": {
       "vars": {
+        "KAIROS_GUEST_ENABLED": "false",
         "KAIROS_APP_URL": "https://mykairos.me",
         "AUTH_URL": "https://mykairos.me",
         "KAIROS_ABUSE_TRUSTED_INGRESS": "cloudflare"

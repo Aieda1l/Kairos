@@ -44,6 +44,12 @@ const items:Assignment[]=[
 
 beforeEach(()=>{refresh.mockClear();statusSyncNow.mockClear();vi.unstubAllGlobals();});
 
+it("keeps hosted controls and source navigation by default when empty",()=>{
+  render(<AssignmentExplorer assignments={[]} timeZone="America/Los_Angeles" canvasConnected/>);
+  expect(screen.getByRole("button",{name:"Sync All"})).toBeInTheDocument();
+  expect(screen.getByRole("link",{name:"Connect a source"})).toHaveAttribute("href","/sources");
+});
+
 it("groups and filters upcoming assignments while showing submission status",async()=>{
   const user=userEvent.setup();
   render(<AssignmentExplorer assignments={items} timeZone="America/Los_Angeles" now={new Date("2026-10-03T19:00:00Z")} canvasConnected/>);

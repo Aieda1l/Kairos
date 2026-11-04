@@ -83,10 +83,10 @@ test('Sync All continues after Canvas partial results and retries an Ed recovery
   await page.goto('/upcoming');
   await waitForAppHydration(page);
   const syncAll=page.getByRole('button',{name:'Sync All',exact:true});
-  await expect(syncAll).toBeEnabled();
   // Let existing mount-time source/calendar reconciliation finish before the
   // manual runs whose ownership and ordering this test observes.
   await page.waitForLoadState('networkidle');
+  await expect(syncAll).toBeEnabled();
 
   const documentId=await page.evaluate(()=>{
     document.documentElement.dataset.syncAllDocument=crypto.randomUUID();

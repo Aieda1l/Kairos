@@ -16,6 +16,17 @@ Kairos and the Firefox extension use the [MIT License](LICENSE), with Copyright 
 
 ## Requirements and local development
 
+Hybrid guest mode is implemented on this branch behind `KAIROS_GUEST_ENABLED`,
+which defaults to `false` in base and production configuration. It provides local
+coursework/preferences, Canvas feed and Ed reads through bounded anonymous server
+requests, and Canvas status/Gradescope reads through Firefox. Credentials stay in
+memory unless explicitly remembered on the device; backups exclude credentials.
+Guest data is separate from signed-in accounts. Public activation, exact-source
+Linux CI, hosted CPU/memory/D1 capacity, physical retention and operator live
+acceptance remain open. See the [guest acceptance ledger](docs/deployment/guest-acceptance.md)
+and [capacity evidence](docs/deployment/guest-capacity-readiness.md); the hosted
+release results above belong to the earlier deployed release.
+
 - Node.js 22.13+ and npm 10+
 - Firefox 140+ on desktop for Canvas submission status and Gradescope browser-local sync
 - A Canvas private calendar feed URL and/or Ed personal API token for the sources you select
@@ -139,3 +150,5 @@ node scripts/verify-production-safety.mjs
 Install Playwright browsers with `npx playwright install chromium firefox` when required. Chromium E2E covers source onboarding, Ed fixtures, iCloud event reconciliation on an existing discovered calendar, and authenticated tenant isolation. Firefox tests use deterministic bridge shims. CI does not rely on live provider credentials. The public-page component checks render real pages without a session and verify purpose, separate consent, privacy limits and domain-only contacts.
 
 For real-account acceptance, use authorized accounts, compare imported fields with official source pages, check sync errors retain prior records, and verify calendar create/repeat/update/event-recreate and explicit removal outcomes. iCloud acceptance requires a pre-existing writable Kairos calendar. A Google/Microsoft whole-calendar deletion should report the missing destination until explicit reconnect. Record account labels and outcomes only; never publish credentials, feed URLs, private inbox addresses or raw authenticated responses. Historical Milestone 6 acceptance does not replace current independent-account, revocation/deletion, provider approval or delivery checks.
+
+The November 1 guest review-fix evidence is recorded in the [guest acceptance ledger](docs/deployment/guest-acceptance.md): runtime `2688f9b` passed 81 native checks; the last full browser run passed 141/143, followed by all four affected cases passing on test-only `2277c14`. All 143 distinct cases have passing coverage across runs, not one final full-suite green. Independent scoped review accepted all eight findings with no new Critical/Important breakage. Exact-source Linux CI required before release and public activation remain open.

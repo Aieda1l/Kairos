@@ -1,0 +1,33 @@
+import {expect,it} from "vitest";
+import {applyChanges} from "@/lib/guest/store-data";
+import type {GuestCommitChanges,GuestRequestFence} from "@/lib/guest/types";
+import {guestSnapshotFixture,guestUuid} from "../helpers/guest-fixtures";
+
+it.each(["ed","gradescope"] as const)("refreshes %s courses while retaining selection and omitted coursework",source=>{
+  const at="2026-10-24T14:00:00.000Z",old="2026-10-24T12:00:00.000Z";
+  const snapshot=guestSnapshotFixture({syncStates:[]});snapshot.connections[0].kind=source;snapshot.assignments[0].source=source;snapshot.assignments[0].sourceUrl=null;
+  const course={id:guestUuid(9),sourceConnectionId:guestUuid(2),externalCourseId:"12",shortName:null,fullName:"Old",term:null,year:null,enabled:true,firstSeenAt:old,lastSeenAt:old};
+  snapshot.courses=[course,{...course,id:guestUuid(10),externalCourseId:"13",fullName:"Omitted"}];
+  const fence:GuestRequestFence={datasetId:snapshot.datasetId,runId:guestUuid(50),pageEpoch:guestUuid(51),generation:1,requestId:guestUuid(52),operation:source==="ed"?"ed-courses":"gradescope-discovery",source,purpose:"read",connectionId:guestUuid(2),connectionGeneration:1,deadlineAtMs:Date.parse(at)+15000};
+  const registration={fence,members:{canvas:[],courseIds:[]},intent:"provider-read" as const,consumed:false};
+  const discovered={externalCourseId:"12",shortName:null,fullName:"New name",term:null,year:null};
+  const changes={kind:"courses",courses:[discovered,{...discovered,externalCourseId:"14"}]} as GuestCommitChanges;
+  const saved=applyChanges(snapshot,fence,registration,changes,at,()=>guestUuid(11));
+  expect(saved.snapshot.courses).toHaveLength(3);
+  expect(saved.snapshot.courses[0]).toEqual({...course,fullName:"New name",lastSeenAt:at});
+  expect(saved.snapshot.courses[1]).toEqual(snapshot.courses[1]);
+  expect(saved.snapshot.courses[2]).toMatchObject({externalCourseId:"14",enabled:false,firstSeenAt:at,lastSeenAt:at});
+  expect(saved.snapshot.connections[0].generation).toBe(2);
+  expect(saved.snapshot.assignments).toEqual(snapshot.assignments);expect(saved.snapshot.statuses).toEqual(snapshot.statuses);expect(saved.snapshot.syncStates).toEqual(snapshot.syncStates);
+  expect(saved).toMatchObject({updatedCount:0,ignoredCount:0});expect(saved).not.toHaveProperty("credential");
+  const empty=applyChanges(snapshot,fence,registration,{kind:"courses",courses:[]} as GuestCommitChanges,at,()=>guestUuid(11));
+  expect(empty.snapshot.courses).toEqual(snapshot.courses);expect(empty.snapshot.connections[0].generation).toBe(2);
+  for(const bad of [{...changes,courses:[discovered,discovered]},{...changes,courses:[{...discovered,externalCourseId:"bad"}]},{...changes,courses:Array.from({length:1001},(_,i)=>({...discovered,externalCourseId:String(i)}))}])expect(()=>applyChanges(snapshot,fence,registration,bad as GuestCommitChanges,at,()=>guestUuid(11))).toThrow();
+  for(const operation of ["ed","gradescope","canvas-feed"] as const)expect(()=>applyChanges(snapshot,{...fence,operation},registration,changes,at,()=>guestUuid(11))).toThrow();
+  expect(()=>applyChanges(snapshot,{...fence,purpose:"setup"},registration,changes,at,()=>guestUuid(11))).toThrow();
+  expect(()=>applyChanges(snapshot,{...fence,source:"canvas"},registration,changes,at,()=>guestUuid(11))).toThrow();
+  expect(()=>applyChanges(snapshot,fence,{...registration,intent:"stage-result"},changes,at,()=>guestUuid(11))).toThrow();
+  expect(()=>applyChanges(snapshot,fence,{...registration,members:{canvas:[],courseIds:["12"]}},changes,at,()=>guestUuid(11))).toThrow();
+  const future={...snapshot,courses:snapshot.courses.map(c=>({...c,lastSeenAt:"2026-10-25T00:00:00.000Z"}))};
+  expect(applyChanges(future,fence,registration,changes,at,()=>guestUuid(11)).snapshot.courses[0].lastSeenAt).toBe("2026-10-25T00:00:00.000Z");
+});

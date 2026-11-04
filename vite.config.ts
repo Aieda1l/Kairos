@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import vinext from "vinext";
 
 export default defineConfig({
+  // Test harness imports are enabled only on the explicit loopback dev server.
+  define:{"import.meta.env.KAIROS_GUEST_STORAGE_TEST":JSON.stringify(process.env.KAIROS_GUEST_STORAGE_TEST==='1' && process.env.E2E_FIXTURES==='1' && process.argv.includes('127.0.0.1'))},
   cacheDir:process.env.E2E_FIXTURES==='1'?process.env.KAIROS_E2E_CACHE_DIR:undefined,
   environments:{
     client:{
@@ -29,6 +31,7 @@ export default defineConfig({
           vars:{
             ...config.vars,
             E2E_FIXTURES:"1",
+            KAIROS_GUEST_ENABLED:process.env.KAIROS_GUEST_STORAGE_TEST==="1" && process.argv.includes("127.0.0.1")?"true":"false",
             KAIROS_CREDENTIAL_KEY_V1:process.env.KAIROS_CREDENTIAL_KEY_V1??"",
             KAIROS_CREDENTIAL_KEY_V2:'',
             KAIROS_CREDENTIAL_ACTIVE_KEY_ID:'v1',

@@ -41,6 +41,10 @@ if(productionObservability?.enabled!==false
 if(String(productionVars.E2E_FIXTURES??"")==="1"){
   errors.push("Production Wrangler configuration enables E2E_FIXTURES.");
 }
+for(const [name,vars] of [['base',wrangler.vars??{}],['production',productionVars]]){
+  if(vars.KAIROS_GUEST_ENABLED!=='false')errors.push(`${name} must default guest access to false.`);
+  if(String(vars.KAIROS_GUEST_STORAGE_TEST??'')==='1')errors.push(`${name} must not enable guest storage fixtures.`);
+}
 if(String(productionVars.KAIROS_LOCAL_AUTH??'').trim()||productionVars.KAIROS_ABUSE_TRUSTED_INGRESS==='loopback'){
   errors.push('Production must not select local authentication or loopback ingress.');
 }
@@ -54,6 +58,9 @@ for(const name of ['KAIROS_TURNSTILE_SITE_KEY','KAIROS_TURNSTILE_SECRET_KEY']){
 for(const file of collectFiles(path.join(process.cwd(),"src"))){
   if(fs.readFileSync(file,"utf8").includes("better-sqlite3")){
     errors.push(`Production source imports better-sqlite3: ${path.relative(process.cwd(),file)}`);
+  }
+  if(file.startsWith(path.join(process.cwd(),'src/lib/guest')+path.sep)&&/(?:source-(?:api-)?runtime|calendar-(?:api-)?runtime|user-scope|request-scope|require-user)/.test(fs.readFileSync(file,'utf8'))){
+    errors.push(`Guest modules must not import hosted request ownership: ${path.relative(process.cwd(),file)}`);
   }
 }
 
@@ -78,10 +85,15 @@ const requiredCiCommands=[
   "npm run typecheck",
   "npm run db:verify",
   "npm run verify:workerd:abuse",
+  "node scripts/verify-workerd-calendar-lifetime.mjs",
+  "node scripts/verify-workerd-turnstile.mjs",
   "npm run build:extension",
   "npm run test:e2e",
   "npm run build",
   "npm run build:vinext",
+  "node scripts/verify-workerd-guest-sources.mjs",
+  "node scripts/verify-workerd-provider-completion.mjs",
+  "node scripts/verify-workerd-icloud.mjs",
   "node scripts/verify-dynamic-dashboard-build.mjs",
   "npm run verify:hosted",
 ];

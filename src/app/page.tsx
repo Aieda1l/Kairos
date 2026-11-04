@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type {Metadata} from "next";
 import {FIREFOX_ADDON_LISTING_URL} from "@/lib/extension-distribution";
+import {getGuestEnabled} from "@/lib/guest/server/feature";
+
+export const dynamic="force-dynamic";
 
 export const metadata:Metadata={
   title:"Kairos — coursework and deadline dashboard",
@@ -8,7 +11,8 @@ export const metadata:Metadata={
   alternates:{canonical:"https://mykairos.me/"},
 };
 
-export default function HomePage(){
+export default async function HomePage(){
+  const guestEnabled=await getGuestEnabled();
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-16">
       <div className="max-w-2xl">
@@ -29,6 +33,7 @@ export default function HomePage(){
           Calendar edits do not change your coursework at its source.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
+          {guestEnabled&&<Link href="/guest/upcoming" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 font-medium">Try without an account</Link>}
           <Link
             href="/sign-in?returnTo=/upcoming"
             className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 font-medium"

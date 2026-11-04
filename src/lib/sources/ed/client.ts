@@ -1,7 +1,7 @@
 import { EdSourceError } from "./errors";
 import {reportSourceRequestFailure} from "@/lib/sources/upstream-diagnostics";
+import {fetchEdResponse,type EdResource} from "./transport";
 
-const ED_API_BASE="https://us.edstem.org/api/";
 const DECIMAL_ID=/^\d+$/;
 
 export class EdApiClient{
@@ -11,31 +11,22 @@ export class EdApiClient{
   ){}
 
   fetchUser():Promise<unknown>{
-    return this.request("user","ED_UPSTREAM_ERROR");
+    return this.request({kind:"user"},"ED_UPSTREAM_ERROR");
   }
 
   fetchLessons(courseId:string):Promise<unknown>{
     if(!DECIMAL_ID.test(courseId)){
       return Promise.reject(new EdSourceError("ED_COURSE_UNAVAILABLE","Ed course identity was invalid."));
     }
-    return this.request(`courses/${courseId}/lessons`,"ED_COURSE_UNAVAILABLE");
+    return this.request({kind:"lessons",courseId},"ED_COURSE_UNAVAILABLE");
   }
 
-  private async request(path:string,notFoundCode:"ED_UPSTREAM_ERROR"|"ED_COURSE_UNAVAILABLE"):Promise<unknown>{
-    const url=new URL(path,ED_API_BASE);
+  private async request(resource:EdResource,notFoundCode:"ED_UPSTREAM_ERROR"|"ED_COURSE_UNAVAILABLE"):Promise<unknown>{
     let response:Response;
     const timeout=AbortSignal.timeout(15_000);
     const fetchImpl=this.fetchImpl;
     try{
-      response=await fetchImpl(url,{
-        method:"GET",
-        headers:{
-          Authorization:`Bearer ${this.token}`,
-          Accept:"application/json",
-        },
-        redirect:"manual",
-        signal:timeout,
-      });
+      response=await fetchEdResponse(this.token,resource,fetchImpl,timeout);
     }catch{
       reportSourceRequestFailure("ed",timeout.aborted?"timeout":"transport");
       throw new EdSourceError(

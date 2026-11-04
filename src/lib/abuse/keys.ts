@@ -27,8 +27,8 @@ async function hmac(key:Uint8Array,message:string):Promise<Uint8Array>{
   const cryptoKey=await crypto.subtle.importKey("raw",new Uint8Array(key).buffer,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC",cryptoKey,new TextEncoder().encode(message)));
 }
-export function deriveAbuseSubkey(key:Uint8Array,purpose:"rate-key"|"auth-attempt"):Promise<Uint8Array>{
-  if(purpose!=="rate-key"&&purpose!=="auth-attempt")throw new AbuseConfigurationError();
+export function deriveAbuseSubkey(key:Uint8Array,purpose:"rate-key"|"auth-attempt"|"guest-capability"):Promise<Uint8Array>{
+  if(purpose!=="rate-key"&&purpose!=="auth-attempt"&&purpose!=="guest-capability")throw new AbuseConfigurationError();
   return hmac(key,JSON.stringify([NAMESPACE,"subkey",purpose]));
 }
 export async function hashRateKey(key:Uint8Array,parts:readonly string[]):Promise<string>{

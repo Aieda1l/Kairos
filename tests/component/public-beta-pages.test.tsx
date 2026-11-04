@@ -2,7 +2,8 @@
 import type {ComponentType} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import {cleanup,render,screen,within} from "@testing-library/react";
-import {afterEach,expect,it} from "vitest";
+import {afterEach,expect,it,vi} from "vitest";
+vi.mock("@/lib/guest/server/feature",()=>({getGuestEnabled:async()=>false}));
 import HomePage from "@/app/page";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
@@ -16,8 +17,8 @@ async function publicPage(name:"support"|"security"){
 }
 afterEach(cleanup);
 
-it("public_pages_explain_UW_first_open_identity_optional_calendar",()=>{
-  render(<HomePage/>);
+it("public_pages_explain_UW_first_open_identity_optional_calendar",async()=>{
+  render(await HomePage());
   expect(screen.getByRole("heading",{name:"Kairos"})).toBeInTheDocument();
   expect(screen.getByText(/assignment dashboard/i)).toHaveTextContent(/Canvas.*Gradescope.*Ed/i);
   expect(screen.getByText(/UW-first/i)).toHaveTextContent(/Google.*Microsoft/i);
@@ -74,8 +75,8 @@ it("security_page_discourages_credentials_in_public_issues",async()=>{
 it("contact_links_never_publish_personal_destination",async()=>{
   const SupportPage=await publicPage("support");
   const SecurityPage=await publicPage("security");
-  for(const Page of [HomePage,PrivacyPage,TermsPage,SupportPage,SecurityPage]){
-    const {container,unmount}=render(<Page/>);
+  for(const element of [await HomePage(),<PrivacyPage key="privacy"/>,<TermsPage key="terms"/>,<SupportPage key="support"/>,<SecurityPage key="security"/>]){
+    const {container,unmount}=render(element);
     const mailLinks=Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href^="mailto:"]'));
     for(const link of mailLinks){
       expect(["mailto:support@mykairos.me","mailto:security@mykairos.me"]).toContain(link.getAttribute("href"));
@@ -92,8 +93,8 @@ it("contact_links_never_publish_personal_destination",async()=>{
 it("public_routes_render_information_without_session_or_client_javascript",async()=>{
   const SupportPage=await publicPage("support");
   const SecurityPage=await publicPage("security");
-  for(const [Page,title] of [[HomePage,"Kairos"],[PrivacyPage,"Privacy"],[TermsPage,"Terms"],[SupportPage,"Support"],[SecurityPage,"Security"]] as const){
-    const html=renderToStaticMarkup(<Page/>);
+  for(const [element,title] of [[await HomePage(),"Kairos"],[<PrivacyPage key="privacy"/>,"Privacy"],[<TermsPage key="terms"/>,"Terms"],[<SupportPage key="support"/>,"Support"],[<SecurityPage key="security"/>,"Security"]] as const){
+    const html=renderToStaticMarkup(element);
     const document=new DOMParser().parseFromString(html,"text/html");
     expect(document.querySelector("main h1")?.textContent).toBe(title);
     expect(document.querySelector("main")?.textContent!.length).toBeGreaterThan(300);

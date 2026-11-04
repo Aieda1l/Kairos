@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { Assignment } from "@/lib/assignments/types";
 import { groupUpcoming } from "@/lib/assignments/queries";
@@ -23,13 +23,24 @@ export function AssignmentExplorer({
   timeZone,
   canvasConnected,
   now=new Date(),
+  syncControls,
+  sourcesHref="/sources",
+  filters:controlledFilters,
+  onFiltersChange,
 }:{
   assignments:Assignment[];
   timeZone:string;
   canvasConnected:boolean;
   now?:Date;
+  syncControls?:ReactNode;
+  sourcesHref?:string;
+  filters?:FilterState;
+  onFiltersChange?:(value:FilterState)=>void;
 }){
-  const [filters,setFilters]=useState<FilterState>({course:"",source:"",search:""});
+  const [localFilters,setLocalFilters]=useState<FilterState>({course:"",source:"",search:""});
+  const filters=controlledFilters??localFilters;
+  const setFilters=(value:FilterState)=>{if(controlledFilters===undefined)setLocalFilters(value);onFiltersChange?.(value);};
+  const controls=syncControls===undefined?<ConnectedSourceSyncControls canvasConnected={canvasConnected}/>:syncControls;
   const courses=useMemo(()=>[...new Set(assignments.map(a=>a.courseName))].sort(),[assignments]);
   const filtered=useMemo(()=>assignments.filter(a=>
     (!filters.course||a.courseName===filters.course)&&
@@ -41,11 +52,11 @@ export function AssignmentExplorer({
   if(assignments.length===0){
     return (
       <div className="space-y-5">
-        <ConnectedSourceSyncControls canvasConnected={canvasConnected}/>
+        {controls}
         <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center">
           <h2 className="font-semibold">No assignments yet</h2>
           <p className="mt-2 text-sm text-[var(--muted)]">Connect a source or run a sync to fill your dashboard.</p>
-          <Link className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-medium text-white" href="/sources">Connect a source</Link>
+          <Link className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-medium text-white" href={sourcesHref}>Connect a source</Link>
         </div>
       </div>
     );
@@ -53,7 +64,7 @@ export function AssignmentExplorer({
 
   return (
     <div className="space-y-5">
-      <ConnectedSourceSyncControls canvasConnected={canvasConnected}/>
+      {controls}
       <AssignmentFilterBar courses={courses} value={filters} onChange={setFilters}/>
       {order.map(key=>groups[key].length>0&&(
         <section key={key}>

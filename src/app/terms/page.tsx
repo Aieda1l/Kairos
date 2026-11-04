@@ -14,9 +14,11 @@ export default function TermsPage(){
     <main className="mx-auto max-w-3xl px-6 py-16">
       <Link href="/" className="text-sm underline underline-offset-4">← Kairos</Link>
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">Terms</h1>
-      <p className="mt-3 text-sm text-[var(--muted)]">Updated October 15, 2026</p>
+      <p className="mt-3 text-sm text-[var(--muted)]">Updated October 27, 2026</p>
       <div className="mt-6 space-y-4 leading-7 text-[var(--muted)]">
         <p>Use Kairos only with accounts, coursework, and calendar data you are authorized to access.</p>
+        <p>When guest mode is available, you can use Kairos without an account. Guest data depends on this browser profile: browser eviction, private browsing, site-data clearing or device loss may remove it, with no server restore. Export private backups for records you need. Backups contain coursework and grades but no credentials; importing replaces local guest data. Calendar publishing, automatic cloud backup, cross-device sync and transfer to an account are not supported in guest mode. Opening the app from scratch offline is not supported.</p>
+        <p>Guest credentials are memory-only unless you explicitly remember them as plaintext in the browser profile. Canvas and Ed reads use transient server processing; extension reads require supported signed-in provider tabs. Clear guest data does not delete account data, provider records, exported backups or admission metadata, and does not revoke provider access. Details and storage limits are described in <Link href="/privacy" className="underline underline-offset-4">Privacy</Link>.</p>
         <p>Kairos combines coursework in a personal dashboard. Follow your institution&apos;s and providers&apos; rules when connecting accounts. Do not use it to access another person&apos;s data, bypass access controls, or disrupt the service.</p>
         <p>Kairos is provided during active development and may change, become unavailable, or require reconnection as the service evolves.</p>
         <p>Public beta launch remains pending. Kairos Bridge is <a href={FIREFOX_ADDON_LISTING_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">published on Mozilla Add-ons</a> for Firefox desktop 140+. A working integration does not establish availability to every account. Managed Google or Microsoft accounts may be restricted by their administrators.</p>

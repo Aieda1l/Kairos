@@ -1,6 +1,6 @@
 # Kairos Roadmap
 
-**Updated:** 2026-10-10
+**Updated:** 2026-10-24
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
@@ -147,6 +147,8 @@ Hosted acceptance:
 
 ## Milestone 7 — Public beta readiness — Engineering complete; release acceptance open
 
+Current runtime `316e2c9` is deployed, and normal Sync All is verified with Canvas partial. Remaining hosted lifecycle, operational and Free-capacity assertions are tracked in [current readiness](../deployment/readiness-milestone-7.md) and the [latest Sync All record](../deployment/sync-all-reliability-2026-10-24.md). The implementation checkpoints below are historical; their earlier deployment/approval statements do not replace those current records.
+
 Scope:
 - open signup with Google or Microsoft; no invite codes and no `@uw.edu` eligibility restriction;
 - UW-first product positioning and continued `canvas.uw.edu` browser integration rather than arbitrary Canvas institutions;
@@ -171,11 +173,15 @@ Implementation plan:
 - A compatible recovery candidate is built/native-verified and representative cleanup costs are measured. Exact hosted/two-account/provider acceptance, actual operational/privacy/token/capacity evidence and live rollback remain release gates. Support/security delivery is operator-confirmed; new workflow activation remains separate.
 - No production upload, remote migration, traffic change, export or restore was performed. Explicit production approval is still required. See `docs/deployment/closeout-milestone-7.md` and the readiness/security/acceptance records.
 
-## Local guest mode — Planned after Milestone 7, not yet numbered
+## Local guest mode — Implemented behind a disabled flag; activation open
 
-User selected this follow-up on October 14, 2026. People should be able to use Kairos without creating or signing into a Kairos account, with assignments and preferences stored on their device. This changes storage and integration boundaries and needs an architectural design before implementation; it is outside Milestone 7's launch acceptance.
+Integration is proceeding through [PR 53](https://github.com/Aieda1l/Kairos/pull/53). The additional ECC review's malformed-Canvas-event finding was corrected in `be6b762` and independently verified with 98 focused tests. Protected CI must pass for the final PR head before merge; previous local receipts retain their original source qualification. Merge does not enable guest mode or deploy production.
 
-The proposed starting scope is a browser guest experience with local persistence, import/export and backup controls, clear behavior when browser data is cleared, and an optional later move to an account. Live source connections, calendar authorization, credential storage, offline support, and the Firefox bridge must be assessed during that design. A Kairos account and a provider account are separate concerns; guest mode must not imply access to provider data without its required authorization. The exact feature set and migration behavior remain to be agreed.
+User selected this follow-up on October 14, 2026. On October 24 the user confirmed live Canvas, Gradescope and Ed syncing in its first release and chose a hybrid architecture so people can use Kairos without creating or signing into a Kairos account. Assignments/preferences are stored locally; Canvas feed and Ed credentials/responses may pass transiently through the server. Canvas statuses and Gradescope retain their existing Firefox/provider-session requirements.
+
+The user approved the [hybrid guest design](specs/2026-10-24-hybrid-local-guest-mode-design.md) and selected subagent-driven execution of its [implementation plan](plans/2026-10-24-hybrid-local-guest-mode.md) on October 24. Local storage/views, bounded anonymous transport, all agreed source workflows, lifecycle recovery, backup/reset and same-browser account separation are implemented. Local A2 verification passed 2,105 tests (46 existing skips) and 127 standard browser cases; the fresh clean-source native guest receipt passes 79 checks across five phases, including compiled default routes. Seven lint warnings and existing build/runtime diagnostics remain disclosed. Base and production `KAIROS_GUEST_ENABLED` remain `false`.
+
+The [guest acceptance ledger](../deployment/guest-acceptance.md) and [capacity record](../deployment/guest-capacity-readiness.md) identify actual receipts/hashes and the operator-controlled next sequence. Task and whole-branch reviews, followed by the single scoped fix re-review, are accepted for implementation behind the flag. Exact integrated-source Linux CI, hosted Worker CPU/shared-isolate memory/deployed D1 billing, cleanup capacity/physical deletion, live Canvas/Gradescope/Ed acceptance and final production approval remain open. Implementation handoff does not establish guest activation or Free CPU headroom. Calendar writes, cold-start offline support, cross-device sync and account transfer remain later scopes. Still-open Milestone 7 hosted acceptance is separate.
 
 ## Later extension follow-ups — Planned, not yet numbered
 
@@ -196,3 +202,9 @@ These remain intentionally deferred until the core aggregation/integration workf
 ## Cross-source behavior
 
 As additional sources arrive, Kairos should preserve each source record independently. Potential duplicates may be linked, and conflicting due dates should be shown explicitly; Kairos should not silently invent a canonical deadline or destructively merge records.
+
+Guest runtime corrections are at `2688f9b`, with final test refinements at `2277c14`. The [acceptance ledger](../deployment/guest-acceptance.md) records the clean 81-check native receipt, last full browser result of 141/143 and subsequent affected 4/4 pass. All 143 distinct cases have passing coverage across runs, not one final full-suite green. Earlier `db8c0c0` and A2/A3 evidence is historical for the changed runtime. Scoped re-review, exact-source Linux CI required before release and activation gates remain open.
+
+Test-only follow-ups `3495428` and `6990ba4` retain the full-browser failure history; the latest focused onboarding recheck passed but the full suite has not been rerun on the final test commit. The [acceptance ledger](../deployment/guest-acceptance.md) records the exact scope and open gates.
+
+Test-only `44b562b` bounds the same-context isolation journey by six phases; its focused two-browser check passed. The subsequent captured full browser run failed two other Firefox journeys. The [acceptance ledger](../deployment/guest-acceptance.md) retains the failure and timing qualifications.

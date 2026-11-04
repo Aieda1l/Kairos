@@ -10,10 +10,16 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[];timeZone:string}){
-  const [filters,setFilters]=useState<FilterState>({course:"",source:"",search:""});
-  const [sort,setSort]=useState<"due"|"status">("due");
-  const [selected,setSelected]=useState<Assignment|null>(null);
+export function AssignmentTable({assignments,timeZone,filters:controlledFilters,onFiltersChange,sort:controlledSort,onSortChange}:{assignments:Assignment[];timeZone:string;filters?:FilterState;onFiltersChange?:(value:FilterState)=>void;sort?:"due"|"status";onSortChange?:(value:"due"|"status")=>void}){
+  const [localFilters,setLocalFilters]=useState<FilterState>({course:"",source:"",search:""});
+  const [localSort,setLocalSort]=useState<"due"|"status">("due");
+  const filters=controlledFilters??localFilters;
+  const sort=controlledSort??localSort;
+  const setFilters=(value:FilterState)=>{if(controlledFilters===undefined)setLocalFilters(value);onFiltersChange?.(value);};
+  const setSort=(value:"due"|"status")=>{if(controlledSort===undefined)setLocalSort(value);onSortChange?.(value);};
+  const [selectedId,setSelectedId]=useState<string|null>(null);
+  const selected=assignments.find(a=>a.id===selectedId)??null;
+  if(selectedId&&!selected)setSelectedId(null);
   const courses=[...new Set(assignments.map(a=>a.courseName))].sort();
 
   const visible=useMemo(()=>assignments
@@ -54,7 +60,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
             {visible.map(a=>(
               <tr key={a.id}>
                 <Td>
-                  <button type="button" aria-label={`View ${a.title} details`} className="min-h-11 text-left font-medium" onClick={()=>setSelected(a)}>
+                  <button type="button" aria-label={`View ${a.title} details`} className="min-h-11 text-left font-medium" onClick={()=>setSelectedId(a.id)}>
                     {a.title}
                   </button>
                 </Td>
@@ -74,7 +80,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
             key={a.id}
             type="button"
             aria-label={`View ${a.title} details`}
-            onClick={()=>setSelected(a)}
+            onClick={()=>setSelectedId(a.id)}
             className="min-h-11 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-left"
           >
             <strong>{a.title}</strong>
@@ -83,7 +89,7 @@ export function AssignmentTable({assignments,timeZone}:{assignments:Assignment[]
           </button>
         ))}
       </div>
-      {selected&&<AssignmentDetailDialog assignment={selected} timeZone={timeZone} open onClose={()=>setSelected(null)}/>}
+      {selected&&<AssignmentDetailDialog assignment={selected} timeZone={timeZone} open onClose={()=>setSelectedId(null)}/>}
     </div>
   );
 }
