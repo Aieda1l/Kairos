@@ -1,11 +1,40 @@
-﻿import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { buildGuestHostedApplication } from '../../scripts/lib/guest-hosted-build.mjs';
+import { prepareGuestHostedPackage, verifyGuestHostedPackage } from '../../scripts/lib/guest-hosted-package.mjs';
 import { loadGuestHostedSchemas, runGuestHostedDiagnostic } from '../../scripts/lib/guest-hosted-diagnostic.mjs';
 
 const origin = 'https://guest-diagnostic.mykairos.me';
-const verifiedPackage = { packageDigest: 'a'.repeat(64), mode: 'offline', manifest: { inventory: { hostname: 'guest-diagnostic.mykairos.me', runId: 'h1-native-fix1', scenario: 'bounded-v1' } } };
-const snapshot = () => ({ tables: { protected: { count: 0, sha256: '0'.repeat(64) }, abuse_rate_events: { count: 0, sha256: '0'.repeat(64) } }, fixtureTables: { fixture_operation: { count: 7, sha256: '0'.repeat(64) } }, identifiedAdmissions: 0, priorAdmissionsPreserved: true, fixture: Object.fromEntries(['challenge', 'canvas-smoke', 'canvas-near', 'ed-courses-smoke', 'ed-lessons-smoke', 'ed-courses-near', 'ed-lessons-near'].map(key => [key, { runId: 'h1-native-fix1', scenario: 'bounded-v1', cap: key.startsWith('canvas-') ? 8 : 16, calls: 0 }])) });
+const verifiedPackage = { packageDigest: 'a'.repeat(64), mode: 'offline', manifest: { inventory: { hostname: 'guest-diagnostic.mykairos.me', runId: 'h2-schema-test', scenario: 'bounded-v1' } } };
+let fixturePackage: Awaited<ReturnType<typeof verifyGuestHostedPackage>>;
+beforeAll(async () => {
+  const root = resolve('artifacts/guest-hosted');
+  await mkdir(root, { recursive: true });
+  const directory = await mkdtemp(join(root, 'h2-schema-test-'));
+  const inventory = { version: 1, runId: 'h2-schema-test', scenario: 'bounded-v1', hostname: 'guest-diagnostic.mykairos.me', candidateName: 'kairos-guest-app-h2-schema-test', fixtureName: 'kairos-guest-fixture-h2-schema-test', appDatabaseName: 'kairos-guest-app-h2-schema-test', fixtureDatabaseName: 'kairos-guest-fixture-h2-schema-test', accountId: null, appDatabaseId: null, fixtureDatabaseId: null };
+  const receipt = await buildGuestHostedApplication({ applicationRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), outputRoot: join(directory, 'build') });
+  const prepared = await prepareGuestHostedPackage({ buildReceipt: receipt, inventory, outputRoot: join(directory, 'package') });
+  fixturePackage = await verifyGuestHostedPackage({ ...prepared, inventory, mode: 'offline' });
+}, 120000);
+const snapshot = () => ({ tables: { protected: { count: 0, sha256: '0'.repeat(64) }, abuse_rate_events: { count: 0, sha256: '0'.repeat(64) } }, fixtureTables: { fixture_operation: { count: 7, sha256: '0'.repeat(64) } }, identifiedAdmissions: 0, priorAdmissionsPreserved: true, fixture: Object.fromEntries(['challenge', 'canvas-smoke', 'canvas-near', 'ed-courses-smoke', 'ed-lessons-smoke', 'ed-courses-near', 'ed-lessons-near'].map(key => [key, { runId: 'h2-schema-test', scenario: 'bounded-v1', cap: key.startsWith('canvas-') ? 8 : 16, calls: 0 }])) });
 const observations = { before: snapshot, quiesce: () => true, after: snapshot };
-const run = (extra: Record<string, unknown> = {}) => runGuestHostedDiagnostic({ verifiedPackage, targetOrigin: origin, workload: [], request: async () => new Response('{}'), observations, ...extra });
+const run = (extra: Record<string, unknown> = {}) => runGuestHostedDiagnostic({ verifiedPackage: fixturePackage as never, targetOrigin: origin, workload: [], request: async () => new Response('{}'), observations, ...extra });
+
+it('requires an explicit verified package for schema loading', async () => {
+  // @ts-expect-error Exercise missing required input at runtime.
+  const failure = await loadGuestHostedSchemas().then(() => null, error => error.message);
+  expect(failure).toBe('GUEST_SCHEMA_SOURCE_INVALID');
+  const nullFailure = await loadGuestHostedSchemas(null as never).then(() => null, error => error.message);
+  expect(nullFailure).toBe('GUEST_SCHEMA_SOURCE_INVALID');
+});
+it('rejects a mismatched verified package identity', async () => {
+  const failure = await loadGuestHostedSchemas({ verifiedPackage: { ...fixturePackage, packageDigest: 'f'.repeat(64) } }).then(() => null, error => error.message);
+  expect(failure).toBe('GUEST_SCHEMA_SOURCE_INVALID');
+  const absent = await loadGuestHostedSchemas({ verifiedPackage: { ...fixturePackage, manifestPath: join(resolve('artifacts/guest-hosted'), 'missing', 'manifest.json') } }).then(() => null, error => error.message);
+  expect(absent).toBe('GUEST_SCHEMA_SOURCE_INVALID');
+});
 
 describe('bounded guest diagnostic', () => {
   it('accepts a completely validated health response and stable observations', async () => {
@@ -67,7 +96,7 @@ describe('bounded guest diagnostic', () => {
     expect(JSON.stringify(result)).not.toContain('private-synthetic-secret');
   });
   it('rejects fixture cap exhaustion before dispatch', async () => {
-    const { schemas } = await loadGuestHostedSchemas();
+    const { schemas } = await loadGuestHostedSchemas({ verifiedPackage: fixturePackage });
     let sent = 0;
     await expect(run({ schemas, workload: Array.from({ length: 9 }, () => ({ method: 'POST', path: '/api/guest/sources/canvas/feed', expectedCount: 1 })), request: () => { sent++; return new Response(); } })).rejects.toThrow('GUEST_WORKLOAD_INVALID');
     expect(sent).toBe(0);
@@ -75,14 +104,17 @@ describe('bounded guest diagnostic', () => {
 });
 
 it('validates a complete session with the frozen application schema', async () => {
-  const { schemas, provenance } = await loadGuestHostedSchemas();
+  const { schemas, provenance } = await loadGuestHostedSchemas({ verifiedPackage: fixturePackage });
   const requestId = '00000000-0000-4000-8000-000000000002';
   const after = snapshot();
   after.fixture.challenge.calls = 1;
   after.tables.abuse_rate_events.count = 1;
   const result = await run({ schemas, workload: [{ method: 'POST', path: '/api/guest/session', requestId }], observations: { ...observations, after: () => after }, request: () => Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z' }, { headers: { 'cache-control': 'no-store, private', 'set-cookie': '__Host-kairos-guest-sync=synthetic; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800' } }) });
   expect(provenance.externalImports).toBe(0);
+  expect(provenance.applicationRevision).toBe(fixturePackage.manifest.applicationRevision);
+  expect(provenance.buildReceiptSha256).toBe(fixturePackage.manifest.buildReceiptSha256);
   expect(result.status).toBe('passed');
+  await expect(run({ schemas, verifiedPackage: { ...fixturePackage, packageDigest: 'f'.repeat(64) }, workload: [{ method: 'POST', path: '/api/guest/session', requestId }] })).rejects.toThrow('GUEST_SCHEMA_REQUIRED');
   const invalid = await run({ schemas, workload: [{ method: 'POST', path: '/api/guest/session', requestId }], observations: { ...observations, after: () => after }, request: () => Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z', extra: 1 }, { headers: { 'cache-control': 'no-store, private', 'set-cookie': '__Host-kairos-guest-sync=synthetic; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800' } }) });
   expect(invalid.status).toBe('incomplete');
 });
@@ -114,7 +146,7 @@ it('releases a stalled reader even when read and cancel never settle', async () 
 });
 
 it('requires real cache directives and JSON media type tokens', async () => {
-  const { schemas } = await loadGuestHostedSchemas();
+  const { schemas } = await loadGuestHostedSchemas({ verifiedPackage: fixturePackage });
   const requestId = '00000000-0000-4000-8000-000000000002';
   const after = snapshot(); after.fixture.challenge.calls = 1; after.tables.abuse_rate_events.count = 1;
   const check = (cache: string, contentType: string) => run({ schemas, workload: [{ method: 'POST', path: '/api/guest/session', requestId }], observations: { ...observations, after: () => after }, request: () => new Response(JSON.stringify({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z' }), { headers: { 'cache-control': cache, 'content-type': contentType, 'set-cookie': '__Host-kairos-guest-sync=synthetic; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800' } }) });
@@ -126,7 +158,7 @@ it('requires real cache directives and JSON media type tokens', async () => {
 });
 
 it('rejects a learned cookie echoed in a later valid source response', async () => {
-  const { schemas } = await loadGuestHostedSchemas();
+  const { schemas } = await loadGuestHostedSchemas({ verifiedPackage: fixturePackage });
   const requestId = '00000000-0000-4000-8000-000000000002';
   const capability = 'synthetic' + String.fromCharCode(34) + 'CapabilityValue';
   const after = snapshot(); after.fixture.challenge.calls = 1; after.fixture['ed-courses-smoke'].calls = 1; after.tables.abuse_rate_events.count = 4;
@@ -154,7 +186,7 @@ it('rejects installed Zod version drift before bundling', async () => {
   vi.doMock('esbuild', async importOriginal => { const original = await importOriginal<typeof import('esbuild')>(); return { ...original, build: (...args: Parameters<typeof original.build>) => { builds++; return original.build(...args); } }; });
   try {
     const fresh = await import('../../scripts/lib/guest-hosted-diagnostic.mjs');
-    const failure = await fresh.loadGuestHostedSchemas().then(() => null, error => error.message);
+    const failure = await fresh.loadGuestHostedSchemas({ verifiedPackage: fixturePackage }).then(() => null, error => error.message);
     expect(failure).toBe('GUEST_SCHEMA_SOURCE_INVALID');
     expect(builds).toBe(0);
   } finally { vi.doUnmock('node:fs/promises'); vi.doUnmock('esbuild'); vi.resetModules(); }

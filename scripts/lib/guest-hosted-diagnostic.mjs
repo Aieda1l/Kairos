@@ -1,6 +1,7 @@
-import { GUEST_LIMITS, GUEST_ROUTES, guestFixtureProtocol } from './guest-hosted-package.mjs';
+import { GUEST_LIMITS, GUEST_ROUTES, guestFixtureProtocol, verifyGuestHostedPackage } from './guest-hosted-package.mjs';
+import { canonical, workspaceRoot } from './guest-hosted-build.mjs';
 import { readFile, realpath } from 'node:fs/promises';
-import { resolve, relative, isAbsolute, sep, join } from 'node:path';
+import { resolve, relative, isAbsolute, sep, join, dirname } from 'node:path';
 import { builtinModules } from 'node:module';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -8,15 +9,23 @@ import { build, version as esbuildVersion } from 'esbuild';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const within = (root, path) => { const value = relative(root, path); return value !== '' && value !== '..' && !value.startsWith('..' + sep) && !isAbsolute(value); };
-const buildReceiptPath = resolve('artifacts/guest-hosted/build-h1-002/build-receipt.json');
-const buildReceiptHash = '4db8634c0a37dcc60e86f03b8cdba2340c7e3f43ec8d0f0c3ebef0aba8592ed7';
-const trustedSchemas = new WeakSet();
-export async function loadGuestHostedSchemas() {
-  const bytes = await readFile(buildReceiptPath);
+const trustedSchemas = new WeakMap();
+export async function loadGuestHostedSchemas(options) {
+  try { return await loadVerifiedSchemas(options?.verifiedPackage); }
+  catch { throw new Error('GUEST_SCHEMA_SOURCE_INVALID'); }
+}
+async function loadVerifiedSchemas(verifiedPackage) {
+  if (!verifiedPackage || verifiedPackage.mode !== 'offline' || typeof verifiedPackage.manifestPath !== 'string' || !verifiedPackage.manifest?.inventory) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  const checked = await verifyGuestHostedPackage({ manifestPath: verifiedPackage.manifestPath, inventory: verifiedPackage.manifest.inventory, mode: 'offline' });
+  if (checked.packageDigest !== verifiedPackage.packageDigest || canonical(checked.manifest) !== canonical(verifiedPackage.manifest)) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  const manifest = checked.manifest;
+  const buildReceiptHash = manifest.buildReceiptSha256;
+  const bytes = await readFile(join(dirname(checked.manifestPath), 'build-receipt.json'));
   if (hash(bytes) !== buildReceiptHash) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   const receipt = JSON.parse(bytes.toString('utf8'));
-  if (receipt.status !== 'built' || receipt.applicationRevision !== 'f13431c487266c3982b4aa9fdcda29e705aac7e6') throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  if (receipt.status !== 'built' || receipt.applicationRevision !== manifest.applicationRevision || receipt.lockSha256 !== manifest.lockSha256 || hash(canonical(receipt.sourceInputs)) !== manifest.sourceInputsSha256) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   const root = await realpath(receipt.sourceRoot), dependencies = await realpath(receipt.dependencyRoot);
+  if (dependencies !== await realpath(join(workspaceRoot, 'node_modules'))) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   const sourceHashes = new Map(receipt.sourceInputs.map(item => [item.path.replaceAll('/', sep), item.sha256]));
   const tsconfig = join(root, 'tsconfig.json');
   if (hash(await readFile(tsconfig)) !== sourceHashes.get('tsconfig.json')) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
@@ -51,7 +60,9 @@ export async function loadGuestHostedSchemas() {
   inputs.sort((a, b) => a.path.localeCompare(b.path));
   const code = result.outputFiles[0].text;
   const schemas = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
-  trustedSchemas.add(schemas);
+  const identities = trustedSchemas.get(schemas) ?? new Set();
+  identities.add(canonical({ packageDigest: checked.packageDigest, buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision }));
+  trustedSchemas.set(schemas, identities);
   return { schemas, provenance: { buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision, node: process.version, esbuild: esbuildVersion, zodVersion, zodManifestSha256: hash(zodManifest), loaderSha256: hash(await readFile(fileURLToPath(import.meta.url))), lockSha256: receipt.lockSha256, inputs, outputSha256: hash(code), externalImports: 0 } };
 }
 
@@ -138,7 +149,10 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
   if (!verifiedPackage || verifiedPackage.mode !== 'offline' || !/^[a-f0-9]{64}$/.test(verifiedPackage.packageDigest ?? '') || verifiedPackage.manifest?.inventory?.hostname !== 'guest-diagnostic.mykairos.me') throw new Error('GUEST_PACKAGE_INVALID');
   if (targetOrigin !== 'https://guest-diagnostic.mykairos.me') throw new Error('GUEST_TARGET_INVALID');
   if (!Array.isArray(workload) || workload.length > GUEST_LIMITS.appRequests || workload.some(item => !GUEST_ROUTES.some(route => route.path === item?.path && route.method === item?.method))) throw new Error('GUEST_WORKLOAD_INVALID');
-  if (workload.some(item => item.path !== '/api/health') && (!schemas || !trustedSchemas.has(schemas))) throw new Error('GUEST_SCHEMA_REQUIRED');
+  if (workload.some(item => item.path !== '/api/health')) {
+    const identity = canonical({ packageDigest: verifiedPackage.packageDigest, buildReceiptSha256: verifiedPackage.manifest.buildReceiptSha256, applicationRevision: verifiedPackage.manifest.applicationRevision });
+    if (!schemas || !trustedSchemas.get(schemas)?.has(identity)) throw new Error('GUEST_SCHEMA_REQUIRED');
+  }
   if (!Array.isArray(sensitiveValues)) throw new Error('GUEST_ADAPTER_REQUIRED');
   if (workload.some((item, index) => !Number.isSafeInteger(item.phase ?? 0) || (item.phase ?? 0) < 0 || (index > 0 && (item.phase ?? 0) < (workload[index - 1].phase ?? 0)))) throw new Error('GUEST_WORKLOAD_INVALID');
   const operations = guestFixtureProtocol(verifiedPackage.manifest.inventory).operations;

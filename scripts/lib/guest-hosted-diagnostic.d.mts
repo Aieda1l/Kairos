@@ -27,7 +27,7 @@ export interface DiagnosticReceipt {
   observation?: Record<string, unknown>;
 }
 type Schema = { safeParse(value: unknown): { success: boolean } };
-export function loadGuestHostedSchemas(): Promise<{ schemas: Record<string, Schema>; provenance: { externalImports: number; [key: string]: unknown } }>;
+export function loadGuestHostedSchemas(options: { verifiedPackage: { manifestPath: string; packageDigest: string; mode: string; manifest: Record<string, unknown> } }): Promise<{ schemas: Record<string, Schema>; provenance: { externalImports: number; [key: string]: unknown } }>;
 export function runGuestHostedDiagnostic(options: {
   verifiedPackage: { packageDigest: string; mode: string; manifest: { inventory: { hostname: string; runId: string; scenario: string; [key: string]: unknown } } };
   targetOrigin: string;
