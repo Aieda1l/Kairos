@@ -26,6 +26,9 @@
     "verify:hosted": "node scripts/verify-production-safety.mjs",
     "verify:workerd": "node scripts/verify-workerd-integrations.mjs",
     "verify:workerd:abuse": "node scripts/verify-workerd-abuse.mjs",
+    "prepare:guest-hosted": "node scripts/run-guest-hosted-diagnostic.mjs --prepare",
+    "verify:guest-hosted:prepared": "node scripts/run-guest-hosted-diagnostic.mjs --verify-prepared",
+    "verify:workerd:guest-hosted": "node scripts/verify-workerd-guest-hosted-package.mjs",
     "verify:guest-retention": "node scripts/verify-workerd-guest-retention.mjs",
     "dev:next-compat": "next dev"
   },

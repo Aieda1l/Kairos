@@ -1,0 +1,52 @@
+﻿# Offline templates only. Do not execute without a separately approved operator plan.
+# Discover entitlement, allowed fields, limits and duration before issuing analytics queries.
+query GuestCapabilities($accountTag: string) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    settings {
+      workersInvocationsAdaptive { enabled availableFields maxPageSize maxNumberOfFields notOlderThan maxDuration }
+      d1AnalyticsAdaptiveGroups { enabled availableFields maxPageSize maxNumberOfFields notOlderThan maxDuration }
+    }
+  } }
+}
+
+# Account schema evidence: descriptions and accepted filter types must be retained.
+# Resolve named types from these results before choosing further introspection fields.
+query GuestSchemaUnits {
+  __schema { types { name description fields { name description type { kind name ofType { kind name } } args { name type { kind name ofType { kind name } } } } inputFields { name description type { kind name ofType { kind name } } } } }
+}
+
+# Per-script/status sampled quantiles, not per-request values or peak memory.
+# Inspect field descriptions and units; cpuTime units remain unknown until verified.
+query GuestWorkerMetrics($accountTag: string, $start: string, $end: string, $scriptName: string) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    workersInvocationsAdaptive(limit: 100, filter: { scriptName: $scriptName, datetime_geq: $start, datetime_leq: $end }) {
+      sum { requests errors subrequests }
+      quantiles { cpuTimeP50 cpuTimeP99 memoryUsageBytesP50 memoryUsageBytesP90 memoryUsageBytesP99 memoryUsageBytesP999 }
+      dimensions { scriptName status }
+    }
+  } }
+}
+
+# Independent phase-wide sampled quantiles; never average status/bucket quantiles.
+# Filter by one exact script and homogeneous phase window; preserve schema units.
+query GuestWorkerPhaseMetrics($accountTag: string, $start: string, $end: string, $scriptName: string) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    workersInvocationsAdaptive(limit: 100, filter: { scriptName: $scriptName, datetime_geq: $start, datetime_leq: $end }) {
+      sum { requests errors subrequests }
+      quantiles { cpuTimeP50 cpuTimeP99 memoryUsageBytesP50 memoryUsageBytesP90 memoryUsageBytesP99 memoryUsageBytesP999 }
+      dimensions { scriptName }
+    }
+  } }
+}
+
+# Date-scoped gross database totals, including same-day setup and observation.
+# One query per fresh app/fixture database. A complete result is required; no top-five totals.
+# Future finer windows require accepted account filter/field evidence; do not invent them.
+query GuestD1Rows($accountTag: string!, $start: Date, $end: Date, $databaseId: string) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date_geq: $start, date_leq: $end, databaseId: $databaseId }) {
+      sum { rowsRead rowsWritten readQueries writeQueries }
+      dimensions { date databaseId }
+    }
+  } }
+}
