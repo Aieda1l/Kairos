@@ -6,12 +6,12 @@ import { join, resolve } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { verifyGuestHostedPackage, FIXTURE_SECRET_NAMES } from './lib/guest-hosted-package.mjs';
-import { canonical, sha256 } from './lib/guest-hosted-build.mjs';
+import { canonical, ownedOutput, sha256 } from './lib/guest-hosted-build.mjs';
 import { loadGuestHostedSchemas, runGuestHostedDiagnostic } from './lib/guest-hosted-diagnostic.mjs';
-import { createNativeRequestAdapter, makeGuestWorkload, NATIVE_INVENTORY as inventory, NATIVE_PACKAGE_DIGEST as digest, preserveAdmissions, tableDigest } from './lib/guest-hosted-native.mjs';
+import { createNativeRequestAdapter, makeGuestWorkload, NATIVE_INVENTORY as inventory, NATIVE_PACKAGE_DIGEST as digest, orderNativeModules, preserveAdmissions, tableDigest } from './lib/guest-hosted-native.mjs';
 
 const root = resolve('artifacts/guest-hosted/package-h1-native-fix1');
-const evidence = resolve('artifacts/guest-hosted/h2-native');
+const evidence = resolve('artifacts/guest-hosted/h2-native-fix1');
 const assert = value => { if (!value) throw new Error('GUEST_NATIVE_ASSERTION_FAILED'); };
 const same = (a, b) => canonical(a) === canonical(b);
 const bounded = async (work, ms = 10000) => {
@@ -24,19 +24,26 @@ const proofEntry = `import './prelude.mjs';import {early} from './proof-capture.
 const sinkScript = `let attempts=0;export default{fetch(request){if(request.url==='https://driver.invalid/stats')return Response.json({attempts});attempts++;return new Response('DENIED',{status:502});}};`;
 const absentEntry = `import './prelude.mjs';import candidate from './entry.mjs';import {fixtureFetch} from './prelude.mjs';export default {async fetch(){try{await fixtureFetch('https://canvas.uw.edu/feeds/calendars/hosted-smoke.ics',{redirect:'manual'});return Response.json({denied:false});}catch(error){return Response.json({denied:error.message==='GUEST_TRANSPORT_DENIED',application:typeof candidate.fetch==='function'});}}};`;
 
-let mf, absent, agent;
+let mf, absent, agent, evidenceOwned = false;
 let result = { schemaVersion: 1, status: 'incomplete', code: 'GUEST_NATIVE_FAILED', nativeOnly: true, hostedExecution: false, packageDigest: digest };
 try {
   assert(process.argv.length === 2);
-  await mkdir(evidence, { recursive: true });
+  await ownedOutput(evidence);
+  await mkdir(evidence);
+  evidenceOwned = true;
   const verified = await verifyGuestHostedPackage({ manifestPath: join(root, 'manifest.json'), inventory, mode: 'offline' });
   assert(verified.packageDigest === digest);
   const { schemas, provenance } = await loadGuestHostedSchemas();
-  const moduleFiles = verified.manifest.uploadFiles.filter(path => !path.startsWith('fixture/'));
+  const candidateConfig = JSON.parse(await readFile(join(root, 'wrangler.candidate.json'), 'utf8'));
+  const fixtureConfig = JSON.parse(await readFile(join(root, 'wrangler.fixture.json'), 'utf8'));
+  // Miniflare selects the first module as main, unlike sorted upload inventories.
+  const moduleFiles = orderNativeModules(verified.manifest.uploadFiles.filter(path => !path.startsWith('fixture/')), candidateConfig.main);
   const modules = await Promise.all(moduleFiles.map(async path => ({ type: 'ESModule', path: join(root, path), contents: await readFile(join(root, path), 'utf8') })));
-  const fixtureModules = await Promise.all(verified.manifest.uploadFiles.filter(path => path.startsWith('fixture/')).map(async path => ({ type: 'ESModule', path: join(root, path), contents: await readFile(join(root, path), 'utf8') })));
+  const fixtureFiles = orderNativeModules(verified.manifest.uploadFiles.filter(path => path.startsWith('fixture/')), fixtureConfig.main);
+  const fixtureModules = await Promise.all(fixtureFiles.map(async path => ({ type: 'ESModule', path: join(root, path), contents: await readFile(join(root, path), 'utf8') })));
   // UploadFiles are modules only; setup/config/migration files remain outside worker imports.
   assert(fixtureModules.length === 4);
+  assert(modules[0].path === resolve(root, candidateConfig.main) && fixtureModules[0].path === resolve(root, fixtureConfig.main));
   const proofModules = [{ type: 'ESModule', path: join(root, 'proof-entry.mjs'), contents: proofEntry }, ...modules, { type: 'ESModule', path: join(root, 'proof-capture.mjs'), contents: 'export const early=globalThis.fetch;' }];
   const secrets = { GUEST_OPERATOR_SECRET: randomUUID(), KAIROS_ABUSE_KEY_V1: randomBytes(32).toString('base64url'), KAIROS_TURNSTILE_SITE_KEY: randomUUID(), KAIROS_TURNSTILE_SECRET_KEY: randomUUID(), GUEST_FIXTURE_CHALLENGE_TOKEN: randomUUID(), GUEST_FIXTURE_ED_SMOKE_TOKEN: randomUUID(), GUEST_FIXTURE_ED_NEAR_TOKEN: randomUUID() };
   const sensitiveValues = Object.values(secrets);
@@ -163,10 +170,11 @@ finally {
   if (agent) try { await bounded(() => agent.destroy()); } catch { disposed = false; }
   result.disposed = disposed;
   if (!disposed || result.status !== 'passed') { result.status = 'incomplete'; result.code = 'GUEST_NATIVE_FAILED'; process.exitCode = 1; }
-  await mkdir(evidence, { recursive: true });
-  await writeFile(join(evidence, 'receipt.json'), JSON.stringify(result, null, 2) + '\n', 'utf8');
-  const files = ['receipt.json', ...(result.proofSha256 ? ['provenance.json'] : [])];
-  const index = await Promise.all(files.map(async path => ({ path, sha256: sha256(await readFile(join(evidence, path))) })));
-  await writeFile(join(evidence, 'hash-index.json'), JSON.stringify(index, null, 2) + '\n', 'utf8');
+  if (evidenceOwned) {
+    await writeFile(join(evidence, 'receipt.json'), JSON.stringify(result, null, 2) + '\n', 'utf8');
+    const files = ['receipt.json', ...(result.proofSha256 ? ['provenance.json'] : [])];
+    const index = await Promise.all(files.map(async path => ({ path, sha256: sha256(await readFile(join(evidence, path))) })));
+    await writeFile(join(evidence, 'hash-index.json'), JSON.stringify(index, null, 2) + '\n', 'utf8');
+  }
   console.log(JSON.stringify({ status: result.status, code: result.code, disposed }));
 }

@@ -6,6 +6,13 @@ import { GUEST_ROUTES } from './guest-hosted-package.mjs';
 export const NATIVE_PACKAGE_DIGEST = '8fd068a3335f6d547b2b305eb5b47105f0a2a27d791748abcddc7f3194537adc';
 export const NATIVE_INVENTORY = Object.freeze({ version: 1, runId: 'h1-native-fix1', scenario: 'bounded-v1', hostname: 'guest-diagnostic.mykairos.me', candidateName: 'kairos-guest-app-h1-native-fix1', fixtureName: 'kairos-guest-fixture-h1-native-fix1', appDatabaseName: 'kairos-guest-app-h1-native-fix1', fixtureDatabaseName: 'kairos-guest-fixture-h1-native-fix1', accountId: null, appDatabaseId: null, fixtureDatabaseId: null });
 
+export function orderNativeModules(paths, main) {
+  const safe = path => typeof path === 'string' && !path.includes('\\') && !path.includes(':') && path.split('/').every(part => part && part !== '.' && part !== '..');
+  const entry = typeof main === 'string' && main.startsWith('./') ? main.slice(2) : null;
+  if (!Array.isArray(paths) || !entry || !safe(entry) || paths.some(path => !safe(path)) || new Set(paths).size !== paths.length || !paths.includes(entry)) throw new Error('GUEST_NATIVE_ENTRY_INVALID');
+  return [entry, ...paths.filter(path => path !== entry).sort()];
+}
+
 export function makeGuestWorkload() {
   const source = (kind, near, phase) => ({ method: 'POST', path: kind === 'canvas' ? '/api/guest/sources/canvas/feed' : '/api/guest/sources/ed/' + kind, near, phase, requestId: randomUUID(), expectedCount: near ? kind === 'canvas' ? 2000 : kind === 'courses' ? 500 : 1000 : 1, ...(kind === 'lessons' ? { courseId: '12' } : {}) });
   return [

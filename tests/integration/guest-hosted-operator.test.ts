@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { createNativeRequestAdapter, makeGuestWorkload, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
+import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
 import { prepareHostedDiagnostic } from '../../scripts/lib/guest-hosted-observations.mjs';
 
 const origin = 'https://guest-diagnostic.mykairos.me';
 const secrets = { GUEST_OPERATOR_SECRET: 'synthetic-operator', GUEST_FIXTURE_CHALLENGE_TOKEN: 'synthetic-challenge', GUEST_FIXTURE_ED_SMOKE_TOKEN: 'synthetic-smoke', GUEST_FIXTURE_ED_NEAR_TOKEN: 'synthetic-near' };
 
 describe('guest diagnostic operator boundary', () => {
+  it('selects the verified config main before lexical data files without duplicating modules', () => {
+    const fixture = ['fixture/data.mjs', 'fixture/entry.mjs', 'fixture/request-body.mjs', 'fixture/worker.mjs'];
+    expect(orderNativeModules(fixture, './fixture/entry.mjs')).toEqual(['fixture/entry.mjs', 'fixture/data.mjs', 'fixture/request-body.mjs', 'fixture/worker.mjs']);
+    expect(fixture[0]).toBe('fixture/data.mjs');
+    expect(orderNativeModules(['prelude.mjs', 'app/server/index.js', 'entry.mjs'], './entry.mjs')).toEqual(['entry.mjs', 'app/server/index.js', 'prelude.mjs']);
+    for (const [paths, main] of [[fixture, './fixture/missing.mjs'], [[...fixture, fixture[0]], './fixture/entry.mjs'], [fixture, '../fixture/entry.mjs'] ] as [string[], string][]) {
+      expect(() => orderNativeModules(paths, main)).toThrow('GUEST_NATIVE_ENTRY_INVALID');
+    }
+  });
   it('defaults to a fixed refusal and never echoes argument values', () => {
     const result = spawnSync(process.execPath, ['scripts/run-guest-hosted-diagnostic.mjs', '--hosted', 'private-test-value'], { encoding: 'utf8' });
     expect(result.status).toBe(1);
