@@ -20,8 +20,15 @@ export async function loadGuestHostedSchemas() {
   const sourceHashes = new Map(receipt.sourceInputs.map(item => [item.path.replaceAll('/', sep), item.sha256]));
   const tsconfig = join(root, 'tsconfig.json');
   if (hash(await readFile(tsconfig)) !== sourceHashes.get('tsconfig.json')) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
-  if (hash(await readFile(join(root, 'package-lock.json'))) !== receipt.lockSha256) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  const lockBytes = await readFile(join(root, 'package-lock.json'));
+  if (hash(lockBytes) !== receipt.lockSha256) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   const zodManifest = await readFile(join(dependencies, 'zod', 'package.json'));
+  let zodVersion, lockedVersion;
+  try {
+    zodVersion = JSON.parse(zodManifest.toString('utf8')).version;
+    lockedVersion = JSON.parse(lockBytes.toString('utf8')).packages['node_modules/zod'].version;
+  } catch { throw new Error('GUEST_SCHEMA_SOURCE_INVALID'); }
+  if (typeof lockedVersion !== 'string' || !lockedVersion || zodVersion !== lockedVersion) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   const banned = new Set(builtinModules.flatMap(name => [name, 'node:' + name]));
   const result = await build({
     stdin: { contents: "export * from './src/lib/guest/sources/contracts.ts';", resolveDir: root, sourcefile: 'guest-diagnostic-schemas.ts', loader: 'ts' },
@@ -45,10 +52,44 @@ export async function loadGuestHostedSchemas() {
   const code = result.outputFiles[0].text;
   const schemas = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
   trustedSchemas.add(schemas);
-  return { schemas, provenance: { buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision, node: process.version, esbuild: esbuildVersion, zodVersion: JSON.parse(zodManifest.toString('utf8')).version, zodManifestSha256: hash(zodManifest), loaderSha256: hash(await readFile(fileURLToPath(import.meta.url))), lockSha256: receipt.lockSha256, inputs, outputSha256: hash(code), externalImports: 0 } };
+  return { schemas, provenance: { buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision, node: process.version, esbuild: esbuildVersion, zodVersion, zodManifestSha256: hash(zodManifest), loaderSha256: hash(await readFile(fileURLToPath(import.meta.url))), lockSha256: receipt.lockSha256, inputs, outputSha256: hash(code), externalImports: 0 } };
 }
 
 const unavailable = reason => ({ value: null, reason });
+function cacheDirectives(header) {
+  const parts = [];
+  let start = 0, quoted = false, escaped = false;
+  for (let i = 0; i < header.length; i++) {
+    const char = header[i];
+    if (escaped) { escaped = false; continue; }
+    if (quoted && char === '\\') { escaped = true; continue; }
+    if (char === '"') { quoted = !quoted; continue; }
+    if (char === ',' && !quoted) { parts.push(header.slice(start, i)); start = i + 1; }
+  }
+  if (quoted || escaped) return new Set();
+  parts.push(header.slice(start));
+  const bare = new Set();
+  for (const part of parts) {
+    const match = /^\s*([!#$%&'*+.^_`|~0-9A-Za-z-]+)(?:\s*=\s*(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+|"(?:[^"\\\r\n]|\\[^\r\n])*"))?\s*$/.exec(part);
+    if (!match) return new Set();
+    if (!part.includes('=')) bare.add(match[1].toLowerCase());
+  }
+  return bare;
+}
+function containsSensitive(payload, value) {
+  const pending = [payload];
+  while (pending.length) {
+    const current = pending.pop();
+    if (typeof current === 'string' && current.includes(value)) return true;
+    if (current && typeof current === 'object') {
+      for (const [key, member] of Object.entries(current)) {
+        if (key.includes(value)) return true;
+        pending.push(member);
+      }
+    }
+  }
+  return false;
+}
 const bounded = (fn, ms, abort) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => { abort?.(); reject(new Error('GUEST_TIMEOUT')); }, ms);
   Promise.resolve().then(fn).then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
@@ -123,6 +164,7 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
   };
   const deadline = Date.now() + GUEST_LIMITS.dispatchDeadlineMs;
   let stopped = false, index = 0;
+  const learnedCookies = new Set();
   const expected = Object.fromEntries(operations.map(operation => [operation.key, 0]));
   let appAdmissions = 0;
   const remaining = () => Math.max(1, Math.min(GUEST_LIMITS.requestTimeoutMs, deadline - Date.now()));
@@ -142,15 +184,16 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
             const health = item.path === '/api/health';
             const negative = item.case === 'wrong-origin' || item.case === 'missing-capability';
             const expectedStatus = item.case === 'wrong-origin' ? 403 : item.case === 'missing-capability' ? 401 : 200;
-            if (response.status !== expectedStatus || !/no-store/i.test(response.headers.get('cache-control') ?? '')) denyResponse(response);
+            const directives = cacheDirectives(response.headers.get('cache-control') ?? '');
+            if (response.status !== expectedStatus || !directives.has('no-store')) denyResponse(response);
             const limit = health ? 256 : negative || item.path.endsWith('/session') ? 16384 : item.path.endsWith('/courses') ? 524288 : 2097152;
             const payload = await readBody(response, controller.signal, limit);
             const text = JSON.stringify(payload);
-            if (sensitiveValues.some(value => typeof value !== 'string' || !value || text.includes(value))) throw new Error('GUEST_RESPONSE_INVALID');
+            if (sensitiveValues.some(value => typeof value !== 'string' || !value || text.includes(value) || containsSensitive(payload, value)) || [...learnedCookies].some(value => text.includes(value) || containsSensitive(payload, value))) throw new Error('GUEST_RESPONSE_INVALID');
             if (health) {
               if (!payload || Array.isArray(payload) || Object.keys(payload).length !== 1 || payload.status !== 'ok') throw new Error('GUEST_RESPONSE_INVALID');
             } else {
-              if (!/application\/json/i.test(response.headers.get('content-type') ?? '') || !/private/i.test(response.headers.get('cache-control') ?? '')) throw new Error('GUEST_RESPONSE_INVALID');
+              if ((response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase() !== 'application/json' || !directives.has('private')) throw new Error('GUEST_RESPONSE_INVALID');
               const schema = negative ? schemas.guestApiErrorSchema : item.path.endsWith('/session') ? schemas.guestSessionResponseSchema : item.path.endsWith('/feed') ? schemas.guestCanvasFeedResponseSchema : item.path.endsWith('/courses') ? schemas.guestEdCoursesResponseSchema : schemas.guestEdLessonsResponseSchema;
               if (!schema?.safeParse(payload).success) throw new Error('GUEST_RESPONSE_INVALID');
               if (negative) {
@@ -161,7 +204,8 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
                   const attributes = parts.slice(1).map(part => part.toLowerCase()).sort();
                   if (!/^__Host-kairos-guest-sync=[^;\s,]+$/.test(parts[0] ?? '') || JSON.stringify(attributes) !== JSON.stringify(['httponly', 'max-age=1800', 'path=/', 'samesite=strict', 'secure'])) throw new Error('GUEST_RESPONSE_INVALID');
                   const value = parts[0].slice(parts[0].indexOf('=') + 1);
-                  if (text.includes(value)) throw new Error('GUEST_RESPONSE_INVALID');
+                  if (text.includes(value) || containsSensitive(payload, value)) throw new Error('GUEST_RESPONSE_INVALID');
+                  learnedCookies.add(value);
                 }
                 if (payload.requestId !== item.requestId || (item.path.endsWith('/lessons') && payload.courseId !== item.courseId)) throw new Error('GUEST_RESPONSE_INVALID');
                 const member = item.path.endsWith('/feed') ? 'assignments' : item.path.endsWith('/courses') ? 'courses' : item.path.endsWith('/lessons') ? 'lessons' : null;

@@ -112,3 +112,50 @@ it('releases a stalled reader even when read and cancel never settle', async () 
     expect(released).toBe(true);
   } finally { vi.useRealTimers(); }
 });
+
+it('requires real cache directives and JSON media type tokens', async () => {
+  const { schemas } = await loadGuestHostedSchemas();
+  const requestId = '00000000-0000-4000-8000-000000000002';
+  const after = snapshot(); after.fixture.challenge.calls = 1; after.tables.abuse_rate_events.count = 1;
+  const check = (cache: string, contentType: string) => run({ schemas, workload: [{ method: 'POST', path: '/api/guest/session', requestId }], observations: { ...observations, after: () => after }, request: () => new Response(JSON.stringify({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z' }), { headers: { 'cache-control': cache, 'content-type': contentType, 'set-cookie': '__Host-kairos-guest-sync=synthetic; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800' } }) });
+  for (const [cache, mime] of [['x-no-store, x-private', 'application/json'], ['other="no-store, private"', 'application/json'], ['other="x\\\", no-store, private"', 'application/json'], ['no-store, private', 'text/plain; note=application/json'], ['no-store, private', 'application/jsonp']]) expect((await check(cache, mime)).status).toBe('incomplete');
+  expect((await check(' No-Store , PRIVATE ', 'Application/JSON; charset=utf-8')).status).toBe('passed');
+  expect((await check('no-store, other="foo,private", private', 'application/json; charset=utf-8')).status).toBe('passed');
+  const health = await run({ workload: [{ method: 'GET', path: '/api/health' }], request: () => new Response('{"status":"ok"}', { headers: { 'cache-control': 'other="no-store, x"' } }) });
+  expect(health.status).toBe('incomplete');
+});
+
+it('rejects a learned cookie echoed in a later valid source response', async () => {
+  const { schemas } = await loadGuestHostedSchemas();
+  const requestId = '00000000-0000-4000-8000-000000000002';
+  const capability = 'synthetic' + String.fromCharCode(34) + 'CapabilityValue';
+  const after = snapshot(); after.fixture.challenge.calls = 1; after.fixture['ed-courses-smoke'].calls = 1; after.tables.abuse_rate_events.count = 4;
+  const check = (fullName: string, sensitiveValues?: string[]) => run({ schemas, sensitiveValues, workload: [{ method: 'POST', path: '/api/guest/session', requestId, phase: 0 }, { method: 'POST', path: '/api/guest/sources/ed/courses', requestId, expectedCount: 1, phase: 1 }], observations: { ...observations, after: () => after }, request: (_url: string, options: { item: { path: string } }) => options.item.path.endsWith('/session') ? Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z' }, { headers: { 'cache-control': 'no-store, private', 'set-cookie': `__Host-kairos-guest-sync=${capability}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800` } }) : Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', courses: [{ externalCourseId: '12', shortName: null, fullName, term: null, year: null }] }, { headers: { 'cache-control': 'no-store, private' } }) });
+  expect((await check('Ordinary course')).status).toBe('passed');
+  const rejected = await check(capability);
+  expect(rejected.status).toBe('incomplete');
+  expect(rejected.completed).toBe(1);
+  expect(JSON.stringify(rejected)).not.toContain(capability);
+  expect((await check(capability, ['syntheticProviderSecret'])).status).toBe('incomplete');
+  expect((await check('syntheticProviderSecret', ['syntheticProviderSecret'])).status).toBe('incomplete');
+});
+
+it('rejects installed Zod version drift before bundling', async () => {
+  const { vi } = await import('vitest');
+  let builds = 0;
+  vi.resetModules();
+  vi.doMock('node:fs/promises', async importOriginal => {
+    const original = await importOriginal<typeof import('node:fs/promises')>();
+    return { ...original, readFile: async (...args: Parameters<typeof original.readFile>) => {
+      if (String(args[0]).replaceAll('\\', '/').endsWith('/node_modules/zod/package.json')) return Buffer.from('{"version":"0.0.0"}');
+      return original.readFile(...args);
+    } };
+  });
+  vi.doMock('esbuild', async importOriginal => { const original = await importOriginal<typeof import('esbuild')>(); return { ...original, build: (...args: Parameters<typeof original.build>) => { builds++; return original.build(...args); } }; });
+  try {
+    const fresh = await import('../../scripts/lib/guest-hosted-diagnostic.mjs');
+    const failure = await fresh.loadGuestHostedSchemas().then(() => null, error => error.message);
+    expect(failure).toBe('GUEST_SCHEMA_SOURCE_INVALID');
+    expect(builds).toBe(0);
+  } finally { vi.doUnmock('node:fs/promises'); vi.doUnmock('esbuild'); vi.resetModules(); }
+});

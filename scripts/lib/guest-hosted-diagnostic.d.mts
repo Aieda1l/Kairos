@@ -35,5 +35,6 @@ export function runGuestHostedDiagnostic(options: {
   request: (url: string, options: { method: string; redirect: 'manual'; signal: AbortSignal; item: DiagnosticWorkloadItem }) => Response | Promise<Response>;
   observations: { before(): DiagnosticSnapshot | Promise<DiagnosticSnapshot>; quiesce(): boolean | Promise<boolean>; after(): DiagnosticSnapshot | Promise<DiagnosticSnapshot> };
   schemas?: Record<string, Schema>;
+  /** Supply non-cookie synthetic secrets for response-echo checks. Bootstrap cookies are remembered automatically. */
   sensitiveValues?: string[];
 }): Promise<DiagnosticReceipt>;
