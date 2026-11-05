@@ -6,7 +6,7 @@ This file records the current milestone numbering for Kairos. Approved milestone
 
 Guest implementation merged in [PR 53](https://github.com/Aieda1l/Kairos/pull/53). Automatic [main CI run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) passed on `0a44c6a`: 2,197 unit tests, 143 browser cases, builds and native checks. Guest remains disabled pending hosted capacity, retention and live-provider evidence plus deployment/activation review. [Release validation preparation](plans/2026-11-04-guest-release-validation.md) and the [local retention probe](../deployment/guest-retention-validation.md) advance that work without a production change.
 
-An offline [isolated hosted-test package](../deployment/guest-hosted-test-package.md) is prepared and passes local native route/concurrency/state proofs. Its [implementation plan](plans/2026-11-04-guest-hosted-test-package.md) preserves Free-plan diagnostic limits and separate resource/activation approval. Full package review/new-branch CI precede integration; hosted measurements have not run and no Cloudflare resources or production settings changed.
+An offline [isolated hosted-test package](../deployment/guest-hosted-test-package.md) is prepared and passes local native route/concurrency/state proofs, with final package review accepted. Its [implementation plan](plans/2026-11-04-guest-hosted-test-package.md) preserves Free-plan diagnostic limits and separate resource/activation approval. Fresh new-branch CI precedes protected integration; hosted measurements have not run and no Cloudflare resources or production settings changed.
 
 ## Milestone 1 — Core local assignment dashboard — Complete
 
