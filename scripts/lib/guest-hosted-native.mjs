@@ -1,10 +1,28 @@
 // Local proof adapters only. No hosted fetch, account or deployment adapter.
 import { randomUUID } from 'node:crypto';
+import { lstat, readFile } from 'node:fs/promises';
+import { basename, resolve } from 'node:path';
 import { canonical, sha256 } from './guest-hosted-build.mjs';
 import { GUEST_ROUTES } from './guest-hosted-package.mjs';
 
-export const NATIVE_PACKAGE_DIGEST = '8fd068a3335f6d547b2b305eb5b47105f0a2a27d791748abcddc7f3194537adc';
-export const NATIVE_INVENTORY = Object.freeze({ version: 1, runId: 'h1-native-fix1', scenario: 'bounded-v1', hostname: 'guest-diagnostic.mykairos.me', candidateName: 'kairos-guest-app-h1-native-fix1', fixtureName: 'kairos-guest-fixture-h1-native-fix1', appDatabaseName: 'kairos-guest-app-h1-native-fix1', fixtureDatabaseName: 'kairos-guest-fixture-h1-native-fix1', accountId: null, appDatabaseId: null, fixtureDatabaseId: null });
+const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const argument = value => typeof value === 'string' && value.trim() === value && value.length > 0 && !value.startsWith('--') && !/[\0\r\n]/.test(value);
+export function parseNativeProofArguments(args) {
+  if (!Array.isArray(args) || args.length !== 4 || !args.every(argument) || !digest(args[2])) throw new Error('GUEST_NATIVE_INPUT_REQUIRED');
+  return { manifestPath: args[0], inventoryPath: args[1], expectedDigest: args[2], evidenceRoot: args[3] };
+}
+export function parseGuestHostedArguments(args) {
+  if (!Array.isArray(args) || args.length !== 4 || !args.slice(1).every(argument)) throw new Error('GUEST_EXPLICIT_ADAPTER_REQUIRED');
+  if (args[0] === '--prepare') return { mode: 'prepare', buildReceiptPath: args[1], inventoryPath: args[2], outputRoot: args[3] };
+  if (args[0] === '--verify-prepared' && digest(args[3])) return { mode: 'verify-prepared', manifestPath: args[1], inventoryPath: args[2], expectedDigest: args[3] };
+  if (args[0] === '--hosted' && digest(args[2])) return { mode: 'hosted', operatorInputPath: args[1], expectedDigest: args[2], evidenceRoot: args[3] };
+  throw new Error('GUEST_EXPLICIT_ADAPTER_REQUIRED');
+}
+export async function readGuestHostedJson(path, maxBytes = 65536) {
+  const resolved = resolve(path), stat = await lstat(resolved);
+  if (!resolved.endsWith('.json') || basename(resolved).startsWith('.') || stat.isSymbolicLink() || !stat.isFile() || stat.size > maxBytes) throw new Error('GUEST_OPERATOR_INPUT_INVALID');
+  return JSON.parse(await readFile(resolved, 'utf8'));
+}
 
 export function orderNativeModules(paths, main) {
   const safe = path => typeof path === 'string' && !path.includes('\\') && !path.includes(':') && path.split('/').every(part => part && part !== '.' && part !== '..');
@@ -46,7 +64,7 @@ export function preserveAdmissions(before, after) {
 }
 
 export function createNativeRequestAdapter({ origin, secrets, sensitiveValues, fetch, syntheticClientAddress = true }) {
-  if (origin !== 'https://' + NATIVE_INVENTORY.hostname || !Array.isArray(sensitiveValues) || typeof fetch !== 'function') throw new Error('GUEST_NATIVE_TARGET_INVALID');
+  if (origin !== 'https://guest-diagnostic.mykairos.me' || !Array.isArray(sensitiveValues) || typeof fetch !== 'function') throw new Error('GUEST_NATIVE_TARGET_INVALID');
   let cookie, active = 0, failed = false;
   const request = async (url, init) => {
     const item = init?.item;

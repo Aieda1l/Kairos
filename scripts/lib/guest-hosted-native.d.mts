@@ -1,6 +1,7 @@
 import type { DiagnosticWorkloadItem } from './guest-hosted-diagnostic.mjs';
-export const NATIVE_PACKAGE_DIGEST: string;
-export const NATIVE_INVENTORY: { readonly [key: string]: string | number | null };
+export function parseNativeProofArguments(args: string[]): { manifestPath: string; inventoryPath: string; expectedDigest: string; evidenceRoot: string };
+export function parseGuestHostedArguments(args: string[]): { mode: 'prepare'; buildReceiptPath: string; inventoryPath: string; outputRoot: string } | { mode: 'verify-prepared'; manifestPath: string; inventoryPath: string; expectedDigest: string } | { mode: 'hosted'; operatorInputPath: string; expectedDigest: string; evidenceRoot: string };
+export function readGuestHostedJson(path: string, maxBytes?: number): Promise<Record<string, unknown>>;
 export function makeGuestWorkload(): DiagnosticWorkloadItem[];
 export function orderNativeModules(paths: string[], main: string): string[];
 export function readGuestCookie(header: string | null): string;

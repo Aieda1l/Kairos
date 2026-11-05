@@ -1,19 +1,12 @@
 // No implicit network, credentials, provisioning, upload or hosted execution.
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { prepareGuestHostedPackage, verifyGuestHostedPackage } from './lib/guest-hosted-package.mjs';
-import { NATIVE_INVENTORY, NATIVE_PACKAGE_DIGEST } from './lib/guest-hosted-native.mjs';
-import { makeGuestWorkload } from './lib/guest-hosted-native.mjs';
+import { makeGuestWorkload, parseGuestHostedArguments, readGuestHostedJson } from './lib/guest-hosted-native.mjs';
 import { ownedOutput, sha256 } from './lib/guest-hosted-build.mjs';
 import { loadGuestHostedSchemas, runGuestHostedDiagnostic } from './lib/guest-hosted-diagnostic.mjs';
 import { prepareHostedDiagnostic } from './lib/guest-hosted-observations.mjs';
 
-async function readOperatorFile(path) {
-  const resolved = resolve(path);
-  const stat = await lstat(resolved);
-  if (!resolved.endsWith('.json') || basename(resolved).startsWith('.') || stat.isSymbolicLink() || !stat.isFile() || stat.size > 65536) throw new Error();
-  return JSON.parse(await readFile(resolved, 'utf8'));
-}
 async function readCredentials() {
   return new Promise((resolve, reject) => {
     let bytes = 0;
@@ -27,27 +20,30 @@ async function readCredentials() {
   });
 }
 
-const args = process.argv.slice(2);
+let args;
+try { args = parseGuestHostedArguments(process.argv.slice(2)); }
+catch { console.error('GUEST_EXPLICIT_ADAPTER_REQUIRED'); process.exit(1); }
 try {
-  if (args.length === 1 && args[0] === '--verify-prepared') {
-    const result = await verifyGuestHostedPackage({ manifestPath: resolve('artifacts/guest-hosted/package-h1-native-fix1/manifest.json'), inventory: NATIVE_INVENTORY, mode: 'offline' });
-    if (result.packageDigest !== NATIVE_PACKAGE_DIGEST) throw new Error();
+  if (args.mode === 'verify-prepared') {
+    const inventory = await readGuestHostedJson(args.inventoryPath);
+    const result = await verifyGuestHostedPackage({ manifestPath: resolve(args.manifestPath), inventory, mode: 'offline' });
+    if (result.packageDigest !== args.expectedDigest) throw new Error();
     console.log(JSON.stringify({ status: 'prepared-only', packageDigest: result.packageDigest, deployable: false, cloudActionAuthorized: false }));
-  } else if (args.length === 3 && args[0] === '--prepare') {
-    const inventory = await readOperatorFile(args[1]);
-    // Use the immutable accepted build; no Vite rebuild or ambient env loading.
-    const buildReceipt = JSON.parse(await readFile(resolve('artifacts/guest-hosted/build-h1-002/build-receipt.json'), 'utf8'));
-    const result = await prepareGuestHostedPackage({ buildReceipt, inventory, outputRoot: resolve(args[2]) });
-    console.log(JSON.stringify({ status: 'prepared-only', manifestPath: join(resolve(args[2]), 'manifest.json'), packageDigest: result.packageDigest, deployable: false, cloudActionAuthorized: false }));
-  } else if (args.length === 3 && args[0] === '--hosted') {
+  } else if (args.mode === 'prepare') {
+    const inventory = await readGuestHostedJson(args.inventoryPath);
+    // Explicit existing build only; no Vite rebuild or ambient env loading.
+    const buildReceipt = await readGuestHostedJson(args.buildReceiptPath, 4194304);
+    const result = await prepareGuestHostedPackage({ buildReceipt, inventory, outputRoot: resolve(args.outputRoot) });
+    console.log(JSON.stringify({ status: 'prepared-only', manifestPath: join(resolve(args.outputRoot), 'manifest.json'), packageDigest: result.packageDigest, deployable: false, cloudActionAuthorized: false }));
+  } else if (args.mode === 'hosted') {
     // An explicit approved future run. Never invoked by preparation or native proof.
-    const input = await readOperatorFile(args[1]);
+    const input = await readGuestHostedJson(args.operatorInputPath);
     const credentials = await readCredentials();
-    const prepared = await prepareHostedDiagnostic({ input, expectedDigest: args[2], credentials });
+    const prepared = await prepareHostedDiagnostic({ input, expectedDigest: args.expectedDigest, credentials });
     let result, output;
     try {
-      const { schemas, provenance } = await loadGuestHostedSchemas();
-      output = await ownedOutput(resolve('artifacts/guest-hosted/hosted-' + input.inventory.runId + '-' + Date.now()));
+      const { schemas, provenance } = await loadGuestHostedSchemas({ verifiedPackage: prepared.verifiedPackage });
+      output = await ownedOutput(resolve(args.evidenceRoot));
       await mkdir(output);
       const diagnostic = await runGuestHostedDiagnostic({ ...prepared, workload: makeGuestWorkload(), schemas });
       result = { ...diagnostic, executionMode: 'hosted', nativeOnly: false, authorization: prepared.authorization, observerCosts: prepared.observerCosts, observerLimits: prepared.limits, schemaProvenance: provenance, costs: { ...diagnostic.costs, setup: null, fixture: null, observer: prepared.observerCosts, teardown: null }, unmeasuredReasons: { setup: 'operator_setup_outside_driver', fixture: 'fixture_workload_cost_not_observed_per_request', hostedAnalytics: 'graphql_templates_not_executed', teardown: 'explicit_operator_teardown_outside_driver' } };

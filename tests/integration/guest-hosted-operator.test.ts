@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
+import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, parseGuestHostedArguments, parseNativeProofArguments, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
 import { prepareHostedDiagnostic } from '../../scripts/lib/guest-hosted-observations.mjs';
 
 const origin = 'https://guest-diagnostic.mykairos.me';
 const secrets = { GUEST_OPERATOR_SECRET: 'synthetic-operator', GUEST_FIXTURE_CHALLENGE_TOKEN: 'synthetic-challenge', GUEST_FIXTURE_ED_SMOKE_TOKEN: 'synthetic-smoke', GUEST_FIXTURE_ED_NEAR_TOKEN: 'synthetic-near' };
 
 describe('guest diagnostic operator boundary', () => {
+  it('requires explicit native package identity and fresh evidence location without retained defaults', () => {
+    const digest = 'a'.repeat(64);
+    expect(parseNativeProofArguments(['owned/manifest.json', 'inventory.json', digest, 'owned/proof-new'])).toEqual({ manifestPath: 'owned/manifest.json', inventoryPath: 'inventory.json', expectedDigest: digest, evidenceRoot: 'owned/proof-new' });
+    for (const invalid of [[], ['owned/manifest.json', 'inventory.json', digest], ['owned/manifest.json', 'inventory.json', 'invalid', 'owned/proof'], ['owned/manifest.json', 'inventory.json', digest, '--remote']]) expect(() => parseNativeProofArguments(invalid)).toThrow('GUEST_NATIVE_INPUT_REQUIRED');
+  });
+  it('requires explicit build or verified package inputs and hosted evidence output', () => {
+    const digest = 'b'.repeat(64);
+    expect(parseGuestHostedArguments(['--prepare', 'build-receipt.json', 'inventory.json', 'owned/package-new'])).toEqual({ mode: 'prepare', buildReceiptPath: 'build-receipt.json', inventoryPath: 'inventory.json', outputRoot: 'owned/package-new' });
+    expect(parseGuestHostedArguments(['--verify-prepared', 'owned/manifest.json', 'inventory.json', digest])).toEqual({ mode: 'verify-prepared', manifestPath: 'owned/manifest.json', inventoryPath: 'inventory.json', expectedDigest: digest });
+    expect(parseGuestHostedArguments(['--hosted', 'operator-input.json', digest, 'owned/hosted-new'])).toEqual({ mode: 'hosted', operatorInputPath: 'operator-input.json', expectedDigest: digest, evidenceRoot: 'owned/hosted-new' });
+    for (const invalid of [[], ['--verify-prepared'], ['--prepare', 'inventory.json', 'owned/package'], ['--hosted', 'operator-input.json', digest]]) expect(() => parseGuestHostedArguments(invalid)).toThrow('GUEST_EXPLICIT_ADAPTER_REQUIRED');
+  });
   it('selects the verified config main before lexical data files without duplicating modules', () => {
     const fixture = ['fixture/data.mjs', 'fixture/entry.mjs', 'fixture/request-body.mjs', 'fixture/worker.mjs'];
     expect(orderNativeModules(fixture, './fixture/entry.mjs')).toEqual(['fixture/entry.mjs', 'fixture/data.mjs', 'fixture/request-body.mjs', 'fixture/worker.mjs']);
@@ -20,6 +32,12 @@ describe('guest diagnostic operator boundary', () => {
     const result = spawnSync(process.execPath, ['scripts/run-guest-hosted-diagnostic.mjs', '--hosted', 'private-test-value'], { encoding: 'utf8' });
     expect(result.status).toBe(1);
     expect(result.stderr.trim()).toBe('GUEST_EXPLICIT_ADAPTER_REQUIRED');
+    expect(result.stdout).toBe('');
+  });
+  it('refuses native execution before creating a runtime when inputs are absent', () => {
+    const result = spawnSync(process.execPath, ['scripts/verify-workerd-guest-hosted-package.mjs'], { encoding: 'utf8' });
+    expect(result.status).toBe(1);
+    expect(result.stderr.trim()).toBe('GUEST_NATIVE_INPUT_REQUIRED');
     expect(result.stdout).toBe('');
   });
 
@@ -88,7 +106,7 @@ describe('hosted operator preflight with injected read-only fakes', () => {
   const expectedDigest = 'b'.repeat(64);
   const input = () => ({ schemaVersion: 1, manifestPath: 'artifacts/guest-hosted/package-h2-hosted-unit/manifest.json', inventory, authorization: { approved: true, action: 'guest-diagnostic-read-only-run', packageDigest: expectedDigest, runId: inventory.runId, hostname: inventory.hostname } });
   const credentials = { apiReadToken: 'private-read-token', secrets: { ...secrets, KAIROS_ABUSE_KEY_V1: 'private-hmac', KAIROS_TURNSTILE_SITE_KEY: 'private-sitekey', KAIROS_TURNSTILE_SECRET_KEY: 'private-challenge-key' } };
-  const verifyPackage = async (options: { mode?: string }) => ({ packageDigest: expectedDigest, mode: options.mode ?? 'offline', manifest: { inventory } });
+  const verifyPackage = async (options: { manifestPath: string; mode?: string }) => ({ manifestPath: options.manifestPath, packageDigest: expectedDigest, mode: options.mode ?? 'offline', manifest: { inventory } });
 
   it('rejects missing authorization, unresolved identity, digest drift and unknown fields before any API request', async () => {
     let calls = 0;

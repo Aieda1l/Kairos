@@ -2,16 +2,20 @@
 import { Agent, buildConnector, fetch as localFetch } from 'undici';
 import { Miniflare, Log, LogLevel, convertV4MiniflareOptions } from 'miniflare';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { verifyGuestHostedPackage, FIXTURE_SECRET_NAMES } from './lib/guest-hosted-package.mjs';
 import { canonical, ownedOutput, sha256 } from './lib/guest-hosted-build.mjs';
 import { loadGuestHostedSchemas, runGuestHostedDiagnostic } from './lib/guest-hosted-diagnostic.mjs';
-import { createNativeRequestAdapter, makeGuestWorkload, NATIVE_INVENTORY as inventory, NATIVE_PACKAGE_DIGEST as digest, orderNativeModules, preserveAdmissions, tableDigest } from './lib/guest-hosted-native.mjs';
+import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, parseNativeProofArguments, preserveAdmissions, readGuestHostedJson, tableDigest } from './lib/guest-hosted-native.mjs';
 
-const root = resolve('artifacts/guest-hosted/package-h1-native-fix1');
-const evidence = resolve('artifacts/guest-hosted/h2-native-fix1');
+let args;
+try { args = parseNativeProofArguments(process.argv.slice(2)); }
+catch { console.error('GUEST_NATIVE_INPUT_REQUIRED'); process.exit(1); }
+const root = dirname(resolve(args.manifestPath));
+const evidence = resolve(args.evidenceRoot);
+const digest = args.expectedDigest;
 const assert = value => { if (!value) throw new Error('GUEST_NATIVE_ASSERTION_FAILED'); };
 const same = (a, b) => canonical(a) === canonical(b);
 const bounded = async (work, ms = 10000) => {
@@ -27,13 +31,13 @@ const absentEntry = `import './prelude.mjs';import candidate from './entry.mjs';
 let mf, absent, agent, evidenceOwned = false;
 let result = { schemaVersion: 1, status: 'incomplete', code: 'GUEST_NATIVE_FAILED', nativeOnly: true, hostedExecution: false, packageDigest: digest };
 try {
-  assert(process.argv.length === 2);
+  const inventory = await readGuestHostedJson(args.inventoryPath);
   await ownedOutput(evidence);
   await mkdir(evidence);
   evidenceOwned = true;
-  const verified = await verifyGuestHostedPackage({ manifestPath: join(root, 'manifest.json'), inventory, mode: 'offline' });
+  const verified = await verifyGuestHostedPackage({ manifestPath: resolve(args.manifestPath), inventory, mode: 'offline' });
   assert(verified.packageDigest === digest);
-  const { schemas, provenance } = await loadGuestHostedSchemas();
+  const { schemas, provenance } = await loadGuestHostedSchemas({ verifiedPackage: verified });
   const candidateConfig = JSON.parse(await readFile(join(root, 'wrangler.candidate.json'), 'utf8'));
   const fixtureConfig = JSON.parse(await readFile(join(root, 'wrangler.fixture.json'), 'utf8'));
   // Miniflare selects the first module as main, unlike sorted upload inventories.
@@ -49,7 +53,8 @@ try {
   const sensitiveValues = Object.values(secrets);
   const base = 'https://' + inventory.hostname;
   const bindings = { ...secrets, KAIROS_GUEST_ENABLED: 'true', KAIROS_APP_URL: base, KAIROS_ABUSE_TRUSTED_INGRESS: 'cloudflare' };
-  const shared = { compatibilityDate: '2026-10-06', compatibilityFlags: ['nodejs_compat'], outboundService: 'deny' };
+  assert(candidateConfig.compatibility_date === fixtureConfig.compatibility_date && same(candidateConfig.compatibility_flags, fixtureConfig.compatibility_flags));
+  const shared = { compatibilityDate: candidateConfig.compatibility_date, compatibilityFlags: candidateConfig.compatibility_flags, outboundService: 'deny' };
   const options = convertV4MiniflareOptions({ cf: false, https: true, log: new Log(LogLevel.NONE), workers: [
     { ...shared, name: 'candidate', routes: [inventory.hostname + '/*'], modules: proofModules, modulesRoot: root, bindings, d1Databases: { DB: 'h2-app-' + randomUUID() }, serviceBindings: { GUEST_FIXTURE: 'fixture', ASSETS: 'deny' } },
     { ...shared, name: 'fixture', modules: fixtureModules, modulesRoot: root, bindings: Object.fromEntries(FIXTURE_SECRET_NAMES.map(key => [key, secrets[key]])), d1Databases: { FIXTURE_DB: 'h2-fixture-' + randomUUID() } },
