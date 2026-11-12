@@ -215,7 +215,7 @@ export function SubmissionStatusProvider({
   initialSyncState: SubmissionStatusSyncState;
   children: ReactNode;
 }) {
-  const router = useRouter();
+  const {refresh} = useRouter();
   const [syncState, setSyncState] = useState(initialSyncState);
   const [phase, setPhase] = useState<SyncPhase>("idle");
   const [message, setMessage] = useState("");
@@ -348,10 +348,11 @@ export function SubmissionStatusProvider({
       }
 
       if (
+        !options?.deferRefresh &&
         completed.lastSuccessfulAt &&
         completed.lastSuccessfulAt !== syncState.lastSuccessfulAt
       ) {
-        router.refresh();
+        refresh();
       }
     } catch (error: unknown) {
       setPhase("error");
@@ -363,7 +364,7 @@ export function SubmissionStatusProvider({
     } finally {
       syncInFlightRef.current = false;
     }
-  }, [getExtensionInfo, router, syncState.lastSuccessfulAt]);
+  }, [getExtensionInfo, refresh, syncState.lastSuccessfulAt]);
 
   useEffect(() => {
     void getExtensionInfo().catch(() => undefined);
@@ -376,14 +377,23 @@ export function SubmissionStatusProvider({
       return;
     }
 
+    let cancelled=false;
     const timeout = window.setTimeout(() => {
-      if (autoStartedRef.current) return;
+      if (autoStartedRef.current || document.visibilityState!=="visible") return;
       autoStartedRef.current = true;
-      void syncNow();
+      void (async()=>{
+        try{
+          const extension=await getExtensionInfo();
+          if(cancelled || !extension.canvasTabDetected || document.visibilityState!=="visible")return;
+          await syncNow();
+        }catch{
+          // Readiness failed before any server registration. Manual retry remains available.
+        }
+      })();
     }, 0);
 
-    return () => window.clearTimeout(timeout);
-  }, [enabled, automaticEnabled, syncNow, syncState.lastSuccessfulAt]);
+    return () => {cancelled=true;window.clearTimeout(timeout);};
+  }, [enabled, automaticEnabled, getExtensionInfo, syncNow, syncState.lastSuccessfulAt]);
 
   return (
     <SubmissionStatusContext.Provider

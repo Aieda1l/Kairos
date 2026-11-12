@@ -18,13 +18,15 @@ import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 import {
   gradescopeAssignmentStructureDiagnosticsV1Schema,
+  gradescopeDiscoverResultV1Schema,
+  type GradescopeDiscoverResultV1,
   gradescopeSyncErrorCodeSchema,
   type GradescopeDiscoveryDiagnosticsV1,
   type GradescopeSyncErrorCode,
   type GradescopeSyncResultV1,
 } from "@/lib/extension-protocol/gradescope";
 import type { SubmissionStatusSyncState } from "@/lib/submission-status/types";
-import { pingKairosExtension } from "@/features/submission-status/extension-bridge";
+import { ExtensionBridgeError, pingKairosExtension } from "@/features/submission-status/extension-bridge";
 import {
   GradescopeBridgeError,
   discoverGradescopeExtension,
@@ -186,7 +188,7 @@ export function GradescopeProvider({
   initialSyncState:SubmissionStatusSyncState<GradescopeSyncErrorCode>;
   children:ReactNode;
 }){
-  const router=useRouter();
+  const {refresh}=useRouter();
   const [connection,setConnection]=useState(initialConnection);
   const [courses,setCourses]=useState(initialCourses);
   const [syncState,setSyncState]=useState(initialSyncState);
@@ -224,6 +226,11 @@ export function GradescopeProvider({
       setExtensionDetected(false);
       setExtensionVersion(null);
       setGradescopeTabDetected(null);
+      if(error instanceof ExtensionBridgeError){
+        const code=error.code==="EXTENSION_UNAVAILABLE"||error.code==="EXTENSION_TIMEOUT"
+          ?error.code:"INVALID_RESULT";
+        throw new GradescopeBridgeError(code,messageForSyncError(code));
+      }
       throw error;
     }
   },[]);
@@ -238,14 +245,28 @@ export function GradescopeProvider({
         await fetch("/api/sources/gradescope/discover/start",{method:"POST"}),
         "Gradescope discovery could not start.",
       ));
-      const info=await getExtensionInfo();
-      if(!info.gradescopeTabDetected){
-        throw new GradescopeBridgeError("GRADESCOPE_TAB_UNAVAILABLE","Open Gradescope in Firefox, then try again.");
+      let result:GradescopeDiscoverResultV1;
+      try{
+        const info=await getExtensionInfo();
+        if(!info.gradescopeTabDetected){
+          throw new GradescopeBridgeError("GRADESCOPE_TAB_UNAVAILABLE","Open Gradescope in Firefox, then try again.");
+        }
+        result=gradescopeDiscoverResultV1Schema.parse(await discoverGradescopeExtension({
+          protocolVersion:1,
+          requestId:started.requestId,
+        }));
+        if(result.requestId!==started.requestId){
+          throw new GradescopeBridgeError("INVALID_RESULT",messageForSyncError("INVALID_RESULT"));
+        }
+      }catch(error){
+        result=gradescopeDiscoverResultV1Schema.parse({
+          protocolVersion:1,
+          requestId:started.requestId,
+          courses:[],
+          errorCode:error instanceof GradescopeBridgeError?error.code:"INVALID_RESULT",
+        });
       }
-      const result=await discoverGradescopeExtension({
-        protocolVersion:1,
-        requestId:started.requestId,
-      });
+      // Completion has one sender; a failed or lost response must not trigger another attempt.
       const completed=discoveryCompleteSchema.parse(await expectJson(
         await fetch("/api/sources/gradescope/discover/complete",{
           method:"POST",
@@ -254,6 +275,9 @@ export function GradescopeProvider({
         }),
         "Gradescope course discovery could not be saved.",
       ));
+      if(result.errorCode){
+        throw new GradescopeBridgeError(result.errorCode,messageForSyncError(result.errorCode));
+      }
       setConnection(completed.connection);
       setCourses(completed.courses);
       setPhase("success");
@@ -262,11 +286,11 @@ export function GradescopeProvider({
           ?formatDiscoveryDiagnostics(result.discoveryDiagnostics)
           :"",
       );
-      router.refresh();
+      refresh();
     }catch(error){
       handleFailure(error,"discovery");
     }
-  },[getExtensionInfo,router,handleFailure]);
+  },[getExtensionInfo,refresh,handleFailure]);
 
   const saveEnabledCourses=useCallback(async(ids:string[])=>{
     if(Date.now()<blockedUntil.current)return;
@@ -284,11 +308,11 @@ export function GradescopeProvider({
       setConnection(completed.connection);
       setCourses(completed.courses);
       setPhase("success");
-      router.refresh();
+      refresh();
     }catch(error){
       handleFailure(error,"selection");
     }
-  },[router,handleFailure]);
+  },[refresh,handleFailure]);
 
   const syncNow=useCallback(async(options?:SyncAllOptions)=>{
     if(syncInFlightRef.current||Date.now()<blockedUntil.current||connection?.lastErrorCode==="SYNC_RECOVERY_REQUIRED")return;
@@ -358,15 +382,15 @@ export function GradescopeProvider({
       }else{
         setPhase("success");
       }
-      if(completed.lastSuccessfulAt&&completed.lastSuccessfulAt!==syncState.lastSuccessfulAt){
-        router.refresh();
+      if(!options?.deferRefresh&&completed.lastSuccessfulAt&&completed.lastSuccessfulAt!==syncState.lastSuccessfulAt){
+        refresh();
       }
     }catch(error){
       handleFailure(error,"sync");
     }finally{
       syncInFlightRef.current=false;
     }
-  },[getExtensionInfo,router,syncState.lastSuccessfulAt,connection?.lastErrorCode,handleFailure]);
+  },[getExtensionInfo,refresh,syncState.lastSuccessfulAt,connection?.lastErrorCode,handleFailure]);
 
   useEffect(()=>{
     const timer=window.setTimeout(()=>{
@@ -382,13 +406,21 @@ export function GradescopeProvider({
       autoStartedRef.current=true;
       return;
     }
-    const timer=window.setTimeout(()=>{
+    let cancelled=false;
+    const timer=window.setTimeout(async()=>{
       if(autoStartedRef.current)return;
       autoStartedRef.current=true;
-      void syncNow();
+      if(document.visibilityState!=="visible")return;
+      try{
+        const info=await getExtensionInfo();
+        if(cancelled||document.visibilityState!=="visible"||!info.gradescopeTabDetected)return;
+        void syncNow();
+      }catch{
+        // A known-unready automatic attempt does not register or retry server work.
+      }
     },0);
-    return ()=>window.clearTimeout(timer);
-  },[connection?.enabled,courses,syncNow,syncState.lastSuccessfulAt]);
+    return ()=>{cancelled=true;window.clearTimeout(timer);};
+  },[connection?.enabled,courses,getExtensionInfo,syncNow,syncState.lastSuccessfulAt]);
 
   return <Context.Provider value={{
     ...syncState,

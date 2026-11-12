@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceConnection } from "@/lib/assignments/types";
 import type { SourceCourse } from "@/lib/sources/types";
 import type {
@@ -26,11 +26,14 @@ vi.mock("@/features/submission-status/extension-bridge",async()=>{
   );
   return {...actual,pingKairosExtension};
 });
-vi.mock("@/features/gradescope/extension-bridge",()=>({
+vi.mock("@/features/gradescope/extension-bridge",async()=>({
+  ...await vi.importActual<typeof import("@/features/gradescope/extension-bridge")>("@/features/gradescope/extension-bridge"),
   discoverGradescopeExtension,
   syncGradescopeExtensionBatch,
 }));
 
+import { ExtensionBridgeError } from "@/features/submission-status/extension-bridge";
+import { GradescopeBridgeError } from "@/features/gradescope/extension-bridge";
 import { GradescopeProvider, useGradescope } from "@/features/gradescope/gradescope-provider";
 import {GradescopeSourceCard} from '@/features/sources/gradescope-source-card';
 
@@ -71,6 +74,7 @@ const emptyState:SubmissionStatusSyncState<GradescopeSyncErrorCode>={
 function Consumer(){
   const value=useGradescope();
   return <div>
+    <span data-testid="connection">{value.connection?.id??"none"}:{String(value.connection?.enabled)}</span>
     <span data-testid="phase">{value.phase}</span>
     <span data-testid="courses">{value.courses.map(c=>`${c.externalCourseId}:${c.enabled}`).join(",")}</span>
     <span data-testid="tab">{String(value.gradescopeTabDetected)}</span>
@@ -210,7 +214,172 @@ beforeEach(()=>{
   vi.unstubAllGlobals();
 });
 
+afterEach(()=>vi.restoreAllMocks());
+
+function deferred<T>(){
+  let resolve!:(value:T)=>void;
+  const promise=new Promise<T>(done=>{resolve=done;});
+  return {promise,resolve};
+}
+
+const readyExtension={extensionVersion:"0.3.0",canvasTabDetected:true,gradescopeTabDetected:true};
+
+async function flushTimers(){
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,10));});
+}
+
 describe("GradescopeProvider",()=>{
+  it("does not register automatic sync while readiness is pending, then starts once when ready",async()=>{
+    const pending=deferred<typeof readyExtension>();
+    pingKairosExtension.mockImplementation(()=>pending.promise);
+    const calls=installFetch();
+    render(<StrictMode><GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider></StrictMode>);
+    await flushTimers();
+    expect(calls.syncStart).toBe(0);
+    await act(async()=>pending.resolve(readyExtension));
+    await waitFor(()=>expect(calls.syncComplete).toBe(1));
+    await flushTimers();
+    expect(calls.syncStart).toBe(1);
+  });
+
+  it.each(["missing extension","missing tab","hidden"])("does not automatically register with %s or retry on visibility changes",async(reason)=>{
+    if(reason==="missing extension")pingKairosExtension.mockRejectedValue(new ExtensionBridgeError("EXTENSION_UNAVAILABLE","synthetic-private-marker"));
+    if(reason==="missing tab")pingKairosExtension.mockResolvedValue({...readyExtension,gradescopeTabDetected:false});
+    const visibility=vi.spyOn(document,"visibilityState","get").mockReturnValue(reason==="hidden"?"hidden":"visible");
+    const calls=installFetch();
+    render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await flushTimers();
+    expect(calls.syncStart).toBe(0);
+    visibility.mockReturnValue("visible");
+    pingKairosExtension.mockResolvedValue(readyExtension);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushTimers();
+    expect(calls.syncStart).toBe(0);
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-marker");
+  });
+
+  it.each(["unmount","hidden","disabled selection","disabled connection"])("does not register when preflight becomes ineligible: %s",async(interruption)=>{
+    const pending=deferred<typeof readyExtension>();
+    pingKairosExtension.mockImplementation(()=>pending.promise);
+    const visibility=vi.spyOn(document,"visibilityState","get").mockReturnValue("visible");
+    const calls=installFetch();
+    const fetchImpl=vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async(input,init)=>String(input).endsWith("/courses")?json({connection:{...connection,enabled:interruption!=="disabled connection"},courses:[course(interruption!=="disabled selection")]}):fetchImpl(input,init));
+    const view=render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await flushTimers();
+    if(interruption==="unmount")view.unmount();
+    if(interruption==="hidden")visibility.mockReturnValue("hidden");
+    if(interruption==="disabled selection"||interruption==="disabled connection")await userEvent.setup().click(screen.getByRole("button",{name:"Save"}));
+    await act(async()=>pending.resolve(readyExtension));
+    await flushTimers();
+    expect(calls.syncStart).toBe(0);
+  });
+
+  it("requires a fresh ready check even after the initial display ping succeeded",async()=>{
+    pingKairosExtension.mockResolvedValueOnce(readyExtension).mockResolvedValue({...readyExtension,gradescopeTabDetected:false});
+    const calls=installFetch();
+    render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await waitFor(()=>expect(screen.getByTestId("tab")).toHaveTextContent("false"));
+    expect(calls.syncStart).toBe(0);
+    expect(syncGradescopeExtensionBatch).not.toHaveBeenCalled();
+  });
+
+  it("allows manual sync on a hidden page after skipping the automatic attempt",async()=>{
+    vi.spyOn(document,"visibilityState","get").mockReturnValue("hidden");
+    const calls=installFetch();
+    render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await flushTimers();
+    expect(calls.syncStart).toBe(0);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Sync"}));
+    await waitFor(()=>expect(calls.syncComplete).toBe(1));
+    expect(screen.getByTestId("phase")).toHaveTextContent("success");
+  });
+
+  it("continues an admitted sync to completion after the provider unmounts",async()=>{
+    const pending=deferred<GradescopeSyncResultV1>();
+    syncGradescopeExtensionBatch.mockImplementation(()=>pending.promise);
+    const calls=installFetch();
+    const view=render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await waitFor(()=>expect(syncGradescopeExtensionBatch).toHaveBeenCalledTimes(1));
+    expect(calls.syncStart).toBe(1);
+    expect(calls.syncComplete).toBe(0);
+    view.unmount();
+    await act(async()=>pending.resolve(syncResult()));
+    expect(calls.syncComplete).toBe(1);
+  });
+
+  it.each([
+    ["missing extension","EXTENSION_UNAVAILABLE"],
+    ["missing tab","GRADESCOPE_TAB_UNAVAILABLE"],
+    ["timeout","EXTENSION_TIMEOUT"],
+    ["invalid response","INVALID_RESULT"],
+    ["malformed result","INVALID_RESULT"],
+    ["mismatched request","INVALID_RESULT"],
+  ] as const)("completes accepted discovery once after %s and keeps saved data",async(failure,code)=>{
+    if(failure==="missing extension")pingKairosExtension.mockRejectedValue(new ExtensionBridgeError("EXTENSION_UNAVAILABLE","synthetic-private-marker"));
+    if(failure==="missing tab")pingKairosExtension.mockResolvedValue({...readyExtension,gradescopeTabDetected:false});
+    if(failure==="timeout"||failure==="invalid response")discoverGradescopeExtension.mockRejectedValue(new GradescopeBridgeError(code,"synthetic-private-marker"));
+    if(failure==="malformed result")discoverGradescopeExtension.mockResolvedValue({requestId});
+    if(failure==="mismatched request")discoverGradescopeExtension.mockResolvedValue({protocolVersion:1,requestId:"22222222-2222-4222-8222-222222222222",courses:[]});
+    const completions:unknown[]=[];
+    vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+      if(String(input).endsWith("/discover/start"))return json({protocolVersion:1,requestId});
+      completions.push(JSON.parse(String(init?.body)));
+      return json({code,message:"synthetic-private-marker"},502);
+    }));
+    render(<GradescopeProvider connection={connection} initialCourses={[course(false)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Discover"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("error"));
+    expect(completions).toEqual([{protocolVersion:1,requestId,courses:[],errorCode:code}]);
+    expect(screen.getByTestId("connection")).toHaveTextContent("connection-1:true");
+    expect(screen.getByTestId("courses")).toHaveTextContent("123:false");
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-marker");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it.each(["error response","invalid response","lost response"])("never repeats an attempted discovery completion after %s",async(failure)=>{
+    let completeCount=0;
+    vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>{
+      if(String(input).endsWith("/discover/start"))return json({protocolVersion:1,requestId});
+      completeCount++;
+      if(failure==="lost response")throw new TypeError("synthetic-private-marker");
+      return failure==="error response"?json({code:"SYNC_RECOVERY_REQUIRED"},409):json({invalid:true});
+    }));
+    render(<GradescopeProvider connection={connection} initialCourses={[course(false)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Discover"}));
+    await waitFor(()=>expect(screen.getByTestId("phase")).toHaveTextContent("error"));
+    expect(completeCount).toBe(1);
+    expect(screen.getByTestId("courses")).toHaveTextContent("123:false");
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-marker");
+  });
+
+  it("retains the uncertain-owner response when terminal discovery timeout completion fails",async()=>{
+    discoverGradescopeExtension.mockRejectedValue(new GradescopeBridgeError("EXTENSION_TIMEOUT","synthetic-private-marker"));
+    const completions:unknown[]=[];
+    vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+      if(String(input).endsWith("/discover/start"))return json({protocolVersion:1,requestId});
+      completions.push(JSON.parse(String(init?.body)));
+      return json({code:"SYNC_RECOVERY_REQUIRED"},409);
+    }));
+    render(<GradescopeProvider connection={connection} initialCourses={[course(false)]} initialSyncState={emptyState}><Consumer/></GradescopeProvider>);
+    const user=userEvent.setup();
+    await user.click(screen.getByRole("button",{name:"Discover"}));
+    await waitFor(()=>expect(screen.getByTestId("message")).toHaveTextContent("uncertain outcome"));
+    await user.click(screen.getByRole("button",{name:"Discover"}));
+    expect(completions).toEqual([{protocolVersion:1,requestId,courses:[],errorCode:"EXTENSION_TIMEOUT"}]);
+    expect(screen.getByTestId("courses")).toHaveTextContent("123:false");
+  });
+
+  it("uses the shared ping's supported extension error for manual sync completion",async()=>{
+    const calls=installFetch({syncErrorCode:"EXTENSION_UNAVAILABLE"});
+    pingKairosExtension.mockRejectedValue(new ExtensionBridgeError("EXTENSION_UNAVAILABLE","synthetic-private-marker"));
+    render(<GradescopeProvider connection={connection} initialCourses={[course(true)]} initialSyncState={{...emptyState,lastSuccessfulAt:new Date().toISOString()}}><Consumer/></GradescopeProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Sync"}));
+    await waitFor(()=>expect(calls.syncComplete).toBe(1));
+    const completed=vi.mocked(fetch).mock.calls.find(([input])=>String(input).endsWith("/sync/complete"));
+    expect(JSON.parse(String(completed?.[1]?.body))).toEqual({requestId,batches:[],batchErrorCode:"EXTENSION_UNAVAILABLE"});
+  });
+
   it("discovers courses and preserves disabled-by-default server selection",async()=>{
     const user=userEvent.setup();
     const calls=installFetch();

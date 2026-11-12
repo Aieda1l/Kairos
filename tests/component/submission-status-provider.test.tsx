@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanvasBatchResultV1, SubmissionFailureDiagnostic, SubmissionSyncErrorCode } from "@/lib/extension-protocol/submission-status";
@@ -24,7 +24,7 @@ import {
   SubmissionStatusProvider,
   useSubmissionStatusSync,
 } from "@/features/submission-status/submission-status-provider";
-import { ExtensionBridgeError } from "@/features/submission-status/extension-bridge";
+import { ExtensionBridgeError, type ExtensionPingResult } from "@/features/submission-status/extension-bridge";
 
 const initialState:SubmissionStatusSyncState={
   lastAttemptedAt:null,
@@ -128,6 +128,77 @@ beforeEach(()=>{
 });
 
 describe("SubmissionStatusProvider",()=>{
+  it("waits for extension readiness before registering automatic work",async()=>{
+    let ready!:(info:ExtensionPingResult)=>void;
+    pingKairosExtension.mockReturnValue(new Promise<ExtensionPingResult>(resolve=>{ready=resolve;}));
+    const {started,calls}=installFetch(1);
+    syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
+    render(<SubmissionStatusProvider enabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    try{
+      await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));});
+      expect(pingKairosExtension).toHaveBeenCalled();
+      expect(calls.start).toBe(0);
+    }finally{
+      await act(async()=>ready({extensionVersion:"fixture",canvasTabDetected:true,gradescopeTabDetected:true}));
+    }
+    await waitFor(()=>expect(calls.complete).toBe(1));
+  });
+
+  it.each(["missing extension","missing tab"])("does not register automatic work with %s",async(kind)=>{
+    const {calls}=installFetch(1);
+    if(kind==="missing extension")pingKairosExtension.mockRejectedValue(new ExtensionBridgeError("EXTENSION_UNAVAILABLE","synthetic-private-detail"));
+    else pingKairosExtension.mockResolvedValue({extensionVersion:"fixture",canvasTabDetected:false,gradescopeTabDetected:true});
+    render(<SubmissionStatusProvider enabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));});
+    expect(pingKairosExtension).toHaveBeenCalled();
+    expect(calls.start).toBe(0);
+    expect(calls.complete).toBe(0);
+    expect(syncExtensionBatch).not.toHaveBeenCalled();
+    expect(screen.getByTestId("message")).not.toHaveTextContent("synthetic-private-detail");
+  });
+
+  it("does not register automatic work in a hidden document",async()=>{
+    const visibility=vi.spyOn(document,"visibilityState","get").mockReturnValue("hidden");
+    try{
+      const {calls}=installFetch(1);
+      render(<SubmissionStatusProvider enabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+      await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));});
+      expect(calls.start).toBe(0);
+      expect(syncExtensionBatch).not.toHaveBeenCalled();
+    }finally{visibility.mockRestore();}
+  });
+
+  it.each(["unmount","opt out","hide"])("does not register if %s happens during automatic readiness",async(change)=>{
+    let ready!:(info:ExtensionPingResult)=>void;
+    pingKairosExtension.mockReturnValue(new Promise<ExtensionPingResult>(resolve=>{ready=resolve;}));
+    const {calls}=installFetch(1);
+    const view=render(<SubmissionStatusProvider enabled initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));});
+    let visibility:ReturnType<typeof vi.spyOn>|undefined;
+    try{
+      if(change==="unmount")view.unmount();
+      else if(change==="opt out")view.rerender(<SubmissionStatusProvider enabled automaticEnabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+      else visibility=vi.spyOn(document,"visibilityState","get").mockReturnValue("hidden");
+      await act(async()=>ready({extensionVersion:"fixture",canvasTabDetected:true,gradescopeTabDetected:true}));
+      expect(calls.start).toBe(0);
+      expect(calls.complete).toBe(0);
+      expect(syncExtensionBatch).not.toHaveBeenCalled();
+    }finally{visibility?.mockRestore();}
+  });
+
+  it("still completes admitted work after React unmount in the same document",async()=>{
+    const {started,calls}=installFetch(1);
+    let finish!:(batch:CanvasBatchResultV1)=>void;
+    syncExtensionBatch.mockReturnValue(new Promise<CanvasBatchResultV1>(resolve=>{finish=resolve;}));
+    const view=render(<SubmissionStatusProvider enabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
+    await userEvent.setup().click(screen.getByRole("button",{name:"Manual status sync"}));
+    await waitFor(()=>expect(syncExtensionBatch).toHaveBeenCalledTimes(1));
+    view.unmount();
+    await act(async()=>finish(batchResult(started.assignments)));
+    expect(calls.start).toBe(1);
+    expect(calls.complete).toBe(1);
+  });
+
   it('does not refresh browser submission data until explicit opt-in, then refreshes once',async()=>{
     const {started,calls}=installFetch(1);syncExtensionBatch.mockResolvedValue(batchResult(started.assignments));
     const view=render(<SubmissionStatusProvider enabled automaticEnabled={false} initialSyncState={initialState}><Consumer/></SubmissionStatusProvider>);
