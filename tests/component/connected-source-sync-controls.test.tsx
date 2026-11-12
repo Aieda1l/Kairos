@@ -65,7 +65,7 @@ import {ConnectedSourceSyncControls} from "@/features/sync/connected-source-sync
 import {SYNC_ALL_STEPS,type SyncAllStep} from '@/lib/sync-all/types';
 const runId='11111111-1111-4111-8111-111111111111';
 const admitted=(steps:readonly SyncAllStep[]=SYNC_ALL_STEPS)=>Response.json({runId,expiresAt:'2099-01-01T00:00:00Z',steps});
-const admittedOptions={deferCalendarSync:true,syncAllRunId:runId};
+const admittedOptions={deferCalendarSync:true,syncAllRunId:runId,deferRefresh:true};
 
 it("denied root admission performs no source request or extension dispatch",async()=>{
   const user=userEvent.setup();

@@ -2,7 +2,7 @@ import {z} from 'zod';
 
 export const SYNC_ALL_STEPS=['canvas-deadlines','canvas-submissions','gradescope','ed','calendars'] as const;
 export type SyncAllStep=typeof SYNC_ALL_STEPS[number];
-export type SyncAllOptions={deferCalendarSync?:boolean;syncAllRunId?:string};
+export type SyncAllOptions={deferCalendarSync?:boolean;syncAllRunId?:string;deferRefresh?:boolean};
 export const syncAllAdmissionSchema=z.object({
   runId:z.string().uuid(),
   expiresAt:z.string().datetime(),

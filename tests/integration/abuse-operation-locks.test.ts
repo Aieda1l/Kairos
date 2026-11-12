@@ -530,6 +530,23 @@ describe("ownership SQL and settled work",()=>{
     expect(test.sqlite.prepare("SELECT state FROM operation_locks").get()).toEqual({state:"running"});
     expect(next.requestId).not.toBe(started.requestId);
   });
+  it.each(['EXTENSION_UNAVAILABLE','GRADESCOPE_TAB_UNAVAILABLE','INVALID_RESULT'] as const)("settles a terminal discovery rejection once and preserves accepted courses (%s)",async errorCode=>{
+    const test=open();
+    const accepted=await startGradescopeDiscovery(test.db,scope);
+    await completeGradescopeDiscovery(test.db,scope,{requestId:accepted.requestId,protocolVersion:1,errorCode:null,
+      courses:[{courseId:'123',shortName:'CSE',fullName:'Synthetic course',term:null,year:null}]});
+    const retained={connections:test.sqlite.prepare('SELECT * FROM source_connections').all(),courses:test.sqlite.prepare('SELECT * FROM source_courses').all()};
+    const started=await startGradescopeDiscovery(test.db,scope);
+    const before=test.sqlite.prepare('SELECT owner_nonce,not_before_ms FROM operation_locks').get();
+    const rejected={requestId:started.requestId,protocolVersion:1 as const,errorCode,courses:[]};
+    await expect(completeGradescopeDiscovery(test.db,scope,rejected)).rejects.toMatchObject({code:'GRADESCOPE_DISCOVERY_FAILED',sourceCode:errorCode});
+    expect(test.sqlite.prepare('SELECT owner_nonce,not_before_ms FROM operation_locks').get()).toEqual(before);
+    expect(test.sqlite.prepare('SELECT state FROM operation_locks').get()).toEqual({state:'idle'});
+    expect(test.sqlite.prepare('SELECT consumed_at FROM sync_requests WHERE request_id=?').get(started.requestId)).toEqual({consumed_at:expect.any(String)});
+    expect({connections:test.sqlite.prepare('SELECT * FROM source_connections').all(),courses:test.sqlite.prepare('SELECT * FROM source_courses').all()}).toEqual(retained);
+    await expect(completeGradescopeDiscovery(test.db,scope,rejected)).rejects.toMatchObject({code:'SYNC_RECOVERY_REQUIRED'});
+    expect((await startGradescopeDiscovery(test.db,scope)).requestId).not.toBe(started.requestId);
+  });
   it("retains extension timeout uncertainty rather than allowing a new remote bridge start",async()=>{
     const test=open();const started=await startGradescopeDiscovery(test.db,scope);
     await expect(completeGradescopeDiscovery(test.db,scope,{requestId:started.requestId,protocolVersion:1,courses:[],errorCode:"EXTENSION_TIMEOUT"})).rejects.toMatchObject({code:"SYNC_RECOVERY_REQUIRED"});

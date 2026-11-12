@@ -118,7 +118,7 @@ export function ConnectedSourceSyncControls({
         admissionFailure(getRecoveryNotice('SERVICE_UNAVAILABLE',{key:'sync-all'}));return;
       }
       const {runId,steps}=admitted;
-      const options={deferCalendarSync:true,syncAllRunId:runId};
+      const options={deferCalendarSync:true,syncAllRunId:runId,deferRefresh:true};
       if(steps.includes('canvas-deadlines')){
         try{
           const response=await fetch("/api/sources/canvas/sync",{

@@ -89,7 +89,7 @@ it('continues partial sources and blocked Ed through all three calendar tickets,
     await waitFor(()=>expect(screen.getByRole('button',{name:'Sync All'})).toBeEnabled());
     expect(requests).toHaveBeenCalledTimes((attempt+1)*7);
     expect(order.slice(attempt*9,(attempt+1)*9)).toEqual(['admission','canvas','submission','gradescope','ed','plan','google','microsoft','caldav']);
-    for(const child of [submissionSync,gradescopeSync])expect(child).toHaveBeenNthCalledWith(attempt+1,{deferCalendarSync:true,syncAllRunId:rootIds[attempt]});
+    for(const child of [submissionSync,gradescopeSync])expect(child).toHaveBeenNthCalledWith(attempt+1,{deferCalendarSync:true,syncAllRunId:rootIds[attempt],deferRefresh:true});
     for(const c of connections)expect(screen.getByTestId(c.id)).toHaveTextContent('success');
     expect(screen.getByText(/Canvas submissions: Some Canvas statuses failed/)).toBeVisible();
     expect(screen.getByText(/Gradescope: Some Gradescope courses failed/)).toBeVisible();

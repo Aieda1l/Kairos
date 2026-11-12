@@ -2,6 +2,8 @@
 
 STATUS: DEPLOYED; NORMAL LIVE SYNC ALL VERIFIED WITH CANVAS PARTIAL
 
+The [November 12 UTC follow-up](source-bridge-interruption-hardening.md) records a later exact-owner Canvas/Gradescope recovery and a normal run with all five root steps, no source status failures and idle owners. It also documents the separately reviewed client hardening candidate and its hard-document-loss limitation. The deployment and partial-result evidence below remains tied to its original October run; this follow-up does not claim the new candidate is deployed.
+
 This October 23–24 UTC continuation follows the deployed Ed persistence change, source `6e05463428869b08481dc577c7b8d3915d468018` / Worker `b8f02ffe-aa73-493f-8c0a-ce23119d7db9`. It changes client feedback and manual Ed recovery rechecks, not durable ownership or provider access policy.
 
 ## Canvas diagnosis

@@ -1,4 +1,4 @@
-import {expect,test,type APIRequestContext,type Page} from '@playwright/test';
+import {expect,test,type APIRequestContext,type BrowserContext,type Page} from '@playwright/test';
 import {enableFixtureSubmissionStatus,prepareFixtureUser,waitForAppHydration} from './helpers';
 
 async function postFixture(request:APIRequestContext,path:string,data?:unknown){
@@ -160,4 +160,184 @@ test('Sync All continues after Canvas partial results and retries an Ed recovery
   const assignments=await request.get('/assignments');
   expect(await assignments.text()).toContain('Gradescope Recovery Homework');
   expect(await assignments.text()).toContain('Ed Dated Lesson');
+});
+
+const sourceBridgePaths={
+  canvasStart:'/api/sources/canvas/submission-status/start',
+  canvasComplete:'/api/sources/canvas/submission-status/complete',
+  gradescopeStart:'/api/sources/gradescope/sync/start',
+  gradescopeComplete:'/api/sources/gradescope/sync/complete',
+};
+
+async function prepareSourceBridgeFixture(context:BrowserContext){
+  // Playwright supplies a fresh context; prepareFixtureUser gives it a unique tenant.
+  await prepareFixtureUser(context);
+  await enableFixtureSubmissionStatus(context);
+  const request=context.request;
+  await postFixture(request,'/api/sources/canvas/connect',{
+    feedUrl:'https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics?token=fixture-secret-never-echo',
+  });
+  const discovery=await postFixture(request,'/api/sources/gradescope/discover/start');
+  await postFixture(request,'/api/sources/gradescope/discover/complete',{
+    protocolVersion:1,requestId:discovery.requestId,errorCode:null,
+    courses:[{courseId:'123',shortName:'CSE 331',fullName:'Software Design',term:'Autumn',year:'2026'}],
+  });
+  const selected=await request.put('/api/sources/gradescope/courses',{data:{enabledCourseIds:['123']}});
+  expect(selected.ok()).toBe(true);
+}
+
+function retainedGradescopeCourse(checkedAt:string){
+  return {
+    courseId:'123',checkedAt,errorCode:null,parseDiagnosticCounts:[],assignments:[{
+      courseId:'123',assignmentId:'458',title:'Gradescope Retained Homework',
+      releaseAt:'2026-10-02T17:00:00.000Z',dueAt:'2026-10-09T06:59:00.000Z',
+      lateDueAt:null,sourceStatusText:'No Submission',state:'not_submitted',
+      isLate:false,isMissing:false,submittedAt:null,gradeScore:null,gradeMax:null,
+      gradeDisplay:null,checkedAt,extractorVersion:'source-interruption-e2e-v1',
+    }],
+  };
+}
+
+type SourceBridgeDispatch={type:string;requestId:string};
+
+async function installSourceBoundaryBridge(page:Page,{ready,hold}:{ready:boolean;hold:boolean},dispatches:SourceBridgeDispatch[]){
+  // Capture only synthetic message type/registered ID in Node so evidence survives
+  // document destruction. No provider body or credential is recorded.
+  await page.exposeFunction('__recordSourceBoundaryDispatch',(dispatch:SourceBridgeDispatch)=>{
+    dispatches.push(dispatch);
+  });
+  await page.addInitScript(({ready,hold})=>{
+    const fixtureWindow=window as unknown as Window&{
+      __sourceBoundaryReady?:boolean;
+      __recordSourceBoundaryDispatch:(dispatch:SourceBridgeDispatch)=>Promise<void>;
+    };
+    fixtureWindow.__sourceBoundaryReady=ready;
+    window.addEventListener('message',event=>{
+      if(event.source!==window||event.origin!==window.location.origin)return;
+      const data=event.data;
+      if(data?.source!=='kairos-page')return;
+      if(data.type==='PING'){
+        window.postMessage({source:'kairos-extension',type:'PONG',protocolVersion:1,
+          requestId:data.requestId,extensionVersion:'0.3.0-e2e',
+          canvasTabDetected:fixtureWindow.__sourceBoundaryReady,
+          gradescopeTabDetected:fixtureWindow.__sourceBoundaryReady},window.location.origin);
+        return;
+      }
+      if(!['SYNC_SUBMISSION_STATUS','GRADESCOPE_SYNC_ASSIGNMENTS'].includes(data.type))return;
+      void fixtureWindow.__recordSourceBoundaryDispatch({type:data.type,requestId:data.payload.requestId});
+      if(hold)return; // Deliberately never deliver either extension terminal result.
+      const checkedAt=new Date().toISOString();
+      const canvas=data.type==='SYNC_SUBMISSION_STATUS';
+      const payload=canvas?{
+        protocolVersion:1,requestId:data.payload.requestId,errorCode:null,
+        results:data.payload.assignments.map((item:{assignmentId:string})=>({
+          ...item,state:'not_submitted',isLate:false,isMissing:false,submittedAt:null,
+          checkedAt,extractorVersion:'source-interruption-e2e-v1',
+        })),
+      }:{
+        protocolVersion:1,requestId:data.payload.requestId,errorCode:null,
+        courses:data.payload.courseIds.map((courseId:string)=>({
+          courseId,checkedAt,errorCode:null,parseDiagnosticCounts:[],assignments:[],
+        })),
+      };
+      window.postMessage({source:'kairos-extension',protocolVersion:1,requestId:data.requestId,
+        type:canvas?'SYNC_SUBMISSION_STATUS_RESULT':'GRADESCOPE_SYNC_ASSIGNMENTS_RESULT',payload},window.location.origin);
+    });
+  },{ready,hold});
+}
+
+test('hard document loss keeps admitted Canvas and Gradescope bridge work blocked and accepted assignments retained',async({page,context})=>{
+  await prepareSourceBridgeFixture(context);
+  const request=context.request;
+  const saved=await postFixture(request,sourceBridgePaths.gradescopeStart);
+  const completed=await postFixture(request,sourceBridgePaths.gradescopeComplete,{
+    requestId:saved.requestId,batchErrorCode:null,
+    batches:[{protocolVersion:1,requestId:saved.requestId,errorCode:null,
+      courses:[retainedGradescopeCourse(new Date().toISOString())]}],
+  });
+  expect(completed).toMatchObject({insertedCount:1,lastErrorCode:null});
+  // Make accepted Gradescope data stale only in the page. Server ownership/expiry
+  // clocks and real timers remain unchanged; this test never waits for expiry.
+  await page.clock.setFixedTime(new Date(Date.parse(completed.lastSuccessfulAt)+16*60_000));
+  const dispatches:SourceBridgeDispatch[]=[];
+  const completions:string[]=[];
+  await installSourceBoundaryBridge(page,{ready:true,hold:true},dispatches);
+  context.on('request',outgoing=>{
+    const path=new URL(outgoing.url()).pathname;
+    if(outgoing.method()==='POST'&&[sourceBridgePaths.canvasComplete,sourceBridgePaths.gradescopeComplete].includes(path)){
+      completions.push(path);
+    }
+  });
+  const started=(path:string)=>page.waitForResponse(response=>
+    new URL(response.url()).pathname===path&&response.request().method()==='POST');
+  const canvasStart=started(sourceBridgePaths.canvasStart);
+  const gradescopeStart=started(sourceBridgePaths.gradescopeStart);
+  await page.goto('/assignments');
+  await waitForAppHydration(page);
+  const canvasResponse=await canvasStart;
+  const gradescopeResponse=await gradescopeStart;
+  expect(canvasResponse.status()).toBe(200);
+  expect(gradescopeResponse.status()).toBe(200);
+  const canvas=await canvasResponse.json();
+  const gradescope=await gradescopeResponse.json();
+  expect(canvas.assignments.length).toBeGreaterThan(0);
+  expect(gradescope.courseIds).toEqual(['123']);
+  await expect.poll(()=>dispatches).toEqual(expect.arrayContaining([
+    {type:'SYNC_SUBMISSION_STATUS',requestId:canvas.requestId},
+    {type:'GRADESCOPE_SYNC_ASSIGNMENTS',requestId:gradescope.requestId},
+  ]));
+  expect(dispatches).toHaveLength(2);
+  await expect(page.getByText('Fixture Homework').first()).toBeVisible();
+  await expect(page.getByText('Gradescope Retained Homework').first()).toBeVisible();
+  expect(completions).toEqual([]);
+
+  await page.close(); // Hard document destruction, not a shared-layout React link.
+  for(const path of [sourceBridgePaths.canvasStart,sourceBridgePaths.gradescopeStart]){
+    const blocked=await request.post(path);
+    expect(blocked.status()).toBe(409);
+    expect(await blocked.json()).toMatchObject({code:'SYNC_IN_PROGRESS'});
+  }
+  const retained=await request.get('/assignments');
+  expect(retained.ok()).toBe(true);
+  const html=await retained.text();
+  expect(html).toContain('Fixture Homework');
+  expect(html).toContain('Gradescope Retained Homework');
+  expect(completions).toEqual([]);
+  // No fabricated completion/unlock: this isolated tenant retains its running owners.
+});
+
+test('known-unready Canvas and Gradescope automatic checks admit no starts and a later manual Sync All still works',async({page,context})=>{
+  await prepareSourceBridgeFixture(context);
+  const starts:string[]=[];
+  const dispatches:SourceBridgeDispatch[]=[];
+  await installSourceBoundaryBridge(page,{ready:false,hold:false},dispatches);
+  page.on('request',outgoing=>{
+    const path=new URL(outgoing.url()).pathname;
+    if(outgoing.method()==='POST'&&[sourceBridgePaths.canvasStart,sourceBridgePaths.gradescopeStart].includes(path))starts.push(path);
+  });
+  await page.goto('/sources');
+  await waitForAppHydration(page);
+  await expect(page.getByText('Firefox extension detected · open a signed-in Gradescope tab to connect.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  expect(starts).toEqual([]);
+  expect(dispatches).toEqual([]);
+
+  await page.getByRole('link',{name:'Upcoming',exact:true}).click();
+  await expect(page).toHaveURL(/\/upcoming$/);
+  expect(starts).toEqual([]);
+  await page.evaluate(()=>{
+    (window as Window&{__sourceBoundaryReady?:boolean}).__sourceBoundaryReady=true;
+  });
+  const syncAll=page.getByRole('button',{name:'Sync All',exact:true});
+  await expect(syncAll).toBeEnabled();
+  const [canvasComplete,gradescopeComplete]=await Promise.all([
+    page.waitForResponse(response=>new URL(response.url()).pathname===sourceBridgePaths.canvasComplete),
+    page.waitForResponse(response=>new URL(response.url()).pathname===sourceBridgePaths.gradescopeComplete),
+    syncAll.click(),
+  ]);
+  expect(canvasComplete.status()).toBe(200);
+  expect(gradescopeComplete.status()).toBe(200);
+  await expect(syncAll).toBeEnabled();
+  expect(starts).toEqual([sourceBridgePaths.canvasStart,sourceBridgePaths.gradescopeStart]);
+  expect(dispatches.map(dispatch=>dispatch.type)).toEqual(['SYNC_SUBMISSION_STATUS','GRADESCOPE_SYNC_ASSIGNMENTS']);
 });

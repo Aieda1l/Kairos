@@ -236,7 +236,7 @@ export function EdProvider({
         const failureMessage=errorMessage(failureBody,'Ed sync could not be completed.',response,'sync');
         const notice=recoveryFromResponse(failureBody,response,'ed');
         setPhase('error');setMessage(failureMessage);
-        router.refresh();
+        if(!options?.deferRefresh)router.refresh();
         return {status:notice?.requiresSettlement||notice?.retryAfterSeconds?'blocked':'failed',message:failureMessage,recovery:notice};
       }
       if(body.lastErrorCode==="PARTIAL_SYNC"){
@@ -244,14 +244,14 @@ export function EdProvider({
         setPhase("partial");
         const partialMessage='Some Ed courses could not be refreshed. '+errorMessage(body,"Previously saved data was kept.",response,"sync");
         setMessage(partialMessage);
-        router.refresh();
+        if(!options?.deferRefresh)router.refresh();
         return {status:'partial',message:partialMessage,recovery:recoveryFromResponse(body,response,'ed')};
       }else{
         blockedUntil.current=0;cooldownUntil.current=0;
         setPhase("success");
         setMessage("Ed sync complete.");
       }
-      router.refresh();
+      if(!options?.deferRefresh)router.refresh();
       return {status:'completed',message:'Ed sync complete.',recovery:null};
     }catch{
       const failureMessage=errorMessage({code:"SERVICE_UNAVAILABLE"},"Ed sync could not be completed.",undefined,"sync");
