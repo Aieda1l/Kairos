@@ -110,7 +110,22 @@ describe('hosted operator preflight with injected read-only fakes', () => {
   const inventory = { version: 1, runId: 'h2-hosted-unit', scenario: 'bounded-v1', hostname: 'guest-diagnostic.mykairos.me', candidateName: 'kairos-guest-app-h2-hosted-unit', fixtureName: 'kairos-guest-fixture-h2-hosted-unit', appDatabaseName: 'kairos-guest-app-h2-hosted-unit', fixtureDatabaseName: 'kairos-guest-fixture-h2-hosted-unit', accountId: '0123456789abcdef0123456789abcdef', appDatabaseId: '12345678-1234-1234-1234-123456789abc', fixtureDatabaseId: '87654321-4321-4321-4321-cba987654321' };
   const expectedDigest = 'b'.repeat(64);
   const input = () => ({ schemaVersion: 1, manifestPath: 'artifacts/guest-hosted/package-h2-hosted-unit/manifest.json', inventory, authorization: { approved: true, action: 'guest-diagnostic-read-only-run', packageDigest: expectedDigest, runId: inventory.runId, hostname: inventory.hostname } });
-  const credentials = { apiReadToken: 'private-read-token', secrets: { ...secrets, KAIROS_ABUSE_KEY_V1: 'private-hmac', KAIROS_TURNSTILE_SITE_KEY: 'private-sitekey', KAIROS_TURNSTILE_SECRET_KEY: 'private-challenge-key' } };
+  const credentials = { apiReadToken: 'private-read-token', secrets: { ...secrets, KAIROS_ABUSE_KEY_V1: Buffer.alloc(32, 7).toString('base64url'), KAIROS_TURNSTILE_SITE_KEY: 'private-sitekey', KAIROS_TURNSTILE_SECRET_KEY: 'private-challenge-key' } };
+
+  it.each([
+    { label: 'padded standard base64', key: Buffer.alloc(32, 7).toString('base64') },
+    { label: 'invalid length', key: 'invalid-synthetic-key' },
+    { label: 'noncanonical pad bits', key: 'A'.repeat(42) + 'B' },
+  ])('refuses incompatible HMAC input before package or network access ($label)', async ({ key }) => {
+    let calls = 0, verificationCalls = 0;
+    await expect(prepareHostedDiagnostic({ input: input(), expectedDigest,
+      credentials: { ...credentials, secrets: { ...credentials.secrets, KAIROS_ABUSE_KEY_V1: key } },
+      fetch: async () => { calls++; return Response.json({}); },
+      verifyPackage: async options => { verificationCalls++; return verifyPackage(options); },
+    })).rejects.toThrow('GUEST_HOSTED_PREFLIGHT_FAILED');
+    expect(verificationCalls).toBe(0);
+    expect(calls).toBe(0);
+  });
   const verifyPackage = async (options: { manifestPath: string; mode?: string }) => ({ manifestPath: options.manifestPath, packageDigest: expectedDigest, mode: options.mode ?? 'offline', manifest: { inventory } });
 
   function sqliteApi(extra?: { database: 'app' | 'fixture'; table: string }) {

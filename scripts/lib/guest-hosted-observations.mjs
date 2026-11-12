@@ -44,6 +44,10 @@ export async function prepareHostedDiagnostic({ input, expectedDigest, credentia
     const approval = input.authorization;
     if (!exact(approval, ['approved', 'action', 'packageDigest', 'runId', 'hostname']) || approval.approved !== true || approval.action !== 'guest-diagnostic-read-only-run' || approval.packageDigest !== expectedDigest || approval.runId !== inventory.runId || approval.hostname !== inventory.hostname) fail();
     if (!exact(credentials, ['apiReadToken', 'secrets']) || typeof credentials.apiReadToken !== 'string' || !credentials.apiReadToken || credentials.apiReadToken.length > 4096 || /[\r\n]/.test(credentials.apiReadToken) || !exact(credentials.secrets, CANDIDATE_SECRET_NAMES) || CANDIDATE_SECRET_NAMES.some(name => typeof credentials.secrets[name] !== 'string' || !credentials.secrets[name] || credentials.secrets[name].length > 4096 || /[\r\n]/.test(credentials.secrets[name]))) fail();
+    const encodedKey = credentials.secrets.KAIROS_ABUSE_KEY_V1;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(encodedKey)) fail();
+    const decodedKey = Buffer.from(encodedKey, 'base64url');
+    if (decodedKey.length !== 32 || decodedKey.toString('base64url') !== encodedKey) fail();
     const manifestPath = resolve(input.manifestPath);
     const ready = await verifyPackage({ manifestPath, inventory, mode: 'operator-ready' });
     if (ready.packageDigest !== expectedDigest) fail();

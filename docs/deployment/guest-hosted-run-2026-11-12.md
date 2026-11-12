@@ -14,6 +14,8 @@ Both exact uploads/private activations, binding/runtime readbacks and disabled i
 
 The first CLI preflight rejected a Windows-backslash manifest path before network access. A new input changed separators only and preserved the resolved path/package identity.
 
+Later local inspection also found that the historical operator key generator used padded base64, which the application does not accept for its abuse HMAC key. The compatibility preflight now validates the required canonical base64url form before package/network access. The earlier cloud receipt still establishes the inventory failure below, without attributing an unexecuted request to a key-format error.
+
 The actual hosted receipt then recorded `incomplete / GUEST_DISPATCH_INCOMPLETE`, **zero driver application attempts and zero completions**. Its observer completed two database metadata GETs and one inventory SELECT, reporting 85 app rows read and zero rows written, before the complete table-name comparison failed.
 
 Read-only diagnosis found the reserved `_cf_KV` table in both databases. The old observer excluded `sqlite_%` and `_cf_METADATA` only, so it saw 23 app tables instead of 22 and would see two fixture tables instead of one. Cloudflare independently documents `_cf_KV` as reserved and unqueryable in its [D1 import/export guide](https://developers.cloudflare.com/d1/best-practices/import-export-data/). Its contents were never queried. The failed run was preserved and was not reset/retried as a passing run.

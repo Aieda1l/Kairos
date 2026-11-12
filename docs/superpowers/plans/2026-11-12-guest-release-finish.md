@@ -15,6 +15,7 @@ Files: scripts/lib/guest-hosted-observations.mjs and .d.mts; scripts/run-guest-h
 - [x] Add failing tests executing the observer's actual SELECTs against two in-memory SQLite databases with all expected tables and the reserved `_cf_KV` table. Both before/after snapshots succeed without querying its contents; metadata identity and the 50 SELECT / 52 API-call envelope remain.
 - [x] Keep unknown app/fixture tables rejected, including `_cf_unrecognized` and `sqliteXunrecognized`, before application dispatch. Use the literal SQLite prefix via `NOT GLOB 'sqlite_*'` in hosted/native observation. Do not ignore a `_cf_%` wildcard or change expected protected tables.
 - [x] Accept manifest.json paths using either slash convention while preserving native path resolution, package verification, exact final filename, bad-input refusal and zero network before preflight.
+- [x] Reject abuse-HMAC values that do not match the application's canonical 32-byte unpadded base64url format before package/network access; use only fresh synthetic values for the diagnostic.
 - [x] Record observer/transport input hashes in new hosted evidence. H1 package identity remains distinct from H2 driver identity; do not relabel old receipts as proof of this change.
 - [x] Preserve schema SQL and constraints. Document removing only known SQL comment-only lines for REST submission, retaining original/submitted hashes; no DDL change is needed.
 - [ ] Run focused RED/GREEN, appropriate full checks and independent ECC review; publish and merge only after required CI passes.
