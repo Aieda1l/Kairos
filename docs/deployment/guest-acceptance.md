@@ -14,13 +14,15 @@ Hosted M7 acceptance remains governed by [current readiness](readiness-milestone
 
 ## Current release status — November 12, 2026
 
-The first approved hosted packet was uploaded and privately activated; ordinary TLS and application/fixture DDL setup ran. The [preserved outcome](guest-hosted-run-2026-11-12.md) records **zero driver requests attempted and zero completed**: remote D1 exposed reserved `_cf_KV`, and the exact inventory guard stopped dispatch. Capacity is **UNMEASURED**, not a failed Free-capacity result. All owned disposable Workers, databases and hostname association, plus both restricted synthetic secret files, were removed. No production deployment or guest activation occurred as part of that diagnostic.
+The separately approved [isolated hosted diagnostic v2](guest-hosted-run-2026-11-12-v2.md) passed its functional baseline: **13/13 requests**, 21 protected table digests unchanged, 28 new anonymous admissions and ten fixture admissions. Compatibility, required CI and independent review are complete and merged in [PR 58](https://github.com/Aieda1l/Kairos/pull/58). Application source is `85ded227d35fc46377cf48326f517e376b1ac435`; driver `636a5adc7fe062e874c94ba796f1b16c2112023d` has the same tree as merged main `fda5bad`. Resolved package SHA-256 is `0ad34eacfa00f07c594e74c49503497e958c2bdd733803e7346c6b25424f426b`.
 
-The user chose to finish guest release first on November 12. The [finish plan](../superpowers/plans/2026-11-12-guest-release-finish.md) freezes guest v1 into five finite packages: compatibility plus a fresh reviewed diagnostic; capacity/operating decision; hosted retention/maintenance; real guest-provider/lifecycle acceptance; and a separate concrete release/activation decision. A new extension protocol and completion after closing Kairos are follow-ups, not guest launch blockers. Existing ownership/timeout safeguards and applicable shared release safety gates remain.
+**CPU headroom remains OPEN.** Ten sampled app HTTP 200 records show P50 55.689 ms and maximum/P99 500.858 ms versus the proposed nominal 10 ms Free target. Twelve available app records versus 13 driver requests remains unexplained. Maximum observed V8 isolate memory is 49.667 MiB, not peak allocation. No per-request, route or cold/warm attribution is established. Free is user-attested; the billing subscription API returned 403. Functional success is not a sustained capacity PASS or a requirement to upgrade.
 
-The compatibility change is a candidate: exclude exactly `_cf_KV` while rejecting other unexpected tables, accept either manifest-path separator with native resolution unchanged, and record observer/transport input hashes in new hosted receipts. Remote-shaped SQLite regressions are part of that work; no new passing CI, package or hosted run is asserted here. Historical H1/H2/native proof keeps its original input boundaries. Another cloud run requires a fresh immutable package, unused resource identities and reviewed finite action/cleanup plan; consumed receipts and deleted UUIDs cannot be reused. Attributed PR 53/54/55 CI/reviews and closed local/native, signed-extension, support and log-assessment evidence retain their recorded dispositions.
+App/fixture D1 gross read/write rows are 447/140 and 40/10; observer reads are 255 and 20 with zero writes. Residuals 192/140 and 20/10 are conditional arithmetic, not exact workload billing. The tracked result retains the window, ingestion and management-cost qualifications. All two owned Workers, two databases, hostname association and both restricted synthetic secret files were removed; production remained unchanged and healthy (HTTP 200). No real-provider call, billing change or guest activation occurred.
 
-Focused operator verification now passes 34/34 cases. It also exposed the former `NOT LIKE 'sqlite_%'` wildcard error: both hosted and native inventories now use `NOT GLOB 'sqlite_*'` with a literal underscore and exactly `_cf_METADATA`/`_cf_KV` exclusions, retaining rejection of prefix lookalikes. Current native provenance lists `platformExcluded: ['_cf_METADATA', '_cf_KV', 'sqlite_*']`; new hosted `observerInputs` records the two current Node file hashes separately from H1 package identity. This focused result is not a new native proof or CI/package/cloud run; historical H2/native results are not promoted to the changed driver.
+The [first hosted run](guest-hosted-run-2026-11-12.md) remains historical: its exact `_cf_KV` inventory mismatch stopped dispatch at zero attempted/completed requests; it was not a Free-capacity failure. Historical hashes/native proof qualifications remain tied to their original inputs. The completed v2 packet and consumed receipts cannot authorize another cloud run; any new packet needs fresh reviewed identities and finite action/cleanup approval.
+
+The user chose to finish guest v1 first. Package 1 is complete; package 2 has measured qualified baseline evidence but CPU headroom and the operating decision remain open. Hosted retention/maintenance, real guest-provider/lifecycle acceptance and a separate frozen release/activation decision remain. New extension protocol and completion after closing Kairos stay deferred; existing ownership safeguards and applicable shared release safety gates remain. See the [finish plan](../superpowers/plans/2026-11-12-guest-release-finish.md).
 
 ## Historical integrated release status — November 4, 2026
 
@@ -195,7 +197,8 @@ drop them or infer a release approval from implementation review.
 1. Freeze the reviewed revision and retain the observation dispositions. Obtain
    exact-source Linux CI and retain receipt hashes.
    A local pass allows implementation handoff behind the flag, not activation.
-2. Verify exact `_cf_KV` observer compatibility, then prepare/review a fresh
+2. Package 1 compatibility and the isolated v2 functional baseline are complete
+   through PR 58 and the tracked result above. For another measurement, prepare/review a fresh
    immutable isolated packet and unused disposable identities with finite workload,
    observation and cleanup limits. The first packet was uploaded but stopped
    before application dispatch; do not reuse its removed resources or receipts.
@@ -254,7 +257,7 @@ drop them or infer a release approval from implementation review.
 | --- | --- |
 | Controller task, whole-branch and scoped fix reviews | **ACCEPTED behind disabled flag** |
 | Exact integrated-source Linux CI | **PASS** — exact-main run 782 above |
-| Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **UNMEASURED / OPEN** — first hosted run stopped before dispatch |
+| Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **OPEN** - v2 functional baseline passed; CPU headroom unresolved |
 | Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
 | Real Canvas, Gradescope, Ed operator acceptance and ingress review | **OPEN** |
 | Exact production candidate checks and final deployment/activation approval | **OPEN** |
