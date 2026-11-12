@@ -4,8 +4,8 @@ import {BoundedBodyError,readBoundedUtf8} from "@/lib/http/bounded-body";
 import {EdSourceError} from "@/lib/sources/ed/errors";
 import {parseEdCourses,parseEdLessons} from "@/lib/sources/ed/parser";
 import {fetchEdResponse,type EdResource} from "@/lib/sources/ed/transport";
-import {GUEST_MAX_UPSTREAM_BYTES,GUEST_ED_MAX_COURSES,GUEST_ED_COURSES_MAX_OUTPUT_BYTES,GUEST_ED_MAX_RAW_LESSONS,GUEST_ED_MAX_VISIBLE_LESSONS,GUEST_ED_LESSONS_MAX_OUTPUT_BYTES,guestJsonBytes} from "../limits";
-import {guestEdCoursesRequestSchema,guestEdCoursesResponseSchema,guestEdLessonsRequestSchema,guestEdLessonsResponseSchema,type GuestEdCoursesRequest,type GuestEdCoursesResponse,type GuestEdLessonsRequest,type GuestEdLessonsResponse} from "./contracts";
+import {GUEST_MAX_UPSTREAM_BYTES,GUEST_ED_MAX_COURSES,GUEST_ED_MAX_RAW_LESSONS,GUEST_ED_MAX_VISIBLE_LESSONS} from "../limits";
+import {guestEdCoursesRequestSchema,validateGuestEdCoursesResponse,guestEdLessonsRequestSchema,validateGuestEdLessonsResponse,type GuestEdCoursesRequest,type GuestEdCoursesResponse,type GuestEdLessonsRequest,type GuestEdLessonsResponse} from "./contracts";
 import {type GuestSourceContext,type GuestSourceScope,withGuestSourceDeadline} from "./deadline";
 import {GuestSourceError} from "./errors";
 
@@ -52,8 +52,8 @@ export async function readGuestEdCourses(input:GuestEdCoursesRequest,context:Gue
       const courses=parseEdCourses(payload);
       scope.check();
       const result={ok:true as const,schemaVersion:1 as const,requestId:context.requestId,checkedAt:context.checkedAt,courses};
-      if(guestJsonBytes(result)>GUEST_ED_COURSES_MAX_OUTPUT_BYTES)throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
-      const validated=guestEdCoursesResponseSchema.safeParse(result);
+      const validated=validateGuestEdCoursesResponse(result);
+      if(!validated.success&&validated.reason==="oversize")throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
       scope.check();
       if(!validated.success)throw new GuestSourceError("ED_PARSE_ERROR");
       await scope.assertProviderCurrent();
@@ -82,8 +82,8 @@ export async function readGuestEdLessons(input:GuestEdLessonsRequest,context:Gue
         return {...normalized,source:"ed" as const,courseId:input.courseId,sourceUrl:null};
       });
       const result={ok:true as const,schemaVersion:1 as const,requestId:context.requestId,checkedAt:context.checkedAt,courseId:input.courseId,lessons};
-      if(guestJsonBytes(result)>GUEST_ED_LESSONS_MAX_OUTPUT_BYTES)throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
-      const validated=guestEdLessonsResponseSchema.safeParse(result);
+      const validated=validateGuestEdLessonsResponse(result);
+      if(!validated.success&&validated.reason==="oversize")throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
       scope.check();
       if(!validated.success)throw new GuestSourceError("ED_PARSE_ERROR");
       await scope.assertProviderCurrent();

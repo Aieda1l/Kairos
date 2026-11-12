@@ -13,6 +13,14 @@ function boundedJson<T extends z.ZodType>(schema:T,bytes:number){
   return schema.refine(value=>limits.guestJsonBytes(value)<=bytes,"Guest payload exceeds the byte limit.");
 }
 
+type ResponseValidation<T>={success:true;data:T}|{success:false;reason:"oversize"|"invalid"};
+function validateResponse<T extends z.ZodType>(value:unknown,schema:T,bytes:number):ResponseValidation<z.output<T>>{
+  const validated=schema.safeParse(value);
+  // Size the stable clone on success; invalid plain DTOs retain size-error precedence.
+  if(limits.guestJsonBytes(validated.success?validated.data:value)>bytes)return {success:false,reason:"oversize"};
+  return validated.success?{success:true,data:validated.data}:{success:false,reason:"invalid"};
+}
+
 export const guestCanvasFeedRequestSchema=boundedJson(z.object({...requestFields,feedUrl:secretSchema}).strict(),limits.GUEST_MAX_REQUEST_BYTES);
 export const guestEdCoursesRequestSchema=boundedJson(z.object({...requestFields,token:secretSchema}).strict(),limits.GUEST_MAX_REQUEST_BYTES);
 export const guestEdLessonsRequestSchema=boundedJson(z.object({...requestFields,token:secretSchema,courseId:guestDecimalIdSchema}).strict(),limits.GUEST_MAX_REQUEST_BYTES);
@@ -27,21 +35,33 @@ const canvasReportSchema=z.object({
   malformedCount:guestCountSchema.max(limits.GUEST_CANVAS_MAX_EVENT_BLOCKS),partial:z.boolean(),
 }).strict().refine(report=>report.malformedCount<=report.skippedCount && report.partial===(report.malformedCount>0),"Invalid Canvas parse counts.");
 
-export const guestCanvasFeedResponseSchema=boundedJson(z.object({
+const guestCanvasFeedResponseShape=z.object({
   ...successFields,assignments:z.array(canvasAssignmentSchema).max(limits.GUEST_CANVAS_MAX_ASSIGNMENTS),report:canvasReportSchema,
 }).strict().superRefine((result,ctx)=>{
   if(new Set(result.assignments.map(row=>row.externalId)).size!==result.assignments.length)ctx.addIssue({code:"custom",message:"Duplicate assignment identity."});
   if(result.assignments.length+result.report.skippedCount>limits.GUEST_CANVAS_MAX_EVENT_BLOCKS)ctx.addIssue({code:"custom",message:"Too many Canvas event blocks."});
-}),limits.GUEST_CANVAS_MAX_OUTPUT_BYTES);
-export const guestEdCoursesResponseSchema=boundedJson(z.object({
+});
+export const guestCanvasFeedResponseSchema=boundedJson(guestCanvasFeedResponseShape,limits.GUEST_CANVAS_MAX_OUTPUT_BYTES);
+export function validateGuestCanvasFeedResponse(value:unknown){
+  return validateResponse(value,guestCanvasFeedResponseShape,limits.GUEST_CANVAS_MAX_OUTPUT_BYTES);
+}
+const guestEdCoursesResponseShape=z.object({
   ...successFields,courses:z.array(guestDiscoveredCourseSchema).max(limits.GUEST_ED_MAX_COURSES),
-}).strict().refine(result=>new Set(result.courses.map(course=>course.externalCourseId)).size===result.courses.length,"Duplicate course identity."),limits.GUEST_ED_COURSES_MAX_OUTPUT_BYTES);
-export const guestEdLessonsResponseSchema=boundedJson(z.object({
+}).strict().refine(result=>new Set(result.courses.map(course=>course.externalCourseId)).size===result.courses.length,"Duplicate course identity.");
+export const guestEdCoursesResponseSchema=boundedJson(guestEdCoursesResponseShape,limits.GUEST_ED_COURSES_MAX_OUTPUT_BYTES);
+export function validateGuestEdCoursesResponse(value:unknown){
+  return validateResponse(value,guestEdCoursesResponseShape,limits.GUEST_ED_COURSES_MAX_OUTPUT_BYTES);
+}
+const guestEdLessonsResponseShape=z.object({
   ...successFields,courseId:guestDecimalIdSchema,lessons:z.array(edLessonSchema).max(limits.GUEST_ED_MAX_VISIBLE_LESSONS),
 }).strict().superRefine((result,ctx)=>{
   if(result.lessons.some(lesson=>lesson.courseId!==result.courseId))ctx.addIssue({code:"custom",message:"Lesson course does not match the requested course."});
   if(new Set(result.lessons.map(lesson=>lesson.externalId)).size!==result.lessons.length)ctx.addIssue({code:"custom",message:"Duplicate lesson identity."});
-}),limits.GUEST_ED_LESSONS_MAX_OUTPUT_BYTES);
+});
+export const guestEdLessonsResponseSchema=boundedJson(guestEdLessonsResponseShape,limits.GUEST_ED_LESSONS_MAX_OUTPUT_BYTES);
+export function validateGuestEdLessonsResponse(value:unknown){
+  return validateResponse(value,guestEdLessonsResponseShape,limits.GUEST_ED_LESSONS_MAX_OUTPUT_BYTES);
+}
 
 export const guestSessionRequestSchema=boundedJson(z.object({...requestFields,turnstileToken:secretSchema}).strict(),limits.GUEST_MAX_REQUEST_BYTES);
 export const guestSessionResponseSchema=z.object({...successFields,expiresAt:guestUtcDateSchema}).strict()
