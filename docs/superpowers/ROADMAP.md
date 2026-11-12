@@ -1,12 +1,16 @@
 # Kairos Roadmap
 
-**Updated:** 2026-11-05
+**Updated:** 2026-11-12
 
 This file records the current milestone numbering for Kairos. Approved milestone design/specification documents remain historical records and are not renumbered retroactively.
 
 Guest implementation merged in [PR 53](https://github.com/Aieda1l/Kairos/pull/53). Automatic [main CI run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) passed on `0a44c6a`: 2,197 unit tests, 143 browser cases, builds and native checks. Guest remains disabled pending hosted capacity, retention and live-provider evidence plus deployment/activation review. [Release validation preparation](plans/2026-11-04-guest-release-validation.md) and the [local retention probe](../deployment/guest-retention-validation.md) advance that work without a production change.
 
-An offline [isolated hosted-test package](../deployment/guest-hosted-test-package.md) is prepared and passes local native route/concurrency/state proofs, with final package review accepted. Its [implementation plan](plans/2026-11-04-guest-hosted-test-package.md) preserves Free-plan diagnostic limits and separate resource/activation approval. Fresh new-branch CI precedes protected integration; hosted measurements have not run and no Cloudflare resources or production settings changed.
+The first approved [isolated hosted packet](../deployment/guest-hosted-test-package.md) was uploaded and privately activated with ordinary TLS and DDL setup. Its [preserved outcome](../deployment/guest-hosted-run-2026-11-12.md) records zero driver requests attempted/completed: reserved remote D1 `_cf_KV` stopped observer inventory validation before dispatch. Capacity is **UNMEASURED**, not a failed Free-capacity result. All owned disposable resources/association and restricted synthetic secret files were removed; the diagnostic deployed no production change and activated no public guest access.
+
+On November 12 the user chose “Finish guest release first.” The [finish plan](plans/2026-11-12-guest-release-finish.md) has five finite packages: observer/path compatibility plus a fresh reviewed diagnostic; capacity/operating decision; hosted retention/maintenance; real Canvas/Gradescope/Ed and lifecycle acceptance; and a separate concrete release/activation decision. The compatibility change is a candidate requiring affected checks and fresh observer/transport input provenance; no new passing CI, package or hosted run is asserted here. Attributed PR 53/54/55 CI/reviews, native/local retention, signed-extension, support and log-assessment dispositions remain closed within their evidence boundaries. Unsupported per-request/peak metrics and stronger egress demands require explicit operating/release disposition without silently waiving applicable safety. New cloud work needs unused identities and fresh concrete action review; deleted UUIDs/consumed receipts grant no repeat permission.
+
+Focused operator verification now passes 34/34 cases. It also exposed the former `NOT LIKE 'sqlite_%'` wildcard error: both hosted and native inventories now use `NOT GLOB 'sqlite_*'` with a literal underscore and exactly `_cf_METADATA`/`_cf_KV` exclusions, retaining rejection of prefix lookalikes. Current native provenance lists `platformExcluded: ['_cf_METADATA', '_cf_KV', 'sqlite_*']`; new hosted `observerInputs` records the two current Node file hashes separately from H1 package identity. This focused result is not a new native proof or CI/package/cloud run; historical H2/native results are not promoted to the changed driver.
 
 ## Milestone 1 — Core local assignment dashboard — Complete
 
@@ -189,6 +193,7 @@ The [guest acceptance ledger](../deployment/guest-acceptance.md) and [capacity r
 
 ## Later extension follow-ups — Planned, not yet numbered
 
+- page-independent operation acknowledgement/completion after closing Kairos, including any new extension protocol; deferred by the user on November 12 and not a guest v1 launch blocker
 - Chromium support for the Canvas submission-status extension
 - optional opt-in periodic background refresh while preserving stale-on-open as the default behavior
 

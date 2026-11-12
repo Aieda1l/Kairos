@@ -46,7 +46,7 @@ try {
       output = await ownedOutput(resolve(args.evidenceRoot));
       await mkdir(output);
       const diagnostic = await runGuestHostedDiagnostic({ ...prepared, workload: makeGuestWorkload(), schemas });
-      result = { ...diagnostic, executionMode: 'hosted', nativeOnly: false, authorization: prepared.authorization, observerCosts: prepared.observerCosts, observerLimits: prepared.limits, schemaProvenance: provenance, costs: { ...diagnostic.costs, setup: null, fixture: null, observer: prepared.observerCosts, teardown: null }, unmeasuredReasons: { setup: 'operator_setup_outside_driver', fixture: 'fixture_workload_cost_not_observed_per_request', hostedAnalytics: 'graphql_templates_not_executed', teardown: 'explicit_operator_teardown_outside_driver' } };
+      result = { ...diagnostic, executionMode: 'hosted', nativeOnly: false, authorization: prepared.authorization, observerCosts: prepared.observerCosts, observerLimits: prepared.limits, observerInputs: prepared.observerInputs, schemaProvenance: provenance, costs: { ...diagnostic.costs, setup: null, fixture: null, observer: prepared.observerCosts, teardown: null }, unmeasuredReasons: { setup: 'operator_setup_outside_driver', fixture: 'fixture_workload_cost_not_observed_per_request', hostedAnalytics: 'graphql_templates_not_executed', teardown: 'explicit_operator_teardown_outside_driver' } };
     } finally {
       try { await prepared.dispose(); }
       catch { if (result) { result.status = 'incomplete'; result.code = 'GUEST_HOSTED_CLEANUP_FAILED'; } else throw new Error(); }

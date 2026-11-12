@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import Database from 'better-sqlite3';
+import { openD1TestDatabase } from '../helpers/d1-test-db';
 import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, parseGuestHostedArguments, parseNativeProofArguments, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
 import { prepareHostedDiagnostic } from '../../scripts/lib/guest-hosted-observations.mjs';
 
@@ -105,8 +110,114 @@ describe('hosted operator preflight with injected read-only fakes', () => {
   const inventory = { version: 1, runId: 'h2-hosted-unit', scenario: 'bounded-v1', hostname: 'guest-diagnostic.mykairos.me', candidateName: 'kairos-guest-app-h2-hosted-unit', fixtureName: 'kairos-guest-fixture-h2-hosted-unit', appDatabaseName: 'kairos-guest-app-h2-hosted-unit', fixtureDatabaseName: 'kairos-guest-fixture-h2-hosted-unit', accountId: '0123456789abcdef0123456789abcdef', appDatabaseId: '12345678-1234-1234-1234-123456789abc', fixtureDatabaseId: '87654321-4321-4321-4321-cba987654321' };
   const expectedDigest = 'b'.repeat(64);
   const input = () => ({ schemaVersion: 1, manifestPath: 'artifacts/guest-hosted/package-h2-hosted-unit/manifest.json', inventory, authorization: { approved: true, action: 'guest-diagnostic-read-only-run', packageDigest: expectedDigest, runId: inventory.runId, hostname: inventory.hostname } });
-  const credentials = { apiReadToken: 'private-read-token', secrets: { ...secrets, KAIROS_ABUSE_KEY_V1: 'private-hmac', KAIROS_TURNSTILE_SITE_KEY: 'private-sitekey', KAIROS_TURNSTILE_SECRET_KEY: 'private-challenge-key' } };
+  const credentials = { apiReadToken: 'private-read-token', secrets: { ...secrets, KAIROS_ABUSE_KEY_V1: Buffer.alloc(32, 7).toString('base64url'), KAIROS_TURNSTILE_SITE_KEY: 'private-sitekey', KAIROS_TURNSTILE_SECRET_KEY: 'private-challenge-key' } };
+
+  it.each([
+    { label: 'padded standard base64', key: Buffer.alloc(32, 7).toString('base64') },
+    { label: 'invalid length', key: 'invalid-synthetic-key' },
+    { label: 'noncanonical pad bits', key: 'A'.repeat(42) + 'B' },
+  ])('refuses incompatible HMAC input before package or network access ($label)', async ({ key }) => {
+    let calls = 0, verificationCalls = 0;
+    await expect(prepareHostedDiagnostic({ input: input(), expectedDigest,
+      credentials: { ...credentials, secrets: { ...credentials.secrets, KAIROS_ABUSE_KEY_V1: key } },
+      fetch: async () => { calls++; return Response.json({}); },
+      verifyPackage: async options => { verificationCalls++; return verifyPackage(options); },
+    })).rejects.toThrow('GUEST_HOSTED_PREFLIGHT_FAILED');
+    expect(verificationCalls).toBe(0);
+    expect(calls).toBe(0);
+  });
   const verifyPackage = async (options: { manifestPath: string; mode?: string }) => ({ manifestPath: options.manifestPath, packageDigest: expectedDigest, mode: options.mode ?? 'offline', manifest: { inventory } });
+
+  function sqliteApi(extra?: { database: 'app' | 'fixture'; table: string }) {
+    const app = openD1TestDatabase();
+    const fixture = new Database(':memory:');
+    fixture.exec(readFileSync('scripts/guest-hosted/control-schema.sql', 'utf8'));
+    const operations = ['challenge', 'canvas-smoke', 'canvas-near', 'ed-courses-smoke', 'ed-courses-near', 'ed-lessons-smoke', 'ed-lessons-near'];
+    for (const operation of operations) fixture.prepare('INSERT INTO fixture_operation(run_id,scenario,operation,call_cap) VALUES(?,?,?,?)').run(inventory.runId, inventory.scenario, operation, operation.startsWith('canvas-') ? 8 : 16);
+    for (const db of [app.sqlite, fixture]) {
+      db.exec('CREATE TABLE "_cf_KV"(key TEXT PRIMARY KEY,value BLOB); CREATE TABLE "_cf_METADATA"(key TEXT)');
+      db.prepare('INSERT INTO "_cf_KV" VALUES(?,?)').run('reserved-key', 'reserved-private-value');
+    }
+    if (extra) (extra.database === 'app' ? app.sqlite : fixture).exec(`CREATE TABLE "${extra.table}"(id TEXT)`);
+    const queries: string[] = [];
+    let applicationRequests = 0;
+    const fetch = async (url: string, init: RequestInit) => {
+      if (!url.startsWith('https://api.cloudflare.com/')) { applicationRequests++; return Response.json({ status: 'ok' }); }
+      const isFixture = url.includes(inventory.fixtureDatabaseId);
+      if (init.method === 'GET') return Response.json({ success: true, result: { uuid: isFixture ? inventory.fixtureDatabaseId : inventory.appDatabaseId, name: isFixture ? inventory.fixtureDatabaseName : inventory.appDatabaseName } });
+      const { sql } = JSON.parse(String(init.body)) as { sql: string };
+      queries.push(sql);
+      if (!sql.startsWith('SELECT ') || /FROM\s+["`\[]?_cf_(?:KV|METADATA)/i.test(sql)) throw new Error('RESERVED_CONTENT_OR_MUTATION_REJECTED');
+      const results = (isFixture ? fixture : app.sqlite).prepare(sql).all();
+      return Response.json({ success: true, result: [{ success: true, results, meta: { rows_read: results.length, rows_written: 0 } }] });
+    };
+    return { fetch, queries, applicationRequests: () => applicationRequests, close: () => { fixture.close(); app.close(); } };
+  }
+
+  it.each(['owned/manifest.json', 'owned\\manifest.json'])('accepts explicit native manifest path separators without network before observation (%s)', async manifestPath => {
+    let calls = 0;
+    const verifiedPaths: string[] = [];
+    const prepared = await prepareHostedDiagnostic({ input: { ...input(), manifestPath }, expectedDigest, credentials,
+      fetch: async () => { calls++; throw new Error('NO_NETWORK_EXPECTED'); },
+      verifyPackage: async options => { verifiedPaths.push(options.manifestPath); return verifyPackage(options); },
+    });
+    expect(verifiedPaths).toEqual([resolve(manifestPath), resolve(manifestPath)]);
+    expect(calls).toBe(0);
+    await prepared.dispose();
+  });
+
+  it.each(['owned/not-manifest.json', 'owned/manifest.json.bak', 'owned/manifest.json/child', 'owned\\manifest.jsonx', 'owned/manifest.json\n'])('refuses a wrong final filename before package/network access (%s)', async manifestPath => {
+    let calls = 0, verificationCalls = 0;
+    await expect(prepareHostedDiagnostic({ input: { ...input(), manifestPath }, expectedDigest, credentials,
+      fetch: async () => { calls++; return Response.json({}); },
+      verifyPackage: async options => { verificationCalls++; return verifyPackage(options); },
+    })).rejects.toThrow('GUEST_HOSTED_PREFLIGHT_FAILED');
+    expect(verificationCalls).toBe(0);
+    expect(calls).toBe(0);
+  });
+
+  it('executes both snapshots with remote reserved tables without reading their contents or expanding the observer envelope', async () => {
+    const api = sqliteApi();
+    try {
+      const prepared = await prepareHostedDiagnostic({ input: input(), expectedDigest, credentials, fetch: api.fetch, verifyPackage });
+      const before = await prepared.observations.before();
+      const after = await prepared.observations.after();
+      expect(Object.keys(before.tables).sort()).toEqual(tableNames);
+      expect(Object.keys(before.fixtureTables)).toEqual(['fixture_operation']);
+      expect(after).toEqual(before);
+      expect(prepared.observerCosts).toMatchObject({ metadataRequests: 2, queryRequests: 50, rowsWritten: 0 });
+      expect(api.queries).toHaveLength(50);
+      expect(api.queries.filter(sql => sql.includes('sqlite_master'))).toHaveLength(4);
+      const item = makeGuestWorkload()[0];
+      await (await prepared.request(origin + item.path, { method: 'GET', redirect: 'manual', signal: new AbortController().signal, item })).text();
+      expect(api.applicationRequests()).toBe(1);
+      expect(JSON.stringify(before)).not.toContain('reserved-private-value');
+      await prepared.dispose();
+    } finally { api.close(); }
+  });
+
+  it.each([
+    ['app', 'unexpected_table'], ['fixture', 'unexpected_table'],
+    ['app', '_cf_unrecognized'], ['fixture', '_cf_unrecognized'],
+    ['app', 'sqliteXunrecognized'], ['fixture', 'sqliteXunrecognized'],
+  ] as const)('still blocks dispatch for an unexpected %s table %s', async (database, table) => {
+    const api = sqliteApi({ database, table });
+    try {
+      const prepared = await prepareHostedDiagnostic({ input: input(), expectedDigest, credentials, fetch: api.fetch, verifyPackage });
+      await expect(prepared.observations.before()).rejects.toThrow('GUEST_HOSTED_OBSERVATION_FAILED');
+      const item = makeGuestWorkload()[0];
+      await expect(prepared.request(origin + item.path, { method: 'GET', redirect: 'manual', signal: new AbortController().signal, item })).rejects.toThrow('GUEST_HOSTED_PREFLIGHT_FAILED');
+      expect(api.applicationRequests()).toBe(0);
+      await prepared.dispose();
+    } finally { api.close(); }
+  });
+
+  it('binds declared hosted observer and transport input hashes to new evidence', async () => {
+    const prepared = await prepareHostedDiagnostic({ input: input(), expectedDigest, credentials, verifyPackage, fetch: async () => { throw new Error('NO_NETWORK_EXPECTED'); } });
+    expect(prepared.observerInputs).toEqual(['scripts/lib/guest-hosted-observations.mjs', 'scripts/lib/guest-hosted-native.mjs'].map(path => ({ path, sha256: createHash('sha256').update(readFileSync(path)).digest('hex') })));
+    expect(JSON.stringify(prepared.observerInputs)).not.toContain(credentials.apiReadToken);
+    await prepared.dispose();
+  });
 
   it('rejects missing authorization, unresolved identity, digest drift and unknown fields before any API request', async () => {
     let calls = 0;

@@ -3,8 +3,8 @@
 Guest implementation and its independent reviews are accepted behind the
 default-off flag. Exact-source main CI has passed; public activation is separate.
 **Guest activation and overall public beta acceptance remain
-incomplete.** No deployment, remote migration, billing change, new key, cleanup
-activation or real provider check was performed for this record.
+incomplete.** The isolated diagnostic below did not deploy production, activate
+guest access or maintenance, change billing, or exercise real providers.
 
 The [approved design](../superpowers/specs/2026-10-24-hybrid-local-guest-mode-design.md)
 and [implementation plan](../superpowers/plans/2026-10-24-hybrid-local-guest-mode.md)
@@ -12,7 +12,17 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
-## Current release status — November 4, 2026
+## Current release status — November 12, 2026
+
+The first approved hosted packet was uploaded and privately activated; ordinary TLS and application/fixture DDL setup ran. The [preserved outcome](guest-hosted-run-2026-11-12.md) records **zero driver requests attempted and zero completed**: remote D1 exposed reserved `_cf_KV`, and the exact inventory guard stopped dispatch. Capacity is **UNMEASURED**, not a failed Free-capacity result. All owned disposable Workers, databases and hostname association, plus both restricted synthetic secret files, were removed. No production deployment or guest activation occurred as part of that diagnostic.
+
+The user chose to finish guest release first on November 12. The [finish plan](../superpowers/plans/2026-11-12-guest-release-finish.md) freezes guest v1 into five finite packages: compatibility plus a fresh reviewed diagnostic; capacity/operating decision; hosted retention/maintenance; real guest-provider/lifecycle acceptance; and a separate concrete release/activation decision. A new extension protocol and completion after closing Kairos are follow-ups, not guest launch blockers. Existing ownership/timeout safeguards and applicable shared release safety gates remain.
+
+The compatibility change is a candidate: exclude exactly `_cf_KV` while rejecting other unexpected tables, accept either manifest-path separator with native resolution unchanged, and record observer/transport input hashes in new hosted receipts. Remote-shaped SQLite regressions are part of that work; no new passing CI, package or hosted run is asserted here. Historical H1/H2/native proof keeps its original input boundaries. Another cloud run requires a fresh immutable package, unused resource identities and reviewed finite action/cleanup plan; consumed receipts and deleted UUIDs cannot be reused. Attributed PR 53/54/55 CI/reviews and closed local/native, signed-extension, support and log-assessment evidence retain their recorded dispositions.
+
+Focused operator verification now passes 34/34 cases. It also exposed the former `NOT LIKE 'sqlite_%'` wildcard error: both hosted and native inventories now use `NOT GLOB 'sqlite_*'` with a literal underscore and exactly `_cf_METADATA`/`_cf_KV` exclusions, retaining rejection of prefix lookalikes. Current native provenance lists `platformExcluded: ['_cf_METADATA', '_cf_KV', 'sqlite_*']`; new hosted `observerInputs` records the two current Node file hashes separately from H1 package identity. This focused result is not a new native proof or CI/package/cloud run; historical H2/native results are not promoted to the changed driver.
+
+## Historical integrated release status — November 4, 2026
 
 [PR 53](https://github.com/Aieda1l/Kairos/pull/53) merged as `0a44c6adb87fe69a2e15b64d736648222cdd73da`. Required PR CI [run 781](https://github.com/Aieda1l/Kairos/actions/runs/41775786896) passed on head `ebfae4a`, testing combined revision `0b8add1`; the actual merge has the same tree. Automatic exact-main CI [run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) then passed: 2,197 unit tests in 196 files, all 143 Chromium/Firefox browser cases, types/lint/database checks, Next/Vinext builds, 81 sealed native guest checks and the remaining compiled/provider/iCloud/safety graph. The required status on main is successful. ECC's Canvas finding and the focused navigation/date and status-publisher corrections have accepted reviews with no remaining actionable finding.
 
@@ -20,7 +30,7 @@ The main native probe records source `0a44c6a`, `dirty:true`, input `dist/server
 
 The [local retention validation](guest-retention-validation.md) exercises actual cleanup against disposable native D1 and records bounded deletion, backlog drain and preservation. It is preparation evidence, not hosted billing, a sustainable retention cadence or recovery-history erasure. Public read-only baseline checks returned health HTTP 200 with `status:ok` and `/guest` HTTP 404. These checks neither deployed nor enabled the merged guest implementation. Hosted capacity, physical retention, live-provider acceptance and concrete deployment/activation review remain open; both guest defaults stay false.
 
-The dated implementation sections below preserve their original failures and open-gate state. They are historical evidence, not the current CI verdict.
+The dated implementation/preparation sections below preserve their original failures and open-gate state. Their pending-CI and no-cloud statements describe those dates, not the November 12 CI or hosted outcome.
 
 ## November 5 isolated diagnostic preparation
 
@@ -185,21 +195,26 @@ drop them or infer a release approval from implementation review.
 1. Freeze the reviewed revision and retain the observation dispositions. Obtain
    exact-source Linux CI and retain receipt hashes.
    A local pass allows implementation handoff behind the flag, not activation.
-2. Prepare an isolated hosted candidate with synthetic data/credentials, fresh
-   disposable D1, explicit ingress/origin, separate guest HMAC/challenge config,
-   no production/account credentials and no fixture bypass in the candidate app.
-   A separately reviewed hosted measurement harness must route the real compiled
-   handlers' upstreams through sealed service-bound fixtures with outbound denial,
-   following the native harness boundary; that hosted artifact is not prepared
-   or measured by A3. Never send synthetic credentials to real providers. Keep
+2. Verify exact `_cf_KV` observer compatibility, then prepare/review a fresh
+   immutable isolated packet and unused disposable identities with finite workload,
+   observation and cleanup limits. The first packet was uploaded but stopped
+   before application dispatch; do not reuse its removed resources or receipts.
+   Never send synthetic credentials to real providers. The accepted diagnostic
+   uses trusted-code HTTP substitution through private fixtures; it does not
+   prove platform-enforced egress isolation. Reconcile the older stronger sealed
+   egress requirement explicitly at release rather than claiming it proved. Keep
    production guest false and log/trace persistence off. Record source, build,
    dependency, config and schema hashes, isolation checks and health results.
    Provision/upload only through a separately authorized operator action.
-3. Measure hosted per-request Worker CPU and shared-isolate peak memory for
+3. Measure supported hosted sampled CPU/isolate-memory distributions and failures for
    admitted near-cap success, parse failure, redirect, bootstrap/challenge failure,
    capability/origin rejection, session/network/global denial and six concurrent
-   near-cap reads. Measure actual D1 billed reads/writes, attempted statements,
-   earlier charges on denial, bootstrap churn and daily projected traffic.
+   near-cap reads. Per-request CPU/D1 attribution and peak allocation stay null
+   with reasons under the selected metrics/logs-off contract. Reconcile those older
+   stronger requirements explicitly in the operating/release decision; do not
+   invent values or silently waive applicable safety. Measure usable D1 billed
+   reads/writes and statements, earlier denial charges, bootstrap churn and daily
+   projections, separating setup/fixture/observer/cleanup from workload costs.
    Retain sanitized count/metric receipts; exclude credential/body/error logs.
 4. In disposable D1, test the existing bounded cleanup with expired anonymous
    rows, dry-run then explicit apply, and verify physical absence while preserving
@@ -224,7 +239,8 @@ drop them or infer a release approval from implementation review.
    Gradescope discovery/read through Firefox/provider login, and Ed selection/read.
    Include memory-only reload/re-entry, explicit remembering/forgetting, source
    replacement, disconnect/reset/import, capability expiry and same-browser account
-   separation. Record actual browser/extension versions and per-stage outcomes;
+   separation and interaction during changing reports. Record actual
+   browser/extension versions and per-stage outcomes;
    synthetic hosted capacity results cannot substitute for this live report.
 7. Prepare the concrete production artifact and operator review: exact source/CI,
    build/config/schema and migration compatibility, data/isolation/health checks,
@@ -238,7 +254,7 @@ drop them or infer a release approval from implementation review.
 | --- | --- |
 | Controller task, whole-branch and scoped fix reviews | **ACCEPTED behind disabled flag** |
 | Exact integrated-source Linux CI | **PASS** — exact-main run 782 above |
-| Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **OPEN** |
+| Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **UNMEASURED / OPEN** — first hosted run stopped before dispatch |
 | Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
 | Real Canvas, Gradescope, Ed operator acceptance and ingress review | **OPEN** |
 | Exact production candidate checks and final deployment/activation approval | **OPEN** |
