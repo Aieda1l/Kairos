@@ -7,6 +7,15 @@ import {canvasEvent,canvasFeed,checkedAt,feedUrl,requestId,sourceContext,textRes
 const input={schemaVersion:1 as const,requestId,feedUrl};
 afterEach(()=>vi.useRealTimers());
 describe("bounded guest Canvas reader",()=>{
+  it("serializes the Canvas output byte bound once",async()=>{
+    const original=JSON.stringify;let outputSerializations=0;
+    const stringify=vi.spyOn(JSON,"stringify").mockImplementation((...args:Parameters<typeof JSON.stringify>)=>{
+      const value=args[0];
+      if(value?.ok===true&&value.schemaVersion===1&&value.requestId===requestId&&value.checkedAt===checkedAt&&"assignments" in value)outputSerializations++;
+      return original(...args);
+    });
+    try{await readGuestCanvas(input,sourceContext(async()=>textResponse(canvasFeed([canvasEvent(1)]))));expect(outputSerializations).toBe(1);}finally{stringify.mockRestore();}
+  });
   it("returns only normalized rows and report, replacing unsupported links with null",async()=>{
     const feed=canvasFeed([canvasEvent(1),canvasEvent(2,{url:"https://canvas.uw.edu/feeds/private.ics?token=never-echo"}),canvasEvent(3,{url:"http://canvas.uw.edu/courses/12/assignments/3"})]);
     const result=await readGuestCanvas(input,sourceContext(async()=>textResponse(feed)));

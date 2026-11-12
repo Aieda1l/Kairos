@@ -5,6 +5,24 @@ import {checkedAt,edCourses,edLessons,requestId,sourceContext,textResponse,token
 const input={schemaVersion:1 as const,requestId,token};
 afterEach(()=>vi.useRealTimers());
 describe("bounded guest Ed readers",()=>{
+  it("serializes the Ed courses output byte bound once",async()=>{
+    const original=JSON.stringify;let outputSerializations=0;
+    const stringify=vi.spyOn(JSON,"stringify").mockImplementation((...args:Parameters<typeof JSON.stringify>)=>{
+      const value=args[0];
+      if(value?.ok===true&&value.schemaVersion===1&&value.requestId===requestId&&value.checkedAt===checkedAt&&"courses" in value)outputSerializations++;
+      return original(...args);
+    });
+    try{await readGuestEdCourses(input,sourceContext(async()=>Response.json(edCourses(1))));expect(outputSerializations).toBe(1);}finally{stringify.mockRestore();}
+  });
+  it("serializes the Ed lessons output byte bound once",async()=>{
+    const original=JSON.stringify;let outputSerializations=0;
+    const stringify=vi.spyOn(JSON,"stringify").mockImplementation((...args:Parameters<typeof JSON.stringify>)=>{
+      const value=args[0];
+      if(value?.ok===true&&value.schemaVersion===1&&value.requestId===requestId&&value.checkedAt===checkedAt&&"lessons" in value)outputSerializations++;
+      return original(...args);
+    });
+    try{await readGuestEdLessons({...input,courseId:"12"},sourceContext(async()=>Response.json(edLessons(1))));expect(outputSerializations).toBe(1);}finally{stringify.mockRestore();}
+  });
   it("supports 150-course discovery and excludes profile and secret properties structurally",async()=>{
     const result=await readGuestEdCourses(input,sourceContext(async()=>Response.json(edCourses(150))));
     expect(guestEdCoursesResponseSchema.safeParse(result).success).toBe(true);

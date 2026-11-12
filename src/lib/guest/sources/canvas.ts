@@ -5,9 +5,9 @@ import {CanvasSourceError} from "@/lib/sources/canvas-ical/errors";
 import {parseCanvasIcal,splitCanvasEvents} from "@/lib/sources/canvas-ical/parser";
 import {fetchCanvasFeedResponse} from "@/lib/sources/canvas-ical/transport";
 import {CanvasFeedUrlError,validateCanvasFeedUrl} from "@/lib/sources/canvas-ical/validate-url";
-import {GUEST_MAX_UPSTREAM_BYTES,GUEST_CANVAS_MAX_EVENT_BLOCKS,GUEST_CANVAS_MAX_ASSIGNMENTS,GUEST_CANVAS_MAX_OUTPUT_BYTES,guestJsonBytes} from "../limits";
+import {GUEST_MAX_UPSTREAM_BYTES,GUEST_CANVAS_MAX_EVENT_BLOCKS,GUEST_CANVAS_MAX_ASSIGNMENTS} from "../limits";
 import {isGuestSourceUrl} from "../schema";
-import {guestCanvasFeedRequestSchema,guestCanvasFeedResponseSchema,type GuestCanvasFeedRequest,type GuestCanvasFeedResponse} from "./contracts";
+import {guestCanvasFeedRequestSchema,validateGuestCanvasFeedResponse,type GuestCanvasFeedRequest,type GuestCanvasFeedResponse} from "./contracts";
 import {type GuestSourceContext,withGuestSourceDeadline} from "./deadline";
 import {GuestSourceError} from "./errors";
 
@@ -38,8 +38,8 @@ export async function readGuestCanvas(input:GuestCanvasFeedRequest,context:Guest
       const result={ok:true as const,schemaVersion:1 as const,requestId:context.requestId,checkedAt:context.checkedAt,assignments,
         report:{skippedCount:parsed.skipped,malformedCount:parsed.errors.length,partial:parsed.errors.length>0}};
       scope.check();
-      if(guestJsonBytes(result)>GUEST_CANVAS_MAX_OUTPUT_BYTES)throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
-      const validated=guestCanvasFeedResponseSchema.safeParse(result);
+      const validated=validateGuestCanvasFeedResponse(result);
+      if(!validated.success&&validated.reason==="oversize")throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
       scope.check();
       if(!validated.success)throw new GuestSourceError("INVALID_ICAL");
       await scope.assertProviderCurrent();
