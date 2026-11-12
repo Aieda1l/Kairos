@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type { Assignment } from "@/lib/assignments/types";
 import { groupUpcoming } from "@/lib/assignments/queries";
@@ -38,6 +39,8 @@ export function AssignmentExplorer({
   onFiltersChange?:(value:FilterState)=>void;
 }){
   const [localFilters,setLocalFilters]=useState<FilterState>({course:"",source:"",search:""});
+  const [collapsedGroups,setCollapsedGroups]=useState<Partial<Record<DueGroup,boolean>>>({});
+  const groupId=useId();
   const filters=controlledFilters??localFilters;
   const setFilters=(value:FilterState)=>{if(controlledFilters===undefined)setLocalFilters(value);onFiltersChange?.(value);};
   const controls=syncControls===undefined?<ConnectedSourceSyncControls canvasConnected={canvasConnected}/>:syncControls;
@@ -69,9 +72,20 @@ export function AssignmentExplorer({
       {order.map(key=>groups[key].length>0&&(
         <section key={key}>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {labels[key]} <span className="font-normal">{groups[key].length}</span>
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center gap-2 rounded-lg text-left uppercase tracking-wide focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              aria-expanded={!collapsedGroups[key]}
+              aria-controls={`${groupId}-${key}`}
+              onClick={()=>setCollapsedGroups(current=>({...current,[key]:!current[key]}))}
+            >
+              {collapsedGroups[key]?<ChevronRight size={16} aria-hidden="true"/>:<ChevronDown size={16} aria-hidden="true"/>}
+              {labels[key]} <span className="font-normal">{groups[key].length}</span>
+            </button>
           </h2>
-          <AssignmentList assignments={groups[key]} timeZone={timeZone}/>
+          <div id={`${groupId}-${key}`}>
+            {!collapsedGroups[key]&&<AssignmentList assignments={groups[key]} timeZone={timeZone}/>}
+          </div>
         </section>
       ))}
     </div>
