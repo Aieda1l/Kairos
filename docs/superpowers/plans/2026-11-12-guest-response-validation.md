@@ -30,7 +30,7 @@ Files: `src/lib/guest/sources/contracts.ts`, `canvas.ts`, `ed.ts`; focused tests
 ## Task 2 — Quantify and integrate the scoped result
 
 - [x] Compare the actual pre/post source pipelines with identical fixed synthetic fixtures, separately recording deterministic serialization counts and qualified local timing. Output hashes match and the count is two-to-one across all fixtures; mixed timings and coarse Windows CPU counters establish no CPU/headroom improvement.
-- [ ] Run appropriate broader checks and fresh compiled/native checks for changed runtime inputs. Update the release record with the measured limits and the still-open Free CPU decision.
+- [x] Run appropriate broader checks and fresh compiled/native checks for changed runtime inputs. Full local 2,279 pass / 46 existing platform skips; types/lint and fresh 13-request sealed-package proof pass. [The release record](../../deployment/guest-response-validation.md) preserves the still-open Free CPU decision.
 - [ ] Freeze the candidate, perform independent ECC/security review, publish the PR and require normal CI before merge. No deployment or new cloud workload follows automatically.
 
 ## Review focus

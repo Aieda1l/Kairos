@@ -23,6 +23,8 @@ The [first hosted run](guest-hosted-run-2026-11-12.md) remains historical: its e
 
 The user chose to finish guest v1 first. Package 1 is complete; package 2 has measured qualified baseline evidence but CPU headroom and the operating decision remain open. Hosted retention/maintenance, real guest-provider/lifecycle acceptance and a separate frozen release/activation decision remain. New extension protocol and completion after closing Kairos stay deferred; existing ownership safeguards and applicable shared release safety gates remain. See the [finish plan](../superpowers/plans/2026-11-12-guest-release-finish.md).
 
+The subsequent [local response-validation increment](guest-response-validation.md) removes one duplicate output-size serialization per Canvas/Ed read while retaining strict schemas and guards. Its focused/full local checks and fresh compiled-package proof pass. Mixed Node timings do not establish CPU improvement or close the hosted Free headroom finding; the actual cloud measurements above keep their original application/package identity.
+
 ## Reproduce local evidence
 
 ```sh
