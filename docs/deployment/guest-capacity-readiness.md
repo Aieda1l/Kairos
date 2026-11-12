@@ -2,7 +2,7 @@
 
 Status: guest behavior is merged and exact-main CI has passed behind the disabled
 guest flag. Hosted capacity and launch acceptance
-are **OPEN**. These local checks do not authorize guest
+are **UNMEASURED / OPEN**. These local checks do not authorize guest
 activation, deployment, maintenance, new keys, billing changes or real provider
 traffic. Base and production `KAIROS_GUEST_ENABLED` defaults remain `false`.
 
@@ -10,6 +10,16 @@ The [acceptance ledger and operator sequence](guest-acceptance.md) records exact
 receipt identities, local suite results, CI source/graph coverage and remaining
 review/live gates. This page preserves the earlier S4 measurements below; their
 precommit status is not retroactively changed by later passing integrated checks.
+
+## Current hosted status — November 12, 2026
+
+The first approved hosted packet was uploaded and privately activated, with ordinary TLS and application/fixture DDL setup. Its [preserved outcome](guest-hosted-run-2026-11-12.md) records **zero driver requests attempted/completed**: reserved remote D1 `_cf_KV` caused the observer's exact inventory check to stop before dispatch. This is observer compatibility evidence, not a failed Free-capacity result. All owned disposable resources/hostname association and both restricted synthetic secret files were removed. No production deployment or public guest activation occurred as part of that diagnostic. Unattributed platform traffic and gross D1 setup/observation totals do not establish workload CPU or net billing.
+
+The compatibility change remains a candidate: exact `_cf_KV` exclusion with unknown tables still rejected, separator-aware manifest basename with native resolution unchanged, observer/transport input hashes in new receipts and remote-shaped SQLite regressions. No new passing CI, package or cloud run is asserted here. Historical H1/H2/native proofs keep their input qualifications. Another run requires a fresh reviewed package, unused identities and finite action/cleanup plan; deleted UUIDs and consumed receipts cannot be reused.
+
+The user chose to finish guest release first on November 12. The [five-package finish plan](../superpowers/plans/2026-11-12-guest-release-finish.md) covers compatibility/fresh diagnostic, capacity/operating decision, hosted retention/maintenance, real guest-provider/lifecycle acceptance and separate concrete release/activation. A new extension protocol/full completion after closing Kairos is a follow-up, not a guest v1 blocker. Existing safeguards and applicable shared release safety gates remain.
+
+Focused operator verification now passes 31/31 cases. It also exposed the former `NOT LIKE 'sqlite_%'` wildcard error: both hosted and native inventories now use `NOT GLOB 'sqlite_*'` with a literal underscore and exactly `_cf_METADATA`/`_cf_KV` exclusions, retaining rejection of prefix lookalikes. Current native provenance lists `platformExcluded: ['_cf_METADATA', '_cf_KV', 'sqlite_*']`; new hosted `observerInputs` records the two current Node file hashes separately from H1 package identity. This focused result is not a new native proof or CI/package/cloud run; historical H2/native results are not promoted to the changed driver.
 
 ## Reproduce local evidence
 
@@ -37,9 +47,9 @@ PR 53 merged as `0a44c6a`. Its required PR CI and automatic [exact-main CI run 7
 
 The [disposable local retention probe](guest-retention-validation.md) now checks actual deletion and preservation with the real helper and migrations. It does not establish hosted cost, a sustainable cadence, maximum retention or recovery-history erasure. No deployed CPU/memory/D1 billing or live-provider acceptance evidence was added; guest activation remains off.
 
-An offline [hosted diagnostic package](guest-hosted-test-package.md) is now prepared with two Workers/two disposable D1 templates, explicit package/identity/approval gates, private fixtures, atomic counters and a bounded driver. Local H2 verification passed 36 focused tests and the formal native proof: 13 complete requests, ten fixture admissions, 28 new anonymous rows, all 21 protected tables unchanged, and zero outbound/asset sink calls. This is local preparation, not an uploaded or measured hosted candidate. The native ingress, self-signed loopback connector and proof instrumentation remain separate from upload files. Hosted mode has only fake-adapter test coverage; no account API or provider run occurred.
+The historical offline [hosted diagnostic package](guest-hosted-test-package.md) has two Workers/two disposable D1 templates, explicit package/identity/approval gates, private fixtures, atomic counters and a bounded driver. Local H2 verification passed 36 focused tests and the formal native proof: 13 complete requests, ten fixture admissions, 28 new anonymous rows, all 21 protected tables unchanged, and zero outbound/asset sink calls. These are local proofs, distinct from the later actual hosted upload/setup that stopped before dispatch. The native ingress, self-signed loopback connector and proof instrumentation remain separate from upload files. No real-provider guest acceptance was established.
 
-The diagnostic preserves original compiled application modules and substitutes inspected HTTP calls through private fixtures. It is trusted-code transport substitution, not platform-enforced egress isolation or a complete capability sandbox. Cloudflare's [Dynamic Workers egress control](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/) offers one stronger boundary, but [requires Workers Paid](https://developers.cloudflare.com/dynamic-workers/pricing/); that is not evidence that the guest application itself requires Paid. Unsupported per-request CPU/D1 attribution and peak memory remain null. Package review is accepted for offline preparation. Fresh protected CI/integration, exact operator inventory/headroom, identity resolution and explicit resource/upload approval precede any hosted experiment. No billing or production configuration changed.
+The diagnostic preserves original compiled application modules and substitutes inspected HTTP calls through private fixtures. It is trusted-code transport substitution, not platform-enforced egress isolation or a complete capability sandbox. Cloudflare's [Dynamic Workers egress control](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/) offers one stronger boundary, but [requires Workers Paid](https://developers.cloudflare.com/dynamic-workers/pricing/); that is not evidence that the guest application itself requires Paid. Unsupported per-request CPU/D1 attribution and peak memory remain null with reasons. The older stronger metric/egress demands require explicit operating/release disposition; trusted substitution and sampled distributions have not proved those stronger requirements, and applicable safety is not silently waived. Attributed PR 53/54/55 CI/reviews and local/native/retention evidence remain closed within their recorded boundaries. Changed source needs affected checks/integration; fresh package, exact unused inventory/headroom and separate resource/upload review precede another experiment. No billing or production configuration changed in the diagnostic.
 
 ## Prior implementation-review receipt (before PR 53 ECC)
 
@@ -175,8 +185,8 @@ not a claim that the local fixtures meet Free capacity.
 | Local native transport/admission/compiled routes | **PASS, local** | Main `0a44c6a` CI run 782: 81 checks plus full browser graph; older receipts below remain historical; no hosted capacity inference |
 | Implementation task, whole-branch and scoped fix reviews | **ACCEPTED** | All eight findings addressed; this does not approve public activation |
 | Exact integrated-source Linux CI | **PASS** | Exact-main run 782 linked above; 2,197 unit and 143 browser cases, full graph successful |
-| Hosted Worker CPU | **OPEN** | Deployed per-request CPU for near-cap success, parse failure, redirect, admission denial and bootstrap paths |
-| Shared-isolate memory | **OPEN** | Hosted peak memory and failures under bounded concurrent near-cap traffic |
+| Hosted Worker CPU | **UNMEASURED / OPEN** | Supported sampled CPU/failure observations for near-cap success, parse failure, redirect, denial and bootstrap; explicit disposition of unsupported per-request attribution |
+| Shared-isolate memory | **UNMEASURED / OPEN** | Supported isolate-memory distributions/failures under bounded concurrency; peak allocation stays null with reason and requires explicit release disposition |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |
 | Cleanup capacity | **OPEN** | Local bounded drain/preservation probe passes; hosted cadence, deletion/index cost, sustained backlog/recovery still need evidence |
 | Physical retention | **OPEN** | Verified physical deletion mechanism/cadence and retention bounds; `purge_after_ms` alone does not prove deletion |

@@ -100,7 +100,7 @@ try {
   const snapshot = async () => {
     assert(await quiesce());
     const tableRows = async (db, name) => {
-      const names = (await sql(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' ORDER BY name", 'observer', name)).map(row => row.name);
+      const names = (await sql(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name <> '_cf_METADATA' AND name <> '_cf_KV' ORDER BY name", 'observer', name)).map(row => row.name);
       const rows = {};
       for (const table of names) {
         assert(/^[A-Za-z_][A-Za-z0-9_]*$/.test(table));
@@ -165,7 +165,7 @@ try {
   assert(absentOutbound.attempts === 0);
   const sourceFiles = ['scripts/verify-workerd-guest-hosted-package.mjs', 'scripts/run-guest-hosted-diagnostic.mjs', 'scripts/lib/guest-hosted-native.mjs', 'scripts/lib/guest-hosted-diagnostic.mjs'];
   const driverInputs = await Promise.all(sourceFiles.map(async path => ({ path, sha256: sha256(await readFile(path)) })));
-  const proof = { implementationRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), applicationRevision: verified.manifest.applicationRevision, packageDigest: digest, driverInputs, schema: provenance, local: { cf: false, telemetry: false, persist: false, ingress: 'exact-proposed-hostname-owned-loopback-tls', tls: 'self-signed-relaxation-local-only', syntheticClientAddress: true, platformExcluded: ['_cf_METADATA', 'sqlite_%'] }, uploadModules: [...modules, ...fixtureModules].map(module => ({ path: module.path.slice(root.length + 1).replaceAll('\\', '/'), sha256: sha256(module.contents) })), proofOnlyModules: [{ path: 'proof-entry.mjs', sha256: sha256(proofEntry) }, { path: 'proof-capture.mjs', sha256: sha256('export const early=globalThis.fetch;') }, { path: 'absent-entry.mjs', sha256: sha256(absentEntry) }, { path: 'rejecting-sink.mjs', sha256: sha256(sinkScript) }] };
+  const proof = { implementationRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), applicationRevision: verified.manifest.applicationRevision, packageDigest: digest, driverInputs, schema: provenance, local: { cf: false, telemetry: false, persist: false, ingress: 'exact-proposed-hostname-owned-loopback-tls', tls: 'self-signed-relaxation-local-only', syntheticClientAddress: true, platformExcluded: ['_cf_METADATA', '_cf_KV', 'sqlite_*'] }, uploadModules: [...modules, ...fixtureModules].map(module => ({ path: module.path.slice(root.length + 1).replaceAll('\\', '/'), sha256: sha256(module.contents) })), proofOnlyModules: [{ path: 'proof-entry.mjs', sha256: sha256(proofEntry) }, { path: 'proof-capture.mjs', sha256: sha256('export const early=globalThis.fetch;') }, { path: 'absent-entry.mjs', sha256: sha256(absentEntry) }, { path: 'rejecting-sink.mjs', sha256: sha256(sinkScript) }] };
   await writeFile(join(evidence, 'provenance.json'), JSON.stringify(proof, null, 2) + '\n', 'utf8');
   result = { ...result, status: 'passed', code: 'GUEST_NATIVE_VALIDATED', diagnostic, proofSha256: sha256(canonical(proof)), localD1Observed, extraProbes: { outsideBaseline: true, ingressDenials, aliases, capRace: { admitted: 4, exhausted: 2 }, unknownDestinationDenied: true, fixtureStoreFailureDenied: true, missingBindingDenied: true }, outboundAttempts: 0, protectedTables: 21, totalAppTables: 22, nearOutputCounts: [2000, 2000, 500, 500, 1000, 1000], applicationRevision: proof.applicationRevision };
 } catch { process.exitCode = 1; }

@@ -1,8 +1,9 @@
 // Future authorized hosted execution only. Tests use injected fakes; no setup/mutation API.
 import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { Agent, fetch as tlsFetch } from 'undici';
 import { CANDIDATE_SECRET_NAMES, validateGuestHostedInventory, verifyGuestHostedPackage } from './guest-hosted-package.mjs';
-import { canonical } from './guest-hosted-build.mjs';
+import { canonical, sha256 } from './guest-hosted-build.mjs';
 import { createNativeRequestAdapter, preserveAdmissions, tableDigest } from './guest-hosted-native.mjs';
 
 const APP_TABLES = Object.freeze(['abuse_controls', 'abuse_rate_events', 'accounts', 'app_settings', 'assignment_links', 'assignment_submission_status', 'assignments', 'calendar_connections', 'calendar_credentials', 'calendar_event_links', 'oauth_requests', 'operation_locks', 'sessions', 'source_connections', 'source_courses', 'source_credentials', 'submission_status_sync', 'sync_all_runs', 'sync_all_steps', 'sync_requests', 'users', 'verification_tokens']);
@@ -36,9 +37,9 @@ async function boundedJson(fetch, url, init, timeoutMs) {
 }
 
 export async function prepareHostedDiagnostic({ input, expectedDigest, credentials, fetch: injectedFetch, verifyPackage = verifyGuestHostedPackage }) {
-  let inventory, verifiedPackage;
+  let inventory, verifiedPackage, observerInputs;
   try {
-    if (!exact(input, ['schemaVersion', 'manifestPath', 'inventory', 'authorization']) || input.schemaVersion !== 1 || typeof input.manifestPath !== 'string' || !input.manifestPath.endsWith('/manifest.json') || !/^[a-f0-9]{64}$/.test(expectedDigest ?? '')) fail();
+    if (!exact(input, ['schemaVersion', 'manifestPath', 'inventory', 'authorization']) || input.schemaVersion !== 1 || typeof input.manifestPath !== 'string' || input.manifestPath.split(/[\\/]/).at(-1) !== 'manifest.json' || !/^[a-f0-9]{64}$/.test(expectedDigest ?? '')) fail();
     inventory = validateGuestHostedInventory(input.inventory, 'operator-ready');
     const approval = input.authorization;
     if (!exact(approval, ['approved', 'action', 'packageDigest', 'runId', 'hostname']) || approval.approved !== true || approval.action !== 'guest-diagnostic-read-only-run' || approval.packageDigest !== expectedDigest || approval.runId !== inventory.runId || approval.hostname !== inventory.hostname) fail();
@@ -48,6 +49,10 @@ export async function prepareHostedDiagnostic({ input, expectedDigest, credentia
     if (ready.packageDigest !== expectedDigest) fail();
     verifiedPackage = await verifyPackage({ manifestPath, inventory, mode: 'offline' });
     if (verifiedPackage.packageDigest !== expectedDigest || canonical(verifiedPackage.manifest.inventory) !== canonical(ready.manifest.inventory)) fail();
+    observerInputs = await Promise.all([
+      ['scripts/lib/guest-hosted-observations.mjs', new URL(import.meta.url)],
+      ['scripts/lib/guest-hosted-native.mjs', new URL('./guest-hosted-native.mjs', import.meta.url)],
+    ].map(async ([path, url]) => ({ path, sha256: sha256(await readFile(url)) })));
   } catch { fail('GUEST_HOSTED_PREFLIGHT_FAILED'); }
   // No network occurs before every local authorization/identity/digest check above.
   const tlsAgent = injectedFetch ? null : new Agent({ connect: { rejectUnauthorized: true } });
@@ -93,7 +98,7 @@ export async function prepareHostedDiagnostic({ input, expectedDigest, credentia
       await identify();
       let rows = 0;
       const readTables = async (id, expected) => {
-        const names = await query(id, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' ORDER BY name LIMIT 65");
+        const names = await query(id, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name <> '_cf_METADATA' AND name <> '_cf_KV' ORDER BY name LIMIT 65");
         if (!names.every(row => exact(row, ['name'])) || canonical(names.map(row => row.name)) !== canonical(expected)) fail();
         const tables = {};
         for (const name of expected) {
@@ -118,5 +123,5 @@ export async function prepareHostedDiagnostic({ input, expectedDigest, credentia
     try { await Promise.race([tlsAgent.destroy(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('GUEST_HOSTED_CLEANUP_FAILED')), 10000); })]); }
     finally { clearTimeout(timer); }
   };
-  return { executionMode: 'hosted', verifiedPackage, targetOrigin, sensitiveValues, request: (url, init) => { if (!identityVerified || !beforeComplete || observationFailed) return Promise.reject(new Error('GUEST_HOSTED_PREFLIGHT_FAILED')); return adapter.request(url, init); }, observations: { before: snapshot, quiesce: adapter.quiesce, after: snapshot }, observerCosts: costs, dispose, limits: { apiCalls: 52, snapshots: 2, rowsPerTable: 2048, rowsPerSnapshot: 8192, responseBytes: 8388608, totalResponseBytes: 33554432, requestTimeoutMs: 10000, snapshotTimeoutMs: 18000, deadlineMs: 300000 }, authorization: { explicitOperatorApproval: true, expectedPackageDigest: expectedDigest, cloudActionAuthorizedByManifest: false } };
+  return { executionMode: 'hosted', verifiedPackage, targetOrigin, sensitiveValues, observerInputs, request: (url, init) => { if (!identityVerified || !beforeComplete || observationFailed) return Promise.reject(new Error('GUEST_HOSTED_PREFLIGHT_FAILED')); return adapter.request(url, init); }, observations: { before: snapshot, quiesce: adapter.quiesce, after: snapshot }, observerCosts: costs, dispose, limits: { apiCalls: 52, snapshots: 2, rowsPerTable: 2048, rowsPerSnapshot: 8192, responseBytes: 8388608, totalResponseBytes: 33554432, requestTimeoutMs: 10000, snapshotTimeoutMs: 18000, deadlineMs: 300000 }, authorization: { explicitOperatorApproval: true, expectedPackageDigest: expectedDigest, cloudActionAuthorizedByManifest: false } };
 }
