@@ -139,7 +139,7 @@ export async function inspectGuestHostedModules(root) {
       }
       // No arbitrary native loader exemption; require/eval edges must be reviewed explicitly.
       if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && ['require', 'eval'].includes(node.callee.name)) fail('GUEST_MODULE_UNSUPPORTED');
-      if (node.type === 'CallExpression' && node.callee?.name === 'Function' && !(sha256(bytes.toString('utf8').slice(node.start, node.end)) === '91ff2a64c35288a5b52e2c1fe67ce53b64d246ac5a4382f0849d91b866b83923' && ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176'].includes(identity.sha256))) fail('GUEST_MODULE_UNSUPPORTED');
+      if (node.type === 'CallExpression' && node.callee?.name === 'Function' && !(sha256(bytes.toString('utf8').slice(node.start, node.end)) === '91ff2a64c35288a5b52e2c1fe67ce53b64d246ac5a4382f0849d91b866b83923' && ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176', 'c98fc345623c822521eaba4a513ee380cb457deee6a0fc59dc88aa25ae941bdc'].includes(identity.sha256))) fail('GUEST_MODULE_UNSUPPORTED');
     });
     for (const specifier of imports) {
       if (specifier.startsWith('./') || specifier.startsWith('../')) {
@@ -191,7 +191,7 @@ export async function inspectGuestHostedModules(root) {
     path: 'node_modules/zod/v4/core/doc.js',
     sha256: 'be4c1b1a1ad247cc70f360a572060edd7e0cea24252c3a319f33d247899c5643'
   }]) {
-    if (modules.some(module => ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176'].includes(module.sha256)) && sha256(await readFile(join(workspaceRoot, dependency.path))) !== dependency.sha256) fail('GUEST_MODULE_UNSUPPORTED');
+    if (modules.some(module => ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176', 'c98fc345623c822521eaba4a513ee380cb457deee6a0fc59dc88aa25ae941bdc'].includes(module.sha256)) && sha256(await readFile(join(workspaceRoot, dependency.path))) !== dependency.sha256) fail('GUEST_MODULE_UNSUPPORTED');
   }
   const reachable = new Set(['index.js']),
     pending = ['index.js'];
@@ -218,7 +218,7 @@ export async function inspectGuestHostedModules(root) {
       ...edge,
       offsetUnit: 'UTF16-source-code-units'
     })),
-    dynamicCodeCapabilities: modules.filter(module => ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176'].includes(module.sha256)).map(module => ({
+    dynamicCodeCapabilities: modules.filter(module => ['b3c068af09904fae0b69e3f5a65ee3c1eb485b1c74fd39f7a6886ccc6cc9eb56', 'd942c31d0c6020df0284f30ece54581e7c70c85287a880c0ee0240d392e88176', 'c98fc345623c822521eaba4a513ee380cb457deee6a0fc59dc88aa25ae941bdc'].includes(module.sha256)).map(module => ({
       ...module,
       reason: 'Pinned Zod Function capability probe and aliased JIT compiler. workerd disables dynamic code; no platform sandbox claim.',
       dependencySources: [{

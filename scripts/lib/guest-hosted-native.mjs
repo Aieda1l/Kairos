@@ -73,8 +73,9 @@ export function createNativeRequestAdapter({ origin, secrets, sensitiveValues, f
     if (cookie && item.case !== 'missing-capability') headers.cookie = cookie;
     let body;
     if (item.method === 'POST') {
-      const common = { schemaVersion: 1, requestId: item.requestId };
-      body = JSON.stringify(item.path.endsWith('/session') ? { ...common, turnstileToken: secrets.GUEST_FIXTURE_CHALLENGE_TOKEN } : item.path.endsWith('/feed') ? { ...common, feedUrl: 'https://canvas.uw.edu/feeds/calendars/hosted-' + (item.near ? 'near' : 'smoke') + '.ics' } : { ...common, token: item.near ? secrets.GUEST_FIXTURE_ED_NEAR_TOKEN : secrets.GUEST_FIXTURE_ED_SMOKE_TOKEN, ...(item.path.endsWith('/lessons') ? { courseId: item.courseId } : {}) });
+      const common = { schemaVersion: item.path.endsWith('/session') ? 1 : 2, requestId: item.requestId };
+      if (item.path.endsWith('/approve') && (typeof init.receipt !== 'string' || !init.receipt || init.receipt.length > 2048)) throw new Error('GUEST_NATIVE_TARGET_INVALID');
+      body = JSON.stringify(item.path.endsWith('/approve') ? { ...common, receipt: init.receipt } : item.path.endsWith('/session') ? { ...common, turnstileToken: secrets.GUEST_FIXTURE_CHALLENGE_TOKEN } : item.path.endsWith('/feed') ? { ...common, feedUrl: 'https://canvas.uw.edu/feeds/calendars/hosted-' + (item.near ? 'near' : 'smoke') + '.ics' } : { ...common, token: item.near ? secrets.GUEST_FIXTURE_ED_NEAR_TOKEN : secrets.GUEST_FIXTURE_ED_SMOKE_TOKEN, ...(item.path.endsWith('/lessons') ? { courseId: item.courseId } : {}) });
     }
     active++;
     let released = false;

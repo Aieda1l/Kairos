@@ -14,6 +14,6 @@ export function createNativeRequestAdapter(options: {
   syntheticClientAddress?: boolean;
   fetch: (url: string, init: RequestInit) => Promise<Response>;
 }): {
-  request(url: string, init: { method: string; redirect: 'manual'; signal: AbortSignal; item: DiagnosticWorkloadItem }): Promise<Response>;
+  request(url: string, init: { method: string; redirect: 'manual'; signal: AbortSignal; item: DiagnosticWorkloadItem; receipt?: string }): Promise<Response>;
   quiesce(timeoutMs?: number): Promise<boolean>;
 };

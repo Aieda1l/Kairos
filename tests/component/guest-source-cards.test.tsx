@@ -68,7 +68,7 @@ it("connects each source with private memory fields, explicit remembering, and n
   expect(mocks.coordinator.connectEd).toHaveBeenCalledWith({value:"private-ed-token",remember:false});
   await userEvent.click(screen.getByRole("button",{name:"Connect Gradescope"}));
   expect(mocks.coordinator.connectGradescope).toHaveBeenCalledOnce();
-  expect(screen.getByText(/temporarily.*server/i)).toBeVisible();
+  expect(screen.getByText(/responses pass through the server temporarily.*browser processes the responses in a worker.*responses may contain reflected credentials/i)).toBeVisible();
   expect(screen.queryByText(/sign in to Kairos/i)).not.toBeInTheDocument();
   expect(mocks.refresh).not.toHaveBeenCalled();
 });

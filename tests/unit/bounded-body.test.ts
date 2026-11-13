@@ -1,5 +1,5 @@
 import {describe,expect,it} from "vitest";
-import {BoundedBodyError,readBoundedJson,readBoundedUtf8} from "@/lib/http/bounded-body";
+import {BoundedBodyError,readBoundedBytes,readBoundedJson,readBoundedUtf8} from "@/lib/http/bounded-body";
 import {bytesStream} from "../helpers/guest-source-fixtures";
 
 const signal=new AbortController().signal;
@@ -27,6 +27,12 @@ describe("bounded upstream body readers",()=>{
     await expect(reading).rejects.toMatchObject({code:"BODY_ABORTED"});
     expect(cancelled).toBe(true);
     expect(stream.locked).toBe(false);
+  });
+  it("counts raw bytes and aborts a stalled cancellation",async()=>{
+    expect([...await readBoundedBytes(bytesStream([new Uint8Array([255,0,1])]),{maxBytes:3,signal})]).toEqual([255,0,1]);
+    await expect(readBoundedBytes(bytesStream([new Uint8Array(4)]),{maxBytes:3,signal})).rejects.toMatchObject({code:"BODY_TOO_LARGE"});
+    const controller=new AbortController();let cancelled=false;const stream=new ReadableStream<Uint8Array>({pull:()=>new Promise(()=>{}),cancel(){cancelled=true;return new Promise(()=>{});}});
+    const pending=readBoundedBytes(stream,{maxBytes:3,signal:controller.signal});controller.abort();await expect(pending).rejects.toMatchObject({code:"BODY_ABORTED"});expect(cancelled).toBe(true);expect(stream.locked).toBe(false);
   });
   it("does not await cancellation when exceeding the limit",async()=>{
     const stream=new ReadableStream<Uint8Array>({start(c){c.enqueue(new Uint8Array(5));},cancel:()=>new Promise(()=>{})});

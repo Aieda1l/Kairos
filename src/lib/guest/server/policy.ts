@@ -27,16 +27,20 @@ export function guestRateKeyParts(subject:GuestRateSubject):string[] {
     default:throw new AbuseSubjectError();
   }
 }
-async function consume(runtime:GuestServerRuntime,subject:GuestRateSubject,budget:GuestPolicy[keyof GuestPolicy]):Promise<void> {
+async function consume(runtime:GuestServerRuntime,subject:GuestRateSubject,budget:GuestPolicy[keyof GuestPolicy],check:()=>void=()=>{}):Promise<void> {
   const keyHash=await hashRateKey(runtime.hmacKey,guestRateKeyParts(subject));
-  const decision=await new D1RateLimitRepository(runtime.db).consume({keyHash,userId:null,...budget});
-  if(!decision.allowed)throw new RateLimitedError(decision.retryAfterSeconds);
+  check();const decision=await new D1RateLimitRepository(runtime.db).consume({keyHash,userId:null,...budget});
+  check();if(!decision.allowed)throw new RateLimitedError(decision.retryAfterSeconds);
 }
 export function enforceGuestBootstrapAdmission(runtime:GuestServerRuntime,network:string):Promise<void> {
   return consume(runtime,{class:'bootstrap-network',network},runtime.guestPolicy.bootstrapNetwork);
 }
-export async function enforceGuestReadAdmission(runtime:GuestServerRuntime,{network,sessionId}:{network:string;sessionId:string}):Promise<void> {
-  await consume(runtime,{class:'read-network',network},runtime.guestPolicy.readNetwork);
-  await consume(runtime,{class:'read-session',sessionId},runtime.guestPolicy.readSession);
-  await consume(runtime,{class:'read-global'},runtime.guestPolicy.readGlobal);
+export async function enforceGuestReadAdmission(runtime:GuestServerRuntime,{network,sessionId,check=()=>{}}:{network:string;sessionId:string;check?:()=>void}):Promise<void> {
+  await consume(runtime,{class:'read-network',network},runtime.guestPolicy.readNetwork,check);
+  check();await consume(runtime,{class:'read-session',sessionId},runtime.guestPolicy.readSession,check);
+  check();await consume(runtime,{class:'read-global'},runtime.guestPolicy.readGlobal,check);
+  check();
+}
+export function enforceGuestApprovalAdmission(runtime:GuestServerRuntime,check:()=>void=()=>{}):Promise<void> {
+  return consume(runtime,{class:'read-global'},runtime.guestPolicy.readGlobal,check);
 }

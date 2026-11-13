@@ -7,11 +7,26 @@ import Database from 'better-sqlite3';
 import { openD1TestDatabase } from '../helpers/d1-test-db';
 import { createNativeRequestAdapter, makeGuestWorkload, orderNativeModules, parseGuestHostedArguments, parseNativeProofArguments, preserveAdmissions, readGuestCookie, tableDigest } from '../../scripts/lib/guest-hosted-native.mjs';
 import { prepareHostedDiagnostic } from '../../scripts/lib/guest-hosted-observations.mjs';
+import { runGuestHostedDiagnostic } from '../../scripts/lib/guest-hosted-diagnostic.mjs';
 
 const origin = 'https://guest-diagnostic.mykairos.me';
 const secrets = { GUEST_OPERATOR_SECRET: 'synthetic-operator', GUEST_FIXTURE_CHALLENGE_TOKEN: 'synthetic-challenge', GUEST_FIXTURE_ED_SMOKE_TOKEN: 'synthetic-smoke', GUEST_FIXTURE_ED_NEAR_TOKEN: 'synthetic-near' };
 
 describe('guest diagnostic operator boundary', () => {
+  it('rejects a logical workload that would exceed the physical call cap', async () => {
+    const item = {method:'POST',path:'/api/guest/sources/canvas/feed',expectedCount:1};
+    const options = {verifiedPackage:{packageDigest:'a'.repeat(64),mode:'offline',manifest:{inventory:{hostname:'guest-diagnostic.mykairos.me',runId:'h2-schema-test',scenario:'bounded-v1'}}},targetOrigin:origin,workload:Array.from({length:33},()=>item),request:async()=>new Response(),observations:{before:()=>{throw 0;},quiesce:()=>true,after:()=>{throw 0;}}};
+    await expect(runGuestHostedDiagnostic(options)).rejects.toThrow('GUEST_WORKLOAD_INVALID');
+  });
+  it('counts every physical attempt even when the transport fails', async () => {
+    const snapshot = {tables:{abuse_rate_events:{count:0,sha256:'0'.repeat(64)}},identifiedAdmissions:0,priorAdmissionsPreserved:true,fixtureTables:{fixture_operation:{count:7,sha256:'0'.repeat(64)}},fixture:Object.fromEntries(['challenge','canvas-smoke','canvas-near','ed-courses-smoke','ed-lessons-smoke','ed-courses-near','ed-lessons-near'].map(key=>[key,{runId:'h2-schema-test',scenario:'bounded-v1',cap:key.startsWith('canvas-')?8:16,calls:0}]))};
+    const result = await runGuestHostedDiagnostic({verifiedPackage:{packageDigest:'a'.repeat(64),mode:'offline',manifest:{inventory:{hostname:'guest-diagnostic.mykairos.me',runId:'h2-schema-test',scenario:'bounded-v1'}}},targetOrigin:origin,workload:[{method:'GET',path:'/api/health'}],request:async()=>{throw new Error('secret');},observations:{before:()=>snapshot,quiesce:()=>true,after:()=>snapshot}});
+    expect(result.attempted).toBe(1);
+    expect(result.completed).toBe(0);
+    expect(result.logicalCompleted).toBe(0);
+    expect(result.physical).toEqual([{stage:'single',status:null,validMediaType:false,noStore:false,private:false,wireVersion2:false}]);
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
   it('requires explicit native package identity and fresh evidence location without retained defaults', () => {
     const digest = 'a'.repeat(64);
     expect(parseNativeProofArguments(['owned/manifest.json', 'inventory.json', digest, 'owned/proof-new'])).toEqual({ manifestPath: 'owned/manifest.json', inventoryPath: 'inventory.json', expectedDigest: digest, evidenceRoot: 'owned/proof-new' });
@@ -84,6 +99,18 @@ describe('guest diagnostic operator boundary', () => {
     expect(await adapter.quiesce()).toBe(true);
     await expect(adapter.request('https://escape.invalid/api/health', { method: 'GET', redirect: 'manual', signal, item: workload[0] })).rejects.toThrow('GUEST_NATIVE_TARGET_INVALID');
     expect(captured).toHaveLength(2);
+  });
+
+  it('sends v2 source and credential-free approval through the same adapter', async () => {
+    const bodies: unknown[] = [];
+    const adapter = createNativeRequestAdapter({ origin, secrets, sensitiveValues: [], fetch: async (_url: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return new Response('{}'); } });
+    const item = makeGuestWorkload()[2];
+    const signal = new AbortController().signal;
+    await (await adapter.request(origin + item.path, {method:'POST',redirect:'manual',signal,item})).text();
+    const approval = {method:'POST',path:'/api/guest/sources/approve',requestId:item.requestId};
+    await (await adapter.request(origin + approval.path, {method:'POST',redirect:'manual',signal,item:approval,receipt:'synthetic-receipt'} as never)).text();
+    expect(bodies[0]).toMatchObject({schemaVersion:2,requestId:item.requestId});
+    expect(bodies[1]).toEqual({schemaVersion:2,requestId:item.requestId,receipt:'synthetic-receipt'});
   });
 
   it('does not declare quiescence with an unfinished response body', async () => {

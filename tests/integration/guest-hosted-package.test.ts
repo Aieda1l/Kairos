@@ -115,6 +115,9 @@ it('inventories original bytes and literal module edges, rejecting unresolved an
   await expect(inspectGuestHostedModules(dir)).rejects.toThrow('GUEST_MODULE_UNSUPPORTED');
   await writeFile(join(dir, 'chunk.js'), 'export const x=import(globalThis.destination);');
   await expect(inspectGuestHostedModules(dir)).rejects.toThrow('GUEST_MODULE_UNSUPPORTED');
+  // The reviewed empty Zod probe is allowed only in exact pinned module bytes.
+  await writeFile(join(dir, 'chunk.js'), 'export const x=Function(``);');
+  await expect(inspectGuestHostedModules(dir)).rejects.toThrow('GUEST_MODULE_UNSUPPORTED');
   await writeFile(join(dir, 'chunk.js'), "export const x=import('./missing.js');");
   await expect(inspectGuestHostedModules(dir)).rejects.toThrow('GUEST_MODULE_UNRESOLVED');
 });

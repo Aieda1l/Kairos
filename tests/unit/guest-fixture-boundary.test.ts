@@ -3,12 +3,20 @@ import {localGuestFixtureFetch} from '@/lib/testing/guest-transport';
 import {localAuthFixtureFetch} from '@/lib/testing/auth-transport';
 import {verifyTurnstile} from '@/lib/auth/turnstile';
 import {getGuestServerRuntime} from '@/lib/guest/server/runtime';
+import {execFileSync} from 'node:child_process';
 
 const bindings=vi.hoisted(()=>({env:{} as Record<string,unknown>}));
 vi.mock('cloudflare:workers',()=>bindings);
 beforeEach(()=>{vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Real network forbidden'));});
 afterEach(()=>{vi.restoreAllMocks();});
 const local={E2E_FIXTURES:'1',KAIROS_APP_URL:'http://127.0.0.1:3000',KAIROS_LOCAL_AUTH:'loopback',KAIROS_ABUSE_TRUSTED_INGRESS:'loopback'};
+it('measures the portable client parser without provider requests',()=>{
+  const report=JSON.parse(execFileSync(process.execPath,['scripts/measure-guest-source-parsers.mjs'],{encoding:'utf8',timeout:120000}));
+  expect(report.evidenceType).toBe('node-simulated-client-process-cpu');
+  expect(report.externalRequests).toBe(0);
+  expect(report.results).toHaveLength(4);
+  expect(report.results.every((row:{ok:boolean})=>row.ok)).toBe(true);
+},120000);
 it('requires the complete explicit local gate and exact canonical origin',()=>{
   expect(localGuestFixtureFetch({...local})).toBeTypeOf('function');
   expect(localGuestFixtureFetch({...local,KAIROS_APP_URL:'http://localhost:3000'})).toBeTypeOf('function');
