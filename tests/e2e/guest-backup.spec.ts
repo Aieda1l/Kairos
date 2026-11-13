@@ -1,7 +1,7 @@
 import {expect,test,type Page} from "@playwright/test";
 import {guestSnapshotFixture,guestUuid} from "../helpers/guest-fixtures";
 import {serializeGuestBackup} from "../../src/lib/guest/backup";
-import {sealGuestJourney} from "./fixtures/guest-session";
+import {bootstrapGuestFixture,canvasFixture,fulfillCanvasFixture,resetGuestAdmission,sealGuestJourney} from "./fixtures/guest-session";
 import {localData,privateData} from "./fixtures/guest-lifecycle";
 
 const backup=serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z");
@@ -24,8 +24,8 @@ test("imports, exports and clears local data with confirmation, privately and of
   await page.getByRole("link",{name:"Assignments",exact:true}).click();await expect(page.getByText("0 assignments",{exact:true})).toBeVisible();expect(capture.forbidden).toEqual([]);expect((await context.cookies()).some(c=>/authjs|session-token/.test(c.name))).toBe(false);
 });
 test("same-source reentry and forgetting keep rows; replacement remaps references and removes private state",async({page})=>{
-  const capture=await sealGuestJourney(page);await importBackup(page);const before=await localData(page);
-  await page.route("**/api/guest/sources/canvas/feed",route=>route.fulfill({json:{ok:true,schemaVersion:1,requestId:route.request().postDataJSON().requestId,checkedAt:new Date().toISOString(),assignments:[],report:{skippedCount:0,malformedCount:0,partial:false}}}));
+  const capture=await sealGuestJourney(page);await resetGuestAdmission(page.context());await bootstrapGuestFixture(page.context());await importBackup(page);const before=await localData(page);
+  await page.route("**/api/guest/sources/canvas/feed",route=>fulfillCanvasFixture(route,canvasFixture(1)));
   await page.getByRole("link",{name:"Sources",exact:true}).click();await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/private-fixture.ics");await page.getByLabel("Remember Canvas credential on this device").check();await page.getByRole("button",{name:"Update Canvas credential"}).click();
   await expect(page.getByText(/A credential is available/)).toBeVisible();expect((await privateData(page)).credentials).toHaveLength(1);expect((await localData(page)).assignments).toEqual(before.assignments);
   await page.getByRole("link",{name:"Settings",exact:true}).click();const download=page.waitForEvent("download");await page.getByRole("button",{name:"Export guest backup"}).click();const stream=await (await download).createReadStream(),chunks=[];for await(const chunk of stream!)chunks.push(chunk);const exported=Buffer.concat(chunks).toString("utf8");expect(exported).not.toContain("private-fixture");expect(JSON.parse(exported).data).not.toHaveProperty("credentials");await page.getByRole("link",{name:"Sources",exact:true}).click();

@@ -6,7 +6,7 @@ import {GuestSyncControls} from "./guest-sync-controls";
 export function GuestSources(){
   const guest=useGuest();
   return <div className="space-y-5">
-    <p className="text-sm text-[var(--muted)]">Source credentials and responses temporarily pass through the server for Canvas feed and Ed reads. Coursework is saved in this browser; credentials stay in memory unless you choose device storage.</p>
+    <p className="text-sm text-[var(--muted)]">Canvas and Ed credentials and responses pass through the server temporarily. Your browser processes the responses in a worker; responses may contain reflected credentials. Coursework is saved in this browser, and credentials stay in memory unless you choose device storage. Closing this tab clears its in-memory credentials; remembered credentials remain on this device.</p>
     <GuestSyncControls/>
     {guest.phase==="ready"&&<div className="flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-[var(--border)] p-4">{(["Canvas","Gradescope"] as const).map(name=>{
       const field=name==="Canvas"?"automaticCanvas":"automaticGradescope";

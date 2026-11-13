@@ -1,0 +1,284 @@
+{
+  "_reference": {
+    "applicationRevision": "43986463764dc301f1c267e8f8e352da8b85f5df",
+    "sourceHashes": {
+      "src/lib/sources/canvas-ical/parser.ts": "f4b5f4b162a24792d2255c736d72cb5466f98cb963588bceb098efe6c026096e",
+      "src/lib/guest/sources/canvas.ts": "14ff3880a412c83f114241f87fda728fbc0d45af8f17749cfcaed2791561291c",
+      "src/lib/guest/sources/ed.ts": "5f247ba2a1b75efb5b1c1180bc268c6ff4eb66da86badb400b97d49960ffa8a7",
+      "src/lib/guest/sources/contracts.ts": "32c512867d70da2c31d7dad74493a43033a5ea915954cda395d4ecc8913d0550",
+      "src/lib/assignments/normalize.ts": "1cd20ed7affadaebe90b0d3061bbb5ac342a07ad3fc6fe34b6e9b8d8a23e8344"
+    },
+    "node": "v22.23.2",
+    "timezone": "UTC",
+    "casesHelperSha256": "caed10f585b7ffc4072d5276b55914aff11f8089649e7e65ab5b6041766ba05a",
+    "bundleSha256": "6f72d75e53b5f0d7902626edb1e46386e9836c42689430ed5b5f613d6cb6eb45",
+    "caseInputs": {
+      "canvas-mixed": {
+        "bytes": 750,
+        "sha256": "ac240aa3dd739abf7b3fd9c91e713d0431732b967077a4e94a12ab3ca7f284c3"
+      },
+      "canvas-empty": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "canvas-malformed": {
+        "bytes": 88,
+        "sha256": "ac656ac4da3b5424a7bf76603cf5436ab114f19270f13c2a4e31cd8fbdad61ef"
+      },
+      "canvas-duplicate": {
+        "bytes": 155,
+        "sha256": "96da246d70d6eadb3d4e26ac16ad2d045d6b4e61945204f77d4810e0ab91f2df"
+      },
+      "ed-courses": {
+        "bytes": 162,
+        "sha256": "e25b387ea0287ad9413064abb556cbf25d74c6e28ec7e58759c7aead7c4ecd1f"
+      },
+      "ed-lessons": {
+        "bytes": 210,
+        "sha256": "c7ed6cea9ee86800f8d6e5a5bb50ca5c5386aea25dbdcf2efa8d23eaf7a59d25"
+      },
+      "ed-duplicate": {
+        "bytes": 91,
+        "sha256": "9de7d2780fedf079245368fd2011672214e0fdddfc67054388ef77612b32fa98"
+      },
+      "ed-unsafe": {
+        "bytes": 54,
+        "sha256": "d51e4c529e68811043c9d941310129842dcbfeec55dc86bef9a5f41bc59e8d0d"
+      },
+      "canvas-cap": {
+        "bytes": 2097088,
+        "sha256": "56d8c2cfd93cb05365dc17faed9e8e5588b78cdc1903c5ff07a95ba4ba7aaead"
+      },
+      "canvas-ordinary-cap": {
+        "bytes": 776720,
+        "sha256": "3c6a37add9ed39ac65e5cd7ae372fc65ca4e6336491779d1ff64a22c241bc3b3"
+      },
+      "canvas-block-over": {
+        "bytes": 776876,
+        "sha256": "3719f7c76559a320d4ae00c344a03391d623967b5840cd4a67f30a1586216c31"
+      },
+      "ed-courses-cap": {
+        "bytes": 2097088,
+        "sha256": "d77743d3f92d4926f34bab4d8cb13c0291c4a714153b1e43e777959cef138ea7"
+      },
+      "ed-lessons-cap": {
+        "bytes": 2097088,
+        "sha256": "d5546b03659eb6a32687d7fda734cb2201d9a8639dd882f8edd70d4e7e7336af"
+      },
+      "ed-course-over": {
+        "bytes": 53528,
+        "sha256": "1c7361b483ed4d43e3f95c4fedcd07c9cddf3c3c72888af4d3ef8c0f90d77672"
+      },
+      "ed-raw-lessons-over": {
+        "bytes": 319079,
+        "sha256": "afede38711392a16475055a544f5cb6061f51506e2f31ba5b3c98376ee9e1b17"
+      },
+      "ed-unsafe-courses": {
+        "bytes": 64,
+        "sha256": "a8aca5aeb7d9633950bdff220a73d9474e9ab9cdb5ffba7524f70761d750ed86"
+      },
+      "canvas-invalid-utf8": {
+        "bytes": 2,
+        "sha256": "eddf68639913a3cb8331cdfe7f87559e0beccf2c289c0d90ac4d89b3204004f8"
+      },
+      "ed-invalid-utf8": {
+        "bytes": 2,
+        "sha256": "eddf68639913a3cb8331cdfe7f87559e0beccf2c289c0d90ac4d89b3204004f8"
+      },
+      "canvas-byte-over": {
+        "bytes": 2097153,
+        "sha256": "71ac24a75f6bc57bc51b43b3d13c3009aa243986b77a92102a3097c9e53123e9"
+      },
+      "ed-escaped-output-over": {
+        "bytes": 2033906,
+        "sha256": "16e9bec2ff499eb4e53ecaae94f196812b66c7fca56812a709e52a51cebf1167"
+      }
+    },
+    "lockSha256": "49a8063f0633f45da56e17f30ad64454df2dcfdcc51648089560f3c4dc26fada",
+    "casesHelperCanonicalSha256": "9659c6594bbc4fcf44927733c7448b81ae018e8996cd664676dd9604a0244e44",
+    "canonicalSourceFormat": "UTF-8 without BOM, LF; exact generated input byte hashes remain authoritative"
+  },
+  "canvas-mixed": {
+    "ok": true,
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "checkedAt": "2026-11-12T12:00:00.000Z",
+    "assignments": [
+      {
+        "source": "canvas",
+        "externalId": "event-assignment-1",
+        "courseId": "42",
+        "courseName": "Course",
+        "title": "Café 🐈 foldedline",
+        "releaseAt": null,
+        "dueAt": "2026-11-02T07:59:00.000Z",
+        "lateDueAt": null,
+        "status": "unknown",
+        "sourceStatusText": null,
+        "gradeScore": null,
+        "gradeMax": null,
+        "gradeDisplay": null,
+        "sourceUrl": "https://canvas.uw.edu/courses/42/assignments/7",
+        "sourceUpdatedAt": "2026-11-01T12:00:00.000Z"
+      },
+      {
+        "source": "canvas",
+        "externalId": "fallback-99337d03ecbbcb55a19bd0ced5cecf19a30508653494817866d8f88590ceae23",
+        "courseId": "42",
+        "courseName": "Course",
+        "title": "No UID",
+        "releaseAt": null,
+        "dueAt": "2026-11-02T12:30:00.000Z",
+        "lateDueAt": null,
+        "status": "unknown",
+        "sourceStatusText": null,
+        "gradeScore": null,
+        "gradeMax": null,
+        "gradeDisplay": null,
+        "sourceUrl": "https://canvas.uw.edu/courses/42/assignments/8",
+        "sourceUpdatedAt": null
+      },
+      {
+        "source": "canvas",
+        "externalId": "event-assignment-3",
+        "courseId": null,
+        "courseName": "Canvas",
+        "title": "Unknown zone",
+        "releaseAt": null,
+        "dueAt": "2026-11-02T12:30:00.000Z",
+        "lateDueAt": null,
+        "status": "unknown",
+        "sourceStatusText": null,
+        "gradeScore": null,
+        "gradeMax": null,
+        "gradeDisplay": null,
+        "sourceUrl": null,
+        "sourceUpdatedAt": null
+      },
+      {
+        "source": "canvas",
+        "externalId": "event-assignment-4",
+        "courseId": null,
+        "courseName": "Canvas",
+        "title": "Survivor",
+        "releaseAt": null,
+        "dueAt": "2026-11-03T12:30:00.000Z",
+        "lateDueAt": null,
+        "status": "unknown",
+        "sourceStatusText": null,
+        "gradeScore": null,
+        "gradeMax": null,
+        "gradeDisplay": null,
+        "sourceUrl": null,
+        "sourceUpdatedAt": null
+      }
+    ],
+    "report": {
+      "skippedCount": 2,
+      "malformedCount": 1,
+      "partial": true
+    }
+  },
+  "canvas-empty": {
+    "error": "EMPTY_FEED"
+  },
+  "canvas-malformed": {
+    "error": "INVALID_ICAL"
+  },
+  "canvas-duplicate": {
+    "error": "INVALID_ICAL"
+  },
+  "ed-courses": {
+    "ok": true,
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "checkedAt": "2026-11-12T12:00:00.000Z",
+    "courses": [
+      {
+        "externalCourseId": "42",
+        "shortName": "CS",
+        "fullName": "Computer Science",
+        "term": "Autumn",
+        "year": "2026"
+      },
+      {
+        "externalCourseId": "43",
+        "shortName": "MATH",
+        "fullName": "Math",
+        "term": null,
+        "year": null
+      }
+    ]
+  },
+  "ed-lessons": {
+    "ok": true,
+    "schemaVersion": 1,
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "checkedAt": "2026-11-12T12:00:00.000Z",
+    "courseId": "42",
+    "lessons": [
+      {
+        "source": "ed",
+        "externalId": "7",
+        "courseId": "42",
+        "title": "Lecture",
+        "releaseAt": null,
+        "dueAt": "2026-11-12T12:00:00.000Z",
+        "lateDueAt": null,
+        "status": "submitted",
+        "sourceStatusText": "completed",
+        "gradeScore": null,
+        "gradeMax": null,
+        "gradeDisplay": null,
+        "sourceUrl": null,
+        "sourceUpdatedAt": null
+      }
+    ]
+  },
+  "ed-duplicate": {
+    "error": "ED_PARSE_ERROR"
+  },
+  "ed-unsafe": {
+    "error": "ED_PARSE_ERROR"
+  },
+  "canvas-cap": {
+    "sha256": "95a69580fa31f0b387dfb20d02b92d1c425a012c6e1008337c90a75d046cd895",
+    "count": 2000
+  },
+  "canvas-ordinary-cap": {
+    "sha256": "7f58898a614072e023be2f45d07d3041ac9340f81ca8162f225454a35592d247",
+    "count": 0
+  },
+  "canvas-block-over": {
+    "error": "SOURCE_RESULT_TOO_LARGE"
+  },
+  "ed-courses-cap": {
+    "sha256": "dc4b543d69963cd0363b078073fce6ab748957553728222e4f70eb943dac2f09",
+    "count": 500
+  },
+  "ed-lessons-cap": {
+    "sha256": "c69d0dda80f71a5f25a294d555d6767e0fde0c66f422d4640f9ce1ade82f5149",
+    "count": 1000
+  },
+  "ed-course-over": {
+    "error": "SOURCE_RESULT_TOO_LARGE"
+  },
+  "ed-raw-lessons-over": {
+    "error": "SOURCE_RESULT_TOO_LARGE"
+  },
+  "ed-unsafe-courses": {
+    "error": "ED_PARSE_ERROR"
+  },
+  "canvas-invalid-utf8": {
+    "error": "INVALID_ICAL"
+  },
+  "ed-invalid-utf8": {
+    "error": "ED_PARSE_ERROR"
+  },
+  "canvas-byte-over": {
+    "error": "SOURCE_RESULT_TOO_LARGE"
+  },
+  "ed-escaped-output-over": {
+    "error": "SOURCE_RESULT_TOO_LARGE"
+  }
+}

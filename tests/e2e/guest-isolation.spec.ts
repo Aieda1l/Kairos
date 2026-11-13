@@ -3,7 +3,7 @@ import {prepareFixtureUser,signInFixtureUser,waitForAppHydration} from './helper
 import {guestSnapshotFixture} from '../helpers/guest-fixtures';
 import {serializeGuestBackup} from '../../src/lib/guest/backup';
 import {localData,privateData} from './fixtures/guest-lifecycle';
-import {resetGuestAdmission} from './fixtures/guest-session';
+import {bootstrapGuestFixture,canvasFixture,fulfillCanvasFixture,resetGuestAdmission} from './fixtures/guest-session';
 
 const origin='http://127.0.0.1:3000';
 async function importGuest(page:Page){
@@ -30,8 +30,8 @@ test('guest/account switching in one browser never transfers data',async({page,c
     if(url.pathname.startsWith('/api/')&&!url.pathname.startsWith('/api/guest/'))accountBodies.push(request.postData()??'');
     return route.continue();
   });
-  await resetGuestAdmission(context);await importGuest(page);
-  await page.route('**/api/guest/sources/canvas/feed',route=>route.fulfill({json:{ok:true,schemaVersion:1,requestId:route.request().postDataJSON().requestId,checkedAt:new Date().toISOString(),assignments:[],report:{skippedCount:0,malformedCount:0,partial:false}}}));
+  await resetGuestAdmission(context);await bootstrapGuestFixture(context);await importGuest(page);
+  await page.route('**/api/guest/sources/canvas/feed',route=>fulfillCanvasFixture(route,canvasFixture(1)));
   await page.getByRole('link',{name:'Sources',exact:true}).click();
   await page.getByLabel('Canvas calendar feed URL').fill('https://canvas.uw.edu/feeds/calendars/guest-private-isolation.ics');
   await page.getByLabel('Remember Canvas credential on this device').check();await page.getByRole('button',{name:'Update Canvas credential'}).click();await expect(page.getByText(/A credential is available/)).toBeVisible();
@@ -49,7 +49,8 @@ test('guest/account switching in one browser never transfers data',async({page,c
   return {alice,aliceBefore};
   },{timeout:phaseTimeout});
   await test.step("Reject missing guest capability and verify Alice's return to guest",async()=>{
-  const withoutCapability=await context.request.post('/api/guest/sources/ed/courses',{headers:{origin},data:{schemaVersion:1,requestId:crypto.randomUUID(),token:'fixture-guest-ed-token-never-echo'}});
+  await context.clearCookies({name:'kairos-guest-sync-dev'});
+  const withoutCapability=await context.request.post('/api/guest/sources/ed/courses',{headers:{origin},data:{schemaVersion:2,requestId:crypto.randomUUID(),token:'fixture-guest-ed-token-never-echo'}});
   expect(withoutCapability.status()).toBe(401);expect((await withoutCapability.json()).code).toBe('GUEST_SESSION_REQUIRED');
   await page.goto('/guest/settings');await expect(page.getByLabel('Display timezone')).toHaveValue('Asia/Tokyo');expect(await localData(page)).toEqual(guestBefore);
 

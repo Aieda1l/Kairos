@@ -1,7 +1,7 @@
 import {expect,test} from "@playwright/test";
 import {serializeGuestBackup} from "../../src/lib/guest/backup";
 import {guestSnapshotFixture} from "../helpers/guest-fixtures";
-import {finishGuestVerification,resetGuestAdmission,sealGuestJourney} from "./fixtures/guest-session";
+import {bootstrapGuestFixture,finishGuestVerification,resetGuestAdmission,sealGuestJourney} from "./fixtures/guest-session";
 import {connectCanvas,holdCanvasStatus,installLifecycleSources,localData,privateData,releaseCanvasStatus} from "./fixtures/guest-lifecycle";
 
 test.beforeEach(async({context})=>{await resetGuestAdmission(context);});
@@ -72,7 +72,7 @@ test("complete guest flow survives reload and rejects a late reset result",async
   },{timeout:phaseTimeout});
   await test.step("Connect Gradescope and Ed",async()=>{
   await page.getByRole("button",{name:"Connect Gradescope",exact:true}).click();await page.getByLabel("GS 123").check();await page.getByRole("button",{name:"Save Gradescope courses"}).click();
-  await page.getByLabel("Ed API token").fill("fixture-guest-ed-token-never-echo");await page.getByLabel("Remember Ed credential on this device").check();await page.getByRole("button",{name:"Connect Ed",exact:true}).click();await finishGuestVerification(page);
+  await page.getByLabel("Ed API token").fill("fixture-guest-ed-token-never-echo");await page.getByLabel("Remember Ed credential on this device").check();await page.getByRole("button",{name:"Connect Ed",exact:true}).click();
   await page.getByLabel("CSE 331").check();await page.getByRole("button",{name:"Save Ed courses"}).click();
   },{timeout:phaseTimeout});
   const saved=await test.step("Sync and verify all source data after reload",async()=>{
@@ -137,4 +137,36 @@ for(const mode of ["unavailable","older"] as const)test(`missing or older extens
   await page.clock.install();await page.evaluate(mode=>sessionStorage.setItem("guest-status-mode",mode),mode);await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem("guest-status-request"))).not.toBeNull();const before=await localData(page);expect(before.assignments).toHaveLength(10);await page.clock.runFor(30001);
   await expect(page.getByText("The Kairos extension did not respond in time.")).toBeVisible();expect((await localData(page)).assignments).toEqual(before.assignments);expect((await localData(page)).statuses).toEqual([]);expect(capture.forbidden).toEqual([]);
+});
+
+for(const replacement of ["reset","import","source"] as const)test(`a held worker result cannot overwrite ${replacement} in another tab`,async({page,context})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);
+  let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  await page.route("**/api/guest/sources/approve",async route=>{seen();await held;await route.continue().catch(()=>{});});
+  await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();await received;
+  const other=await context.newPage(),otherCapture=await sealGuestJourney(other);
+  if(replacement==="source"){
+    await other.goto("/guest/sources");await other.getByRole("button",{name:"Disconnect Canvas",exact:true}).click();await other.getByRole("button",{name:"Confirm disconnect Canvas"}).click();
+  }else{
+    await other.goto("/guest/settings");
+    if(replacement==="reset"){await other.getByRole("button",{name:"Clear guest data",exact:true}).click();await other.getByRole("button",{name:"Confirm clear guest data"}).click();await expect(other.getByText(/Guest data cleared/)).toBeVisible();}
+    else{await other.getByLabel("Import guest backup").setInputFiles({name:"backup.json",mimeType:"application/json",buffer:Buffer.from(serializeGuestBackup(guestSnapshotFixture(),"2026-10-24T12:00:00.000Z"))});await other.getByRole("button",{name:"Replace local data"}).click();await expect(other.getByText(/Backup imported/)).toBeVisible();}
+  }
+  const accepted=await localData(other);release();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();expect(await localData(other)).toEqual(accepted);expect(capture.forbidden).toEqual([]);expect(otherCapture.forbidden).toEqual([]);
+});
+
+test("changing the guest capability while approval is held rejects the old result",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);const before=await localData(page);
+  let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  let approvalStatus=0;await page.route("**/api/guest/sources/approve",async route=>{seen();await held;const response=await context.request.post(route.request().url(),{headers:{origin:"http://127.0.0.1:3000"},data:route.request().postDataJSON()});approvalStatus=response.status();await route.fulfill({response}).catch(()=>{});});await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();await received;
+  await context.clearCookies({name:"kairos-guest-sync-dev"});await bootstrapGuestFixture(context);release();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();expect((await localData(page)).assignments).toEqual(before.assignments);expect(approvalStatus).toBe(400);expect(capture.forbidden).toEqual([]);
+});
+
+test("a newer lease fences a parsed result held at approval",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);const before=await localData(page);
+  let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  await page.route("**/api/guest/sources/approve",async route=>{seen();await held;await route.continue().catch(()=>{});});await page.getByRole("button",{name:"Sync Canvas",exact:true}).click();await received;
+  const other=await context.newPage();await sealGuestJourney(other);await other.goto("/guest/sources");
+  const lease=await other.evaluate(async()=>{const path="/src/lib/guest/store.ts";const {openGuestStore}=await import(/* @vite-ignore */ path) as typeof import("../../src/lib/guest/store");const store=await openGuestStore();try{const nowMs=Date.now()+31000;return await store.beginRun({pageEpoch:crypto.randomUUID(),nowMs,deadlineAtMs:nowMs+180000});}finally{store.close();}});expect(lease).not.toBeNull();
+  release();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();const after=await localData(other);expect(after.assignments).toEqual(before.assignments);expect((await privateData(other)).metadata[0]).toMatchObject({lease:{runId:lease!.runId}});expect(capture.forbidden).toEqual([]);
 });

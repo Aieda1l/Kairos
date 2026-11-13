@@ -4,7 +4,7 @@ import {canvasEvent,canvasFeed,edCourses,edLessons,feedUrl,requestId,token} from
 import {createGuestSourceHandler} from '@/lib/guest/server/source-handler';
 import {resolveGuestServerRuntime} from '@/lib/guest/server/runtime';
 import {guestCapabilityCookie,mintGuestCapability} from '@/lib/guest/server/capability';
-import {guestApiErrorSchema,guestCanvasFeedResponseSchema,guestEdCoursesResponseSchema,guestEdLessonsResponseSchema} from '@/lib/guest/sources/contracts';
+import {guestApiErrorSchema,} from '@/lib/guest/sources/contracts';
 import {getGuestEnabled} from '@/lib/guest/server/feature';
 
 vi.mock('@/lib/guest/server/feature',()=>({getGuestEnabled:vi.fn(async()=>true)}));
@@ -14,11 +14,10 @@ afterEach(()=>{for(const database of databases.splice(0))database.close();vi.use
 const origin='https://kairos.example';
 const operations=['canvas-feed','ed-courses','ed-lessons'] as const;
 const bodies={
-  'canvas-feed':{schemaVersion:1,requestId,feedUrl},
-  'ed-courses':{schemaVersion:1,requestId,token},
-  'ed-lessons':{schemaVersion:1,requestId,token,courseId:'12'},
+  'canvas-feed':{schemaVersion:2,requestId,feedUrl},
+  'ed-courses':{schemaVersion:2,requestId,token},
+  'ed-lessons':{schemaVersion:2,requestId,token,courseId:'12'},
 };
-const schemas={'canvas-feed':guestCanvasFeedResponseSchema,'ed-courses':guestEdCoursesResponseSchema,'ed-lessons':guestEdLessonsResponseSchema};
 async function setup(){
   const database=openD1TestDatabase();databases.push(database);
   const fetchImpl=vi.fn<typeof fetch>(async input=>{
@@ -43,13 +42,14 @@ async function error(response:Response,status:number,code:string){
   expect(response.headers.get('set-cookie')).toBeNull();return value;
 }
 describe('transient guest source API',()=>{
-  it.each(operations)('reads %s with a guest capability and validates the public DTO',async operation=>{
+  it('relays v2 bytes',async()=>{const {handler,request}=await setup();const response=await handler()(request('ed-courses',{...bodies['ed-courses'],schemaVersion:2}));expect(response.status).toBe(200);expect(response.headers.get('content-type')).toBe('application/octet-stream');});
+  it.each(operations)('relays %s with a guest capability',async operation=>{
     const {handler,request,fetchImpl}=await setup();const response=await handler(operation)(request(operation));
     expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store, private');
-    const result=await response.json();expect(schemas[operation].safeParse(result).success).toBe(true);
-    expect(result.requestId).toBe(requestId);expect(JSON.stringify(result)).not.toContain(token);expect(JSON.stringify(result)).not.toContain(feedUrl);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(response.headers.get('x-kairos-guest-source-version')).toBe('2');expect(response.headers.get('x-kairos-guest-read-receipt')).toBeTruthy();
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+  it('rejects v1 before provider or admission writes',async()=>{const {handler,request,fetchImpl,sqlite}=await setup();await error(await handler()(request('ed-courses',{...bodies['ed-courses'],schemaVersion:1})),400,'BAD_REQUEST');expect(fetchImpl).not.toHaveBeenCalled();expect(sqlite.prepare('SELECT * FROM abuse_rate_events').all()).toEqual([]);});
   it('gates disabled features before runtime creation or database access',async()=>{
     const {handler,request,getRuntime,sqlite}=await setup();vi.mocked(getGuestEnabled).mockResolvedValue(false);
     await error(await handler()(request()),404,'GUEST_DISABLED');expect(getRuntime).not.toHaveBeenCalled();
@@ -79,12 +79,6 @@ describe('transient guest source API',()=>{
     for(const cookie of ['','authjs.session-token=existing-account','__Host-kairos-guest-sync=forged'])await error(await handler()(request('ed-courses',bodies['ed-courses'],{cookie})),401,'GUEST_SESSION_REQUIRED');
     const expired=await mintGuestCapability(runtime,runtime.now()-1_800_001);
     await error(await handler()(request('ed-courses',bodies['ed-courses'],{cookie:guestCapabilityCookie(runtime,expired.value)})),401,'GUEST_SESSION_REQUIRED');expect(fetchImpl).not.toHaveBeenCalled();
-  });
-  it('ignores account cookies and selects only request-local provider data',async()=>{
-    const {handler,request,cookie}=await setup();
-    const first=await (await handler()(request())).json();
-    const second=await (await handler()(request('ed-courses',bodies['ed-courses'],{cookie:cookie+'; authjs.session-token=other-account'}))).json();
-    expect(second.courses).toEqual(first.courses);expect(second.courses[0].externalCourseId).toBe('1');
   });
   it.each(['canvas-feed','ed-courses'] as const)('rejects paused %s provider before dispatch',async operation=>{
     const {handler,request,sqlite,fetchImpl}=await setup();
@@ -123,7 +117,7 @@ describe('transient guest source API',()=>{
     expect(JSON.stringify(await error(await handler(operation)(request(operation)),422,code))).not.toContain('SECRET_MARKER');
   });
   it('rejects oversized source output atomically',async()=>{
-    const {handler,request,fetchImpl}=await setup();fetchImpl.mockResolvedValueOnce(Response.json(edCourses(501)));
+    const {handler,request,fetchImpl}=await setup();fetchImpl.mockResolvedValueOnce(new Response(new Uint8Array(2_097_153)));
     await error(await handler()(request()),422,'SOURCE_RESULT_TOO_LARGE');
   });
   it('never leaks thrown provider secrets in response or log structures',async()=>{
@@ -155,4 +149,5 @@ describe('transient guest source API',()=>{
     await vi.advanceTimersByTimeAsync(15_000);await error(await pending,422,'ED_NETWORK_ERROR');
     release(runtime);await vi.advanceTimersByTimeAsync(0);expect(fetchImpl).not.toHaveBeenCalled();
   });
+  it('does not issue an expired receipt after the source body arrives',async()=>{const {handler,request,fetchImpl,runtime}=await setup();const original=runtime.now;fetchImpl.mockImplementationOnce(async()=>{runtime.now=()=>original()+16000;return new Response('ok');});await error(await handler()(request()),422,'ED_NETWORK_ERROR');});
 });

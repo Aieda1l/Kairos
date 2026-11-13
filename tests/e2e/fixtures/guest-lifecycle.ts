@@ -1,4 +1,5 @@
 import {expect,type Page} from "@playwright/test";
+import {bootstrapGuestFixture,canvasFixture,fulfillCanvasFixture} from "./guest-session";
 
 export async function localData(page:Page){return page.evaluate(async()=>{
   const path="/src/lib/guest/store.ts";const {openGuestStore}=await import(/* @vite-ignore */ path) as typeof import("../../../src/lib/guest/store");
@@ -9,7 +10,7 @@ export async function privateData(page:Page){return page.evaluate(async()=>{
   try{return await new Promise<Record<string,unknown[]>>((resolve,reject)=>{const names=Array.from(db.objectStoreNames),tx=db.transaction(names,"readonly"),result:Record<string,unknown[]>={};for(const name of names){const request=tx.objectStore(name).getAll();request.onsuccess=()=>{result[name]=request.result;};}tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error);});}finally{db.close();}
 });}
 export async function installLifecycleSources(page:Page, dueAt:string|null=null){
-  await page.route("**/api/guest/sources/canvas/feed",route=>route.fulfill({json:{ok:true,schemaVersion:1,requestId:route.request().postDataJSON().requestId,checkedAt:new Date().toISOString(),assignments:Array.from({length:10},(_,i)=>({source:"canvas",externalId:String(i+1),courseId:"12",courseName:"Canvas Test",title:`Canvas Homework ${i+1}`,releaseAt:null,dueAt,lateDueAt:null,status:"pending",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:`https://canvas.uw.edu/courses/12/assignments/${i+1}`,sourceUpdatedAt:null})),report:{skippedCount:0,malformedCount:0,partial:false}}}));
+  await page.route("**/api/guest/sources/canvas/feed",route=>fulfillCanvasFixture(route,canvasFixture(10,dueAt)));
   await page.addInitScript(()=>{
     let held:unknown=null;
     window.addEventListener("guest-fixture-release",()=>{if(held){window.postMessage(held,location.origin);held=null;sessionStorage.setItem("guest-released","yes");}});
@@ -31,6 +32,7 @@ export async function installLifecycleSources(page:Page, dueAt:string|null=null)
   });
 }
 export async function connectCanvas(page:Page){
+  await bootstrapGuestFixture(page.context());
   await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");
   await page.getByLabel("Remember Canvas credential on this device").check();await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();
   await expect(page.getByRole("button",{name:"Disconnect Canvas",exact:true})).toBeVisible();

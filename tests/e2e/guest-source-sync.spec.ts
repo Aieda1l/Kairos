@@ -1,5 +1,6 @@
 import {expect,test} from "@playwright/test";
-import {finishGuestVerification,resetGuestAdmission,sealGuestJourney} from "./fixtures/guest-session";
+import {localData,privateData} from "./fixtures/guest-lifecycle";
+import {bootstrapGuestFixture,canvasFixture,fulfillCanvasFixture,finishGuestVerification,resetGuestAdmission,sealGuestJourney} from "./fixtures/guest-session";
 
 test.beforeEach(async({context})=>{await resetGuestAdmission(context);});
 test("connects feed and Ed without extension or account, verifies deliberately, and persists results",async({page,context})=>{
@@ -38,10 +39,8 @@ test("Gradescope uses v1 discovery, explicit course selection, current status an
 });
 test("current 9 of 10 Canvas status stays partial beside successful Ed, with no account prompt",async({page})=>{
   const capture=await sealGuestJourney(page);
-  await page.route("**/api/guest/sources/canvas/feed",async route=>{
-    const request=route.request().postDataJSON();
-    await route.fulfill({json:{ok:true,schemaVersion:1,requestId:request.requestId,checkedAt:new Date().toISOString(),assignments:Array.from({length:10},(_,i)=>({source:"canvas",externalId:String(i+1),courseId:"12",courseName:"Canvas Test",title:`Canvas Homework ${i+1}`,releaseAt:null,dueAt:null,lateDueAt:null,status:"pending",sourceStatusText:null,gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:`https://canvas.uw.edu/courses/12/assignments/${i+1}`,sourceUpdatedAt:null})),report:{skippedCount:0,malformedCount:0,partial:false}}});
-  });
+  await bootstrapGuestFixture(page.context());
+  await page.route("**/api/guest/sources/canvas/feed",route=>fulfillCanvasFixture(route,canvasFixture(10)));
   await page.addInitScript(()=>{
     window.addEventListener("message",event=>{
       if(event.source!==window||event.origin!==location.origin||event.data?.source!=="kairos-page")return;
@@ -51,6 +50,46 @@ test("current 9 of 10 Canvas status stays partial beside successful Ed, with no 
     });
   });
   await page.goto("/guest/sources");await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas"}).click();await expect(page.getByRole("button",{name:"Disconnect Canvas"})).toBeVisible();
-  await page.getByLabel("Ed API token").fill("fixture-guest-ed-token-never-echo");await page.getByRole("button",{name:"Connect Ed"}).click();await finishGuestVerification(page);await expect(page.getByLabel("CSE 331")).not.toBeChecked();await page.getByLabel("CSE 331").check();await page.getByRole("button",{name:"Save Ed courses"}).click();
+  await page.getByLabel("Ed API token").fill("fixture-guest-ed-token-never-echo");await page.getByRole("button",{name:"Connect Ed"}).click();await expect(page.getByLabel("CSE 331")).not.toBeChecked();await page.getByLabel("CSE 331").check();await page.getByRole("button",{name:"Save Ed courses"}).click();
   await page.getByRole("button",{name:"Sync sources",exact:true}).click();await expect(page.getByText(/9 of 10 statuses updated/)).toBeVisible();await expect(page.getByText("Ed sync complete",{exact:true})).toBeVisible();await expect(page.getByText("Canvas status partially updated")).toBeVisible();await expect(page.getByText(/sign in to Kairos/i)).toHaveCount(0);expect(capture.forbidden).toEqual([]);
+});
+
+test("real worker projects provider bytes without persisting or displaying reflected text",async({page,context})=>{
+  const marker="reflected-provider-secret-marker";const diagnostics:string[]=[];
+  page.on("console",message=>diagnostics.push(message.text()));page.on("pageerror",error=>diagnostics.push(error.message));
+  const capture=await sealGuestJourney(page);await bootstrapGuestFixture(context);
+  await page.addInitScript(()=>{const NativeWorker=window.Worker;window.Worker=class extends NativeWorker {constructor(url:string|URL,options?:WorkerOptions){super(url,options);sessionStorage.setItem("guest-worker-created","yes");}};});
+  await page.route("**/api/guest/sources/canvas/feed",route=>fulfillCanvasFixture(route,canvasFixture(1).replace("END:VCALENDAR",`X-REFLECTED:${marker}\r\nEND:VCALENDAR`)));
+  await page.goto("/guest/sources");await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Disconnect Canvas",exact:true})).toBeVisible();expect(await page.evaluate(()=>sessionStorage.getItem("guest-worker-created"))).toBe("yes");
+  expect(capture.requests.some(request=>request.path==="/api/guest/sources/approve")).toBe(true);
+  expect(await page.content()).not.toContain(marker);expect(JSON.stringify(await privateData(page))).not.toContain(marker);expect(JSON.stringify(capture.requests)).not.toContain(marker);expect(diagnostics.join("\n")).not.toContain(marker);
+  await page.goto("/guest/settings");const download=page.waitForEvent("download");await page.getByRole("button",{name:"Export guest backup"}).click();const stream=await (await download).createReadStream();const chunks=[];for await(const chunk of stream!)chunks.push(chunk);expect(Buffer.concat(chunks).toString("utf8")).not.toContain(marker);expect(capture.forbidden).toEqual([]);
+});
+
+test("missing worker fails safely without approving the source",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await bootstrapGuestFixture(context);await page.addInitScript(()=>{Object.defineProperty(window,"Worker",{value:undefined});});
+  await page.goto("/guest/sources");await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();
+  await expect(page.getByText("This service is temporarily unavailable.")).toBeVisible();expect(capture.requests.filter(request=>request.path==="/api/guest/sources/approve")).toHaveLength(0);expect((await localData(page)).connections).toEqual([]);
+});
+
+test("Stop waiting while approval is pending prevents accepting the result",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await bootstrapGuestFixture(context);let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  await page.route("**/api/guest/sources/approve",async route=>{seen();await held;await route.continue().catch(()=>{});});
+  await page.goto("/guest/sources");await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();await received;
+  await page.getByRole("button",{name:"Stop waiting"}).click();release();await expect(page.getByRole("button",{name:"Sync sources",exact:true})).toBeEnabled();expect((await localData(page)).connections).toEqual([]);expect(capture.forbidden).toEqual([]);
+});
+
+test("rejects wrong raw media type before worker or approval",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await bootstrapGuestFixture(context);
+  await page.route("**/api/guest/sources/canvas/feed",async route=>{const response=await route.fetch();await route.fulfill({response,headers:{...response.headers(),"content-type":"text/html"}});});
+  await page.goto("/guest/sources");await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();
+  await expect(page.getByText("The source returned an invalid result.")).toBeVisible();expect(capture.requests.filter(request=>request.path==="/api/guest/sources/approve")).toHaveLength(0);expect((await localData(page)).connections).toEqual([]);
+});
+
+test("one source deadline expires while approval is held",async({page,context})=>{
+  const capture=await sealGuestJourney(page);await bootstrapGuestFixture(context);let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  await page.route("**/api/guest/sources/approve",async route=>{seen();await held;await route.continue().catch(()=>{});});
+  await page.goto("/guest/sources");await page.clock.install();await page.getByLabel("Canvas calendar feed URL").fill("https://canvas.uw.edu/feeds/calendars/kairos-e2e-fixture.ics");await page.getByRole("button",{name:"Connect Canvas",exact:true}).click();await received;
+  await page.clock.runFor(15001);await expect(page.getByText("The guest sync reached its time limit.")).toBeVisible();release();expect((await localData(page)).connections).toEqual([]);expect(capture.forbidden).toEqual([]);
 });

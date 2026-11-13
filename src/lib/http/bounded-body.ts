@@ -49,3 +49,14 @@ export async function readBoundedJson(stream:ReadableStream<Uint8Array>|null,opt
   if(options.signal.aborted)throw new BoundedBodyError("BODY_ABORTED");
   return parsed;
 }
+
+/** Count actual stream bytes and cancel without waiting on an untrusted stream. */
+export async function readBoundedBytes(stream:ReadableStream<Uint8Array>|null,{maxBytes,signal}:BodyOptions):Promise<Uint8Array<ArrayBuffer>>{
+  if(!Number.isSafeInteger(maxBytes)||maxBytes<0)throw new RangeError('Invalid body byte limit.');
+  if(signal.aborted)throw new BoundedBodyError('BODY_ABORTED');
+  if(!stream)return new Uint8Array();
+  const reader=stream.getReader();let rejectRead:((e:BoundedBodyError)=>void)|null=null,complete=false,total=0;
+  const abort=()=>rejectRead?.(new BoundedBodyError('BODY_ABORTED'));signal.addEventListener('abort',abort,{once:true});
+  try{const parts:Uint8Array[]=[];while(true){if(signal.aborted)throw new BoundedBodyError('BODY_ABORTED');const chunk=await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve,reject)=>{rejectRead=reject;void reader.read().then(resolve,reject);});rejectRead=null;if(signal.aborted)throw new BoundedBodyError('BODY_ABORTED');if(chunk.done)break;total+=chunk.value.byteLength;if(total>maxBytes)throw new BoundedBodyError('BODY_TOO_LARGE');parts.push(chunk.value);}const result=new Uint8Array(total);let offset=0;for(const part of parts){result.set(part,offset);offset+=part.byteLength;}complete=true;return result;}
+  finally{signal.removeEventListener('abort',abort);if(!complete){try{void reader.cancel().catch(()=>{});}catch{}}reader.releaseLock();}
+}
