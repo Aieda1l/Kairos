@@ -142,7 +142,9 @@ it.each(["success","abort"] as const)("rehydrates a retired lifecycle when a lea
     return <p>{guest.phase==="ready"?guest.snapshot.datasetId:guest.phase}</p>;
   }
   render(<GuestProvider storeFactory={factory}><Consumer/></GuestProvider>);
-  await screen.findByText(guestSnapshot().datasetId);const retired=lifecycle!;
+  await screen.findByText(guestSnapshot().datasetId);
+  await waitFor(()=>expect(lifecycle?.isActive()).toBe(true));
+  const retired=lifecycle!;
   const saved=outcome==="success"?{...guestSnapshot(),datasetId:"22222222-2222-4222-8222-222222222222"}:guestSnapshot();
   fake.store.clear=vi.fn(async()=>{if(outcome==="abort")throw Error("native write abort");fake.replace(saved);return saved;});
   let finishIdentity!:(identity:{datasetId:string;revision:number})=>void;
