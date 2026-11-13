@@ -38,9 +38,15 @@ async function loadVerifiedSchemas(verifiedPackage) {
     lockedVersion = JSON.parse(lockBytes.toString('utf8')).packages['node_modules/zod'].version;
   } catch { throw new Error('GUEST_SCHEMA_SOURCE_INVALID'); }
   if (typeof lockedVersion !== 'string' || !lockedVersion || zodVersion !== lockedVersion) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  const allowedDependencies = ['zod', 'ical.js', 'date-fns', 'date-fns-tz'];
+  const locked = JSON.parse(lockBytes.toString('utf8')).packages;
+  for (const name of allowedDependencies) {
+    const installed = JSON.parse(await readFile(join(dependencies, name, 'package.json'), 'utf8'));
+    if (!locked['node_modules/' + name]?.version || installed.version !== locked['node_modules/' + name].version) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
+  }
   const banned = new Set(builtinModules.flatMap(name => [name, 'node:' + name]));
   const result = await build({
-    stdin: { contents: "export * from './src/lib/guest/sources/contracts.ts';", resolveDir: root, sourcefile: 'guest-diagnostic-schemas.ts', loader: 'ts' },
+    stdin: { contents: "export * from './src/lib/guest/sources/contracts.ts'; export * from './src/lib/guest/sources/wire.ts'; export {parseGuestSourceBytes} from './src/lib/guest/sources/parse.ts';", resolveDir: root, sourcefile: 'guest-diagnostic-schemas.ts', loader: 'ts' },
     absWorkingDir: root, tsconfig, bundle: true, write: false, metafile: true, format: 'esm', platform: 'node', target: 'node22', logLevel: 'silent',
     plugins: [{ name: 'schema-capability-audit', setup(api) { api.onResolve({ filter: /.*/ }, args => { if (banned.has(args.path) || args.path === 'server-only' || args.path.startsWith('cloudflare:')) return { errors: [{ text: 'GUEST_SCHEMA_IMPORT_DENIED' }] }; }); } }]
   });
@@ -53,7 +59,7 @@ async function loadVerifiedSchemas(verifiedPackage) {
     if (within(root, absolute)) {
       if (sourceHashes.get(relative(root, absolute)) !== digest) throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
       inputs.push({ path: relative(root, absolute).replaceAll(sep, '/'), sha256: digest });
-    } else if (within(join(dependencies, 'zod'), absolute)) {
+    } else if (allowedDependencies.some(name => within(join(dependencies, name), absolute))) {
       inputs.push({ path: 'node_modules/' + relative(dependencies, absolute).replaceAll(sep, '/'), sha256: digest });
     } else throw new Error('GUEST_SCHEMA_SOURCE_INVALID');
   }
@@ -63,7 +69,7 @@ async function loadVerifiedSchemas(verifiedPackage) {
   const identities = trustedSchemas.get(schemas) ?? new Set();
   identities.add(canonical({ packageDigest: checked.packageDigest, buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision }));
   trustedSchemas.set(schemas, identities);
-  return { schemas, provenance: { buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision, node: process.version, esbuild: esbuildVersion, zodVersion, zodManifestSha256: hash(zodManifest), loaderSha256: hash(await readFile(fileURLToPath(import.meta.url))), lockSha256: receipt.lockSha256, inputs, outputSha256: hash(code), externalImports: 0 } };
+  return { schemas, provenance: { buildReceiptSha256: buildReceiptHash, applicationRevision: receipt.applicationRevision, node: process.version, esbuild: esbuildVersion, zodVersion, zodManifestSha256: hash(zodManifest), loaderSha256: hash(await readFile(fileURLToPath(import.meta.url))), lockSha256: receipt.lockSha256, inputs, outputSha256: hash(code), externalImports: 0, clientExecution: 'node-simulated-client' } };
 }
 
 const unavailable = reason => ({ value: null, reason });
@@ -110,7 +116,7 @@ const denyResponse = response => {
   throw new Error('GUEST_RESPONSE_INVALID');
 };
 
-async function readBody(response, signal, limit) {
+async function readBody(response, signal, limit, raw = false) {
   const declared = response.headers.get('content-length');
   if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > limit)) denyResponse(response);
   if (!response.body) throw new Error('GUEST_BODY_MISSING');
@@ -133,8 +139,9 @@ async function readBody(response, signal, limit) {
       chunks.push(part.value);
     }
     if (signal.aborted) throw new Error('GUEST_TIMEOUT');
-    const decoder = new TextDecoder('utf-8', { fatal: true });
-    const payload = JSON.parse(chunks.map((chunk, index) => decoder.decode(chunk, { stream: index !== chunks.length - 1 })).join(''));
+    const joined = new Uint8Array(bytes);
+    let offset = 0; for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength; }
+    const payload = raw ? joined.buffer : JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(joined));
     finished = true;
     return payload;
   } finally {
@@ -148,7 +155,8 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
   if (typeof request !== 'function' || !observations || ['before', 'quiesce', 'after'].some(key => typeof observations[key] !== 'function')) throw new Error('GUEST_ADAPTER_REQUIRED');
   if (!verifiedPackage || verifiedPackage.mode !== 'offline' || !/^[a-f0-9]{64}$/.test(verifiedPackage.packageDigest ?? '') || verifiedPackage.manifest?.inventory?.hostname !== 'guest-diagnostic.mykairos.me') throw new Error('GUEST_PACKAGE_INVALID');
   if (targetOrigin !== 'https://guest-diagnostic.mykairos.me') throw new Error('GUEST_TARGET_INVALID');
-  if (!Array.isArray(workload) || workload.length > GUEST_LIMITS.appRequests || workload.some(item => !GUEST_ROUTES.some(route => route.path === item?.path && route.method === item?.method))) throw new Error('GUEST_WORKLOAD_INVALID');
+  const sourceItem = item => !!item && !item.case && ['/api/guest/sources/canvas/feed', '/api/guest/sources/ed/courses', '/api/guest/sources/ed/lessons'].includes(item.path);
+  if (!Array.isArray(workload) || workload.reduce((n, item) => n + 1 + (sourceItem(item) ? 1 : 0), 0) > GUEST_LIMITS.appRequests || workload.some(item => item?.path === '/api/guest/sources/approve' || !GUEST_ROUTES.some(route => route.path === item?.path && route.method === item?.method))) throw new Error('GUEST_WORKLOAD_INVALID');
   if (workload.some(item => item.path !== '/api/health')) {
     const identity = canonical({ packageDigest: verifiedPackage.packageDigest, buildReceiptSha256: verifiedPackage.manifest.buildReceiptSha256, applicationRevision: verifiedPackage.manifest.applicationRevision });
     if (!schemas || !trustedSchemas.get(schemas)?.has(identity)) throw new Error('GUEST_SCHEMA_REQUIRED');
@@ -171,8 +179,8 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
   }
   if (Object.entries(requested).some(([key, value]) => value > operationCaps[key]) || Object.values(requested).reduce((a, b) => a + b, 0) > GUEST_LIMITS.fixtureAdmissions) throw new Error('GUEST_WORKLOAD_INVALID');
   const receipt = {
-    schemaVersion: 1, status: 'incomplete', code: 'GUEST_EMPTY_WORKLOAD',
-    packageDigest: verifiedPackage.packageDigest, attempted: 0, completed: 0,
+    schemaVersion: 2, status: 'incomplete', code: 'GUEST_EMPTY_WORKLOAD',
+    packageDigest: verifiedPackage.packageDigest, attempted: 0, completed: 0, logicalCompleted: 0, physical: [],
     metrics: { perRequestCpuMs: unavailable('not_collected_under_logs_traces_off_contract'), peakMemoryBytes: unavailable('unsupported_by_selected_platform_metrics'), perRequestD1Rows: unavailable('aggregate_metrics_cannot_attribute_requests') },
     costs: { setup: null, fixture: null, observer: null, teardown: null }
   };
@@ -188,11 +196,23 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
       while (!stopped && index < end) {
         if (Date.now() >= deadline) { stopped = true; break; }
         const item = workload[index++];
-        receipt.attempted++;
         const controller = new AbortController();
         try {
           await bounded(async () => {
-            const response = await request(targetOrigin + item.path, { method: item.method, redirect: 'manual', signal: controller.signal, item });
+            const send = async (entry, proof) => {
+              receipt.attempted++;
+              const physical = {stage: proof ? 'approval' : sourceItem(item) ? 'relay' : 'single', status: null, validMediaType: false, noStore: false, private: false, wireVersion2: false};
+              receipt.physical.push(physical);
+              const response = await request(targetOrigin + entry.path, { method: entry.method, redirect: 'manual', signal: controller.signal, item: entry, ...(proof ? {receipt: proof} : {}) });
+              physical.status = Number.isInteger(response?.status) ? response.status : null;
+              const media = response?.headers?.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+              physical.validMediaType = media === (physical.stage === 'relay' ? 'application/octet-stream' : 'application/json');
+              physical.noStore = cacheDirectives(response?.headers?.get('cache-control') ?? '').has('no-store');
+              physical.private = cacheDirectives(response?.headers?.get('cache-control') ?? '').has('private');
+              physical.wireVersion2 = response?.headers?.get('x-kairos-guest-source-version') === '2';
+              return response;
+            };
+            const response = await send(item);
             if (controller.signal.aborted) { try { Promise.resolve(response?.body?.cancel()).catch(() => {}); } catch { /* best effort */ } throw new Error('GUEST_TIMEOUT'); }
             if (!response || response.status >= 300 && response.status < 400 || response.redirected || response.url && response.url !== targetOrigin + item.path) denyResponse(response);
             const health = item.path === '/api/health';
@@ -201,13 +221,33 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
             const directives = cacheDirectives(response.headers.get('cache-control') ?? '');
             if (response.status !== expectedStatus || !directives.has('no-store')) denyResponse(response);
             const limit = health ? 256 : negative || item.path.endsWith('/session') ? 16384 : item.path.endsWith('/courses') ? 524288 : 2097152;
-            const payload = await readBody(response, controller.signal, limit);
+            let payload;
+            if (sourceItem(item)) {
+              if (!directives.has('private') || (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase() !== 'application/octet-stream' || response.headers.get('x-kairos-guest-source-version') !== '2') denyResponse(response);
+              const proof = response.headers.get('x-kairos-guest-read-receipt');
+              const claims = proof && schemas.readGuestReadReceiptMetadata(proof);
+              const operation = item.path.endsWith('/feed') ? 'canvas-feed' : item.path.endsWith('/courses') ? 'ed-courses' : 'ed-lessons';
+              const courseId = operation === 'ed-lessons' ? item.courseId : null;
+              if (!claims || claims.operation !== operation || claims.requestId !== item.requestId || claims.courseId !== courseId) denyResponse(response);
+              const bytes = await readBody(response, controller.signal, 2097152, true);
+              receipt.completed++;
+              payload = await schemas.parseGuestSourceBytes({operation, requestId: item.requestId, checkedAt: claims.checkedAt, bytes, ...(courseId === null ? {} : {courseId})}, {signal: controller.signal});
+              if (payload?.requestId !== item.requestId || payload?.checkedAt !== claims.checkedAt || (courseId !== null && payload?.courseId !== courseId)) throw new Error('GUEST_RESPONSE_INVALID');
+              const ackItem = {method:'POST', path:'/api/guest/sources/approve', requestId:item.requestId};
+              const ackResponse = await send(ackItem, proof);
+              const ackDirectives = cacheDirectives(ackResponse?.headers?.get('cache-control') ?? '');
+              if (!ackResponse || ackResponse.status !== 200 || ackResponse.redirected || ackResponse.url && ackResponse.url !== targetOrigin + ackItem.path || !ackDirectives.has('no-store') || !ackDirectives.has('private') || (ackResponse.headers.get('content-type') ?? '').split(';',1)[0].trim().toLowerCase() !== 'application/json') denyResponse(ackResponse);
+              const ack = await readBody(ackResponse, controller.signal, 16384);
+              const parsedAck = schemas.guestSourceApprovalAckSchema.safeParse(ack);
+              if (!parsedAck.success || ack.requestId !== item.requestId || ack.operation !== operation || ack.courseId !== courseId || ack.checkedAt !== claims.checkedAt) throw new Error('GUEST_RESPONSE_INVALID');
+              receipt.completed++;
+            } else payload = await readBody(response, controller.signal, limit);
             const text = JSON.stringify(payload);
             if (sensitiveValues.some(value => typeof value !== 'string' || !value || text.includes(value) || containsSensitive(payload, value)) || [...learnedCookies].some(value => text.includes(value) || containsSensitive(payload, value))) throw new Error('GUEST_RESPONSE_INVALID');
             if (health) {
               if (!payload || Array.isArray(payload) || Object.keys(payload).length !== 1 || payload.status !== 'ok') throw new Error('GUEST_RESPONSE_INVALID');
             } else {
-              if ((response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase() !== 'application/json' || !directives.has('private')) throw new Error('GUEST_RESPONSE_INVALID');
+              if ((!sourceItem(item) && (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase() !== 'application/json') || !directives.has('private')) throw new Error('GUEST_RESPONSE_INVALID');
               const schema = negative ? schemas.guestApiErrorSchema : item.path.endsWith('/session') ? schemas.guestSessionResponseSchema : item.path.endsWith('/feed') ? schemas.guestCanvasFeedResponseSchema : item.path.endsWith('/courses') ? schemas.guestEdCoursesResponseSchema : schemas.guestEdLessonsResponseSchema;
               if (!schema?.safeParse(payload).success) throw new Error('GUEST_RESPONSE_INVALID');
               if (negative) {
@@ -227,10 +267,11 @@ export async function runGuestHostedDiagnostic({ verifiedPackage, targetOrigin, 
               }
             }
             if (controller.signal.aborted) throw new Error('GUEST_TIMEOUT');
-            receipt.completed++;
+            if (!sourceItem(item)) receipt.completed++;
+            receipt.logicalCompleted++;
             const key = fixtureKey(item);
-            if (key) { expected[key]++; appAdmissions += key === 'challenge' ? 1 : 3; }
-          }, remaining(), () => controller.abort());
+            if (key) { expected[key]++; appAdmissions += key === 'challenge' ? 1 : 4; }
+          }, sourceItem(item) ? Math.min(15000, remaining()) : remaining(), () => controller.abort());
         } catch { stopped = true; }
       }
     }

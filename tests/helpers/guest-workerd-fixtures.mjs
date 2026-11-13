@@ -86,22 +86,25 @@ export function instrumentCompiledGuest(script) {
 
 export const guestWorkerEntry = `
 import {createGuestSourceHandler} from './src/lib/guest/server/source-handler';
+import {createGuestSourceApprovalHandler} from './src/lib/guest/server/source-approval';
 import {createGuestSessionHandlers} from './src/lib/guest/server/session';
 import {resolveGuestServerRuntime} from './src/lib/guest/server/runtime';
 import {getGuestEnabled} from './src/lib/guest/server/feature';
 import * as schemas from './src/lib/guest/sources/contracts';
+import {readGuestReadReceiptMetadata,guestSourceApprovalAckSchema} from './src/lib/guest/sources/wire';
 ${measuredDatabaseEntry}
 export default {async fetch(request,env){
  const measured=measuredDatabase(env.DB), network={requests:0,bodyWithoutLength:0};
  const fetchImpl=async(...args)=>{network.requests++;const response=await fetch(...args);if(!response.headers.has('content-length'))network.bodyWithoutLength++;return response;};
  const getRuntime=async()=>resolveGuestServerRuntime({...env,DB:measured.db},fetchImpl);
  const path=new URL(request.url).pathname;
- const response=path==='/session'?await createGuestSessionHandlers({isEnabled:getGuestEnabled,getRuntime}).start(request):
+ const response=path==='/session'?await createGuestSessionHandlers({isEnabled:getGuestEnabled,getRuntime}).start(request):path==='/approve'?await createGuestSourceApprovalHandler(getRuntime)(request):
   await createGuestSourceHandler(path==='/canvas'?'canvas-feed':path==='/courses'?'ed-courses':'ed-lessons',getRuntime)(request);
- const raw=await response.text(),payload=JSON.parse(raw);
- const schema=!payload.ok?schemas.guestApiErrorSchema:path==='/session'?schemas.guestSessionResponseSchema:path==='/canvas'?schemas.guestCanvasFeedResponseSchema:path==='/courses'?schemas.guestEdCoursesResponseSchema:schemas.guestEdLessonsResponseSchema;
+ const raw=await response.arrayBuffer();let schemaValid=false;
+ if(response.status===200&&response.headers.get('content-type')==='application/octet-stream')schemaValid=response.headers.get('x-kairos-guest-source-version')==='2'&&readGuestReadReceiptMetadata(response.headers.get('x-kairos-guest-read-receipt'))!==null;
+ else{const payload=JSON.parse(new TextDecoder().decode(raw));const schema=!payload.ok?schemas.guestApiErrorSchema:path==='/session'?schemas.guestSessionResponseSchema:guestSourceApprovalAckSchema;schemaValid=schema.safeParse(payload).success;}
  const headers=new Headers(response.headers);
- headers.set('x-probe-metrics',JSON.stringify({...measured.stats,...network,schemaValid:schema.safeParse(payload).success}));
+ headers.set('x-probe-metrics',JSON.stringify({...measured.stats,...network,schemaValid}));
  return new Response(raw,{status:response.status,headers});
 }};`;
 

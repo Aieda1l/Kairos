@@ -161,15 +161,46 @@ it('rejects a learned cookie echoed in a later valid source response', async () 
   const { schemas } = await loadGuestHostedSchemas({ verifiedPackage: fixturePackage });
   const requestId = '00000000-0000-4000-8000-000000000002';
   const capability = 'synthetic' + String.fromCharCode(34) + 'CapabilityValue';
-  const after = snapshot(); after.fixture.challenge.calls = 1; after.fixture['ed-courses-smoke'].calls = 1; after.tables.abuse_rate_events.count = 4;
-  const check = (fullName: string, sensitiveValues?: string[]) => run({ schemas, sensitiveValues, workload: [{ method: 'POST', path: '/api/guest/session', requestId, phase: 0 }, { method: 'POST', path: '/api/guest/sources/ed/courses', requestId, expectedCount: 1, phase: 1 }], observations: { ...observations, after: () => after }, request: (_url: string, options: { item: { path: string } }) => options.item.path.endsWith('/session') ? Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', expiresAt: '2026-11-04T00:30:00.000Z' }, { headers: { 'cache-control': 'no-store, private', 'set-cookie': `__Host-kairos-guest-sync=${capability}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800` } }) : Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt: '2026-11-04T00:00:00.000Z', courses: [{ externalCourseId: '12', shortName: null, fullName, term: null, year: null }] }, { headers: { 'cache-control': 'no-store, private' } }) });
+  const after = snapshot(); after.fixture.challenge.calls = 1; after.fixture['ed-courses-smoke'].calls = 1; after.tables.abuse_rate_events.count = 5;
+  // Unit-only receipt with structurally valid metadata; the genuine signed flow is native proof.
+  const checkedAt = '2026-11-04T00:00:00.000Z', issuedAtMs = Date.parse(checkedAt);
+  const claims = {v:2,aud:origin,sessionTag:Buffer.alloc(32).toString('base64url'),operation:'ed-courses',requestId,checkedAt,issuedAtMs,deadlineAtMs:issuedAtMs+15000,providerVersion:1,courseId:null};
+  const proof = Buffer.from(JSON.stringify(claims)).toString('base64url')+'.'+Buffer.alloc(32).toString('base64url');
+  const check = (fullName: string, sensitiveValues?: string[]) => run({ schemas, sensitiveValues, workload: [{ method: 'POST', path: '/api/guest/session', requestId, phase: 0 }, { method: 'POST', path: '/api/guest/sources/ed/courses', requestId, expectedCount: 1, phase: 1 }], observations: { ...observations, after: () => after }, request: (_url: string, options: { item: { path: string } }) => {
+    if (options.item.path.endsWith('/session')) return Response.json({ ok: true, schemaVersion: 1, requestId, checkedAt, expiresAt: '2026-11-04T00:30:00.000Z' }, { headers: { 'cache-control': 'no-store, private', 'set-cookie': `__Host-kairos-guest-sync=${capability}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800` } });
+    if (options.item.path.endsWith('/approve')) return Response.json({ok:true,schemaVersion:2,requestId,checkedAt,operation:'ed-courses',courseId:null},{headers:{'cache-control':'no-store, private'}});
+    return new Response(JSON.stringify({user:{id:1},courses:[{course:{id:12,code:'C1',name:fullName,year:2026,session:'Autumn'},role:{role:'student'}}]}),{headers:{'cache-control':'no-store, private','content-type':'application/octet-stream','x-kairos-guest-source-version':'2','x-kairos-guest-read-receipt':proof}});
+  } });
   expect((await check('Ordinary course')).status).toBe('passed');
   const rejected = await check(capability);
   expect(rejected.status).toBe('incomplete');
-  expect(rejected.completed).toBe(1);
+  expect(rejected.completed).toBe(3);
   expect(JSON.stringify(rejected)).not.toContain(capability);
   expect((await check(capability, ['syntheticProviderSecret'])).status).toBe('incomplete');
   expect((await check('syntheticProviderSecret', ['syntheticProviderSecret'])).status).toBe('incomplete');
+});
+
+it('rejects relay, parser and approval failures without accepting a partial dataset', async () => {
+  const {schemas} = await loadGuestHostedSchemas({verifiedPackage:fixturePackage});
+  const requestId = '00000000-0000-4000-8000-000000000002', checkedAt = '2026-11-04T00:00:00.000Z', issuedAtMs = Date.parse(checkedAt);
+  const claims = {v:2,aud:origin,sessionTag:Buffer.alloc(32).toString('base64url'),operation:'ed-courses',requestId,checkedAt,issuedAtMs,deadlineAtMs:issuedAtMs+15000,providerVersion:1,courseId:null};
+  // Structural fake only: native proof verifies the real server-signed receipt.
+  const proof = Buffer.from(JSON.stringify(claims)).toString('base64url')+'.'+Buffer.alloc(32).toString('base64url');
+  const after = snapshot(); after.fixture['ed-courses-smoke'].calls = 1; after.tables.abuse_rate_events.count = 4;
+  for (const failure of ['media','correlation','parser','denial','ack'] as const) {
+    let calls = 0;
+    const result = await run({schemas, workload:[{method:'POST',path:'/api/guest/sources/ed/courses',requestId,expectedCount:1}], observations:{...observations,after:()=>after}, request: (_url:string, options:{item:{path:string}}) => {
+      calls++;
+      if (options.item.path.endsWith('/approve')) return failure === 'denial' ? Response.json({error:true},{status:429,headers:{'cache-control':'no-store, private'}}) : Response.json({ok:true,schemaVersion:2,requestId,checkedAt,operation:'ed-courses',courseId:failure === 'ack' ? '12' : null},{headers:{'cache-control':'no-store, private'}});
+      const receipt = failure === 'correlation' ? Buffer.from(JSON.stringify({...claims,requestId:'00000000-0000-4000-8000-000000000003'})).toString('base64url')+'.'+Buffer.alloc(32).toString('base64url') : proof;
+      const body = failure === 'parser' ? '{' : JSON.stringify({user:{id:1},courses:[{course:{id:12,code:'C1',name:'Course',year:2026,session:'Autumn'},role:{role:'student'}}]});
+      return new Response(body,{headers:{'cache-control':'no-store, private','content-type':failure === 'media'?'application/json':'application/octet-stream','x-kairos-guest-source-version':'2','x-kairos-guest-read-receipt':receipt}});
+    }});
+    expect(result.status, failure).toBe('incomplete');
+    expect(result.logicalCompleted, failure).toBe(0);
+    expect(calls, failure).toBe(['media','correlation','parser'].includes(failure)?1:2);
+    expect(JSON.stringify(result)).not.toContain(proof);
+  }
 });
 
 it('rejects installed Zod version drift before bundling', async () => {

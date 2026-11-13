@@ -99,4 +99,6 @@ Tasks1 and2 are independent after these interfaces are frozen and may run concur
 
 ## Definition of this increment's completion
 
+November 13 checkpoint: Tasks 1–3 runtime is committed as `0a2e7a8`. Local diagnostics and both production worker formats pass; full local Vitest is 2,342 passed / 46 platform-specific skips. Independent ECC code/security review and its tooling delta review found no blocking findings. [Implementation evidence and qualifications](../../deployment/guest-free-processing.md) preserve distinct browser/native/Node proofs. Task 4 still requires normal CI and merge; a new cloud packet remains separately authorized.
+
 The approved implementation is complete when the foreground worker/client, lightweight server protocol and diagnostics are integrated, actual regressions and required CI/reviews pass, and the reviewed branch is merged. This does not claim 10ms hosted feasibility, production deployment, scheduled maintenance, physical retention or guest activation. Those require the remaining release evidence and explicit operator decisions.

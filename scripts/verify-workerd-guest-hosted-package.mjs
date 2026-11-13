@@ -29,7 +29,7 @@ const sinkScript = `let attempts=0;export default{fetch(request){if(request.url=
 const absentEntry = `import './prelude.mjs';import candidate from './entry.mjs';import {fixtureFetch} from './prelude.mjs';export default {async fetch(){try{await fixtureFetch('https://canvas.uw.edu/feeds/calendars/hosted-smoke.ics',{redirect:'manual'});return Response.json({denied:false});}catch(error){return Response.json({denied:error.message==='GUEST_TRANSPORT_DENIED',application:typeof candidate.fetch==='function'});}}};`;
 
 let mf, absent, agent, evidenceOwned = false;
-let result = { schemaVersion: 1, status: 'incomplete', code: 'GUEST_NATIVE_FAILED', nativeOnly: true, hostedExecution: false, packageDigest: digest };
+let result = { schemaVersion: 2, status: 'incomplete', code: 'GUEST_NATIVE_FAILED', nativeOnly: true, hostedExecution: false, packageDigest: digest };
 try {
   const inventory = await readGuestHostedJson(args.inventoryPath);
   await ownedOutput(evidence);
@@ -110,6 +110,7 @@ try {
     };
     const app = await tableRows(appDb, 'app'), fixture = await tableRows(fixtureDb, 'fixture');
     assert(same(Object.keys(fixture), ['fixture_operation']));
+    assert(same(Object.keys(app), ['abuse_controls', 'abuse_rate_events', 'accounts', 'app_settings', 'assignment_links', 'assignment_submission_status', 'assignments', 'calendar_connections', 'calendar_credentials', 'calendar_event_links', 'oauth_requests', 'operation_locks', 'sessions', 'source_connections', 'source_courses', 'source_credentials', 'submission_status_sync', 'sync_all_runs', 'sync_all_steps', 'sync_requests', 'users', 'verification_tokens']));
     const admissions = app.abuse_rate_events;
     const preserved = priorAdmissions ? preserveAdmissions(priorAdmissions, admissions) : true;
     if (!priorAdmissions) priorAdmissions = admissions;
@@ -117,10 +118,11 @@ try {
   };
   const diagnostic = await runGuestHostedDiagnostic({ verifiedPackage: verified, targetOrigin: base, workload: makeGuestWorkload(), request: adapter.request, observations: { before: snapshot, quiesce, after: snapshot }, schemas, sensitiveValues });
   result.diagnostic = diagnostic;
-  assert(diagnostic.status === 'passed' && diagnostic.attempted === 13 && diagnostic.completed === 13);
-  assert(diagnostic.observation.appAdmissions === 28 && diagnostic.observation.fixtureAdmissions === 10);
+  assert(diagnostic.status === 'passed' && diagnostic.attempted === 22 && diagnostic.completed === 22 && diagnostic.logicalCompleted === 13);
+  assert(diagnostic.physical.length === 22 && diagnostic.physical.filter(call => call.status === 200).length === 20 && diagnostic.physical.filter(call => call.status === 401).length === 1 && diagnostic.physical.filter(call => call.status === 403).length === 1);
+  assert(diagnostic.observation.appAdmissions === 37 && diagnostic.observation.fixtureAdmissions === 10);
   assert(Object.keys(diagnostic.observation.tablesBefore).length === 22 && Object.keys(diagnostic.observation.tablesBefore).filter(name => name !== 'abuse_rate_events').length === 21);
-  assert(diagnostic.observation.tablesBefore.abuse_rate_events.count === 1 && diagnostic.observation.tablesAfter.abuse_rate_events.count === 29);
+  assert(diagnostic.observation.tablesBefore.abuse_rate_events.count === 1 && diagnostic.observation.tablesAfter.abuse_rate_events.count === 38);
   assert(diagnostic.observation.identifiedAdmissionsAfter === 0 && diagnostic.observation.priorAdmissionsPreserved);
 
   // All additional H1 transport/cap/fault probes start strictly after the baseline.

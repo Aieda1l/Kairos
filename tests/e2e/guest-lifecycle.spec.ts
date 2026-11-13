@@ -139,7 +139,7 @@ for(const mode of ["unavailable","older"] as const)test(`missing or older extens
   await expect(page.getByText("The Kairos extension did not respond in time.")).toBeVisible();expect((await localData(page)).assignments).toEqual(before.assignments);expect((await localData(page)).statuses).toEqual([]);expect(capture.forbidden).toEqual([]);
 });
 
-for(const replacement of ["reset","import","source"] as const)test(`a held worker result cannot overwrite ${replacement} in another tab`,async({page,context})=>{
+for(const replacement of ["reset","import","source"] as const)test(`a parsed result held at approval cannot overwrite ${replacement} in another tab`,async({page,context})=>{
   const capture=await sealGuestJourney(page);await installLifecycleSources(page);await page.goto("/guest/sources");await connectCanvas(page);
   let seen!:()=>void,release!:()=>void;const received=new Promise<void>(resolve=>{seen=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
   await page.route("**/api/guest/sources/approve",async route=>{seen();await held;await route.continue().catch(()=>{});});

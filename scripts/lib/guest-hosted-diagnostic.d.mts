@@ -22,6 +22,8 @@ export interface DiagnosticReceipt {
   packageDigest: string;
   attempted: number;
   completed: number;
+  logicalCompleted: number;
+  physical: { stage: string; status: number | null; validMediaType: boolean; noStore: boolean; private: boolean; wireVersion2: boolean }[];
   metrics: Record<string, { value: null; reason: string }>;
   costs: Record<string, null>;
   observation?: Record<string, unknown>;
@@ -32,7 +34,7 @@ export function runGuestHostedDiagnostic(options: {
   verifiedPackage: { packageDigest: string; mode: string; manifest: { inventory: { hostname: string; runId: string; scenario: string; [key: string]: unknown } } };
   targetOrigin: string;
   workload: DiagnosticWorkloadItem[];
-  request: (url: string, options: { method: string; redirect: 'manual'; signal: AbortSignal; item: DiagnosticWorkloadItem }) => Response | Promise<Response>;
+  request: (url: string, options: { method: string; redirect: 'manual'; signal: AbortSignal; item: DiagnosticWorkloadItem; receipt?: string }) => Response | Promise<Response>;
   observations: { before(): DiagnosticSnapshot | Promise<DiagnosticSnapshot>; quiesce(): boolean | Promise<boolean>; after(): DiagnosticSnapshot | Promise<DiagnosticSnapshot> };
   schemas?: Record<string, Schema>;
   /** Supply non-cookie synthetic secrets for response-echo checks. Bootstrap cookies are remembered automatically. */

@@ -66,6 +66,8 @@ jobs:
             fi
           done
       - run: npx playwright install --with-deps chromium firefox
+      - name: Verify guest parser golden vectors across browser timezones
+        run: node scripts/verify-browser-guest-parsers.mjs
       - run: npm run test:e2e
       - name: Upload Playwright failure artifacts
         if: failure()
@@ -84,6 +86,8 @@ jobs:
         run: npx vinext check
       - name: Build vinext Workers target
         run: npm run build:vinext
+      - name: Verify emitted guest parser workers under strict CSP
+        run: node scripts/verify-browser-guest-worker-assets.mjs
       - name: Verify sealed native guest transport and admission
         run: node scripts/verify-workerd-guest-sources.mjs
       - name: Verify compiled provider completion and recovery

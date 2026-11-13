@@ -1,4 +1,4 @@
-// Version-1 offline artifact contract. Deliberately contains no cloud action implementation.
+// Version-2 offline artifact contract. Deliberately contains no cloud action implementation.
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { canonical, inspectGuestHostedModules, ownedOutput, safeFiles, sha256, workspaceRoot } from './guest-hosted-build.mjs';
@@ -20,7 +20,7 @@ async function safeFile(root, path) {
 export const GUEST_ROUTES = Object.freeze([{
   method: 'GET',
   path: '/api/health'
-}, ...['/api/guest/session', '/api/guest/sources/canvas/feed', '/api/guest/sources/ed/courses', '/api/guest/sources/ed/lessons'].map(path => ({
+}, ...['/api/guest/session', '/api/guest/sources/canvas/feed', '/api/guest/sources/ed/courses', '/api/guest/sources/ed/lessons', '/api/guest/sources/approve'].map(path => ({
   method: 'POST',
   path
 }))]);
@@ -301,7 +301,7 @@ export async function prepareGuestHostedPackage({
     });
   }
   const manifest = {
-    version: 1,
+    version: 2,
     kind: 'guest-hosted-test-package',
     state: 'prepared-only',
     deployable: false,
@@ -364,7 +364,7 @@ export async function verifyGuestHostedPackage({
   void ignored;
   const schema = JSON.parse(await readFile(join(workspaceRoot, 'scripts/guest-hosted/manifest.schema.json'), 'utf8'));
   if (canonical(Object.keys(manifest).sort()) !== canonical(schema.required.slice().sort())) fail('GUEST_MANIFEST_INVALID');
-  if (manifest.version !== 1 || manifest.kind !== 'guest-hosted-test-package' || manifest.state !== 'prepared-only' || manifest.deployable !== false || manifest.cloudActionAuthorized !== false || canonical(identity) !== canonical(manifest.inventory) || claimed !== sha256(canonical(unsigned))) fail('GUEST_MANIFEST_DRIFT');
+  if (manifest.version !== 2 || manifest.kind !== 'guest-hosted-test-package' || manifest.state !== 'prepared-only' || manifest.deployable !== false || manifest.cloudActionAuthorized !== false || canonical(identity) !== canonical(manifest.inventory) || claimed !== sha256(canonical(unsigned))) fail('GUEST_MANIFEST_DRIFT');
   const actual = await safeFiles(root);
   if (canonical(actual) !== canonical([...manifest.files.map(item => item.path), 'manifest.json'].sort())) fail('GUEST_PACKAGE_FILES_DRIFT');
   for (const item of manifest.files) {

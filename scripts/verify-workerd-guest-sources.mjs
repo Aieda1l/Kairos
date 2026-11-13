@@ -1,5 +1,6 @@
 // Native local evidence only: no live provider, credential, account or deployment.
 import assert from 'node:assert/strict';
+import {readNativeGuestSource} from '../tests/helpers/guest-native-client.mjs';
 import {build} from 'esbuild';
 import {Miniflare, Log, LogLevel, convertV4MiniflareOptions} from 'miniflare';
 import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises';
@@ -18,6 +19,7 @@ const report = {code: 'GUEST_NATIVE_TRANSPORT_FAILED', evidenceType: 'local-nati
   protectedRowsWritten: null, results: [], phases: [], deniedTraffic: null};
 const allMetrics = [];
 let active;
+let pipeline;
 let currentCase = 'build';
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const quote = name => '"' + name.replaceAll('"', '""') + '"';
@@ -27,12 +29,12 @@ function check(name, condition, details = {}) {
   assert(condition, name);
 }
 function sumMetrics(metrics) {
-  const keys = ['statements', 'admissionStatements', 'admissionReadStatements', 'admissionWriteStatements', 'admissionRowsRead', 'admissionRowsWritten', 'readStatements', 'writeStatements', 'changes', 'protectedWriteStatements', 'accountStatements', 'rowsRead', 'rowsWritten', 'missingRowsRead', 'missingRowsWritten', 'requests'];
+  const keys = ['statements', 'admissionStatements', 'admissionReadStatements', 'admissionWriteStatements', 'admissionRowsRead', 'admissionRowsWritten', 'readStatements', 'writeStatements', 'changes', 'protectedWriteStatements', 'accountStatements', 'rowsRead', 'rowsWritten', 'missingRowsRead', 'missingRowsWritten', 'requests', 'bodyWithoutLength'];
   return Object.fromEntries(keys.map(key => [key, metrics.reduce((sum, m) => sum + (m[key] ?? 0), 0)]));
 }
 async function snapshot(db, observerMetrics) {
   // D1 reserves _cf_METADATA and forbids its contents; it is not an app table.
-  const selected = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' ORDER BY name").all();
+  const selected = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name <> '_cf_METADATA' AND name <> '_cf_KV' ORDER BY name").all();
   observerMetrics.push(selected.meta);
   return Object.fromEntries(await Promise.all(selected.results.map(async ({name}) => {
     const result = await db.prepare(`SELECT * FROM ${quote(name)}`).all();
@@ -111,7 +113,7 @@ async function finishPhase(phase) {
     fixtureBytesQualification: 'Generated synthetic upstream bytes (plus emitted stall bytes), not proof all bytes were consumed by the app.',
     snapshotProof: proof, fixture: stats, rejectingSinkAttempts: deny.attempts, fixtureMigration: {statements: phase.migrationMetrics.length, meta: phase.migrationMetrics},
     observerD1: {statements: phase.observerMetrics.length, meta: phase.observerMetrics, productionBilling: null},
-    inaccessibleInternalTables: ['sqlite_*', '_cf_METADATA'], snapshotScope: 'All application tables, including abuse_controls; no control exclusion.'});
+    inaccessibleInternalTables: ['sqlite_*', '_cf_METADATA', '_cf_KV'], snapshotScope: 'All application tables, including abuse_controls; no control exclusion.'});
   report.protectedRowsWritten = (report.protectedRowsWritten ?? 0) + protectedChanges;
   allMetrics.push(...phase.metrics);
   await phase.mf.dispose();
@@ -120,20 +122,21 @@ async function finishPhase(phase) {
 async function configure(phase, mode) {
   await phase.fixture.fetch('http://fixture.invalid/configure', {method: 'POST', body: JSON.stringify({mode})});
 }
-async function invoke(phase, path, {cookie, network = '192.0.2.1', worker = 0, origin = 'https://guest.invalid', host = 'guest.invalid'} = {}) {
-  const started = performance.now();
-  const payload = {schemaVersion: 1, requestId: fixtureRequestId, ...(path === '/session' ? {turnstileToken: 'synthetic-guest-' + crypto.randomUUID()} : path === '/canvas' ? {feedUrl: 'https://canvas.uw.edu/feeds/calendars/synthetic.ics'} : {token: 'synthetic-ed-secret', ...(path === '/lessons' ? {courseId: '12'} : {})})};
-  const response = await phase.mf.dispatchFetch('https://guest.invalid' + path, {method: 'POST', headers: {
-    'content-type': 'application/json', 'x-driver-network': network, 'x-driver-worker': String(worker), 'x-driver-host': host, 'x-driver-origin': origin, ...(cookie ? {cookie} : {}),
-  }, body: JSON.stringify(payload)});
-  const raw = await response.text();
-  const body = JSON.parse(raw);
-  const metrics = JSON.parse(response.headers.get('x-probe-metrics'));
-  assert.equal(metrics.schemaValid, true, 'actual public response schema');
-  phase.metrics.push(metrics);
-  return {status: response.status, code: body.code, count: body.assignments?.length ?? body.courses?.length ?? body.lessons?.length,
-    partial: body.report?.partial, metrics, elapsedMs: performance.now() - started, outputBytes: Buffer.byteLength(raw),
-    cookie: response.headers.get('set-cookie')?.split(';')[0]};
+async function invoke(phase,path,{cookie,network='192.0.2.1',worker=0,origin='https://guest.invalid',host='guest.invalid',serverDeadlineProbe=false}={}){
+ const started=performance.now();
+ const headers={'content-type':'application/json','x-driver-network':network,'x-driver-host':host,'x-driver-origin':origin,...(cookie?{cookie}:{})};
+ const send=(p,body,signal)=>phase.mf.dispatchFetch('https://guest.invalid'+p,{method:'POST',headers:{...headers,'x-driver-worker':String(p==='/approve'?1-worker:worker)},body:JSON.stringify(body),signal});
+ if(path==='/session'){
+  const response=await send(path,{schemaVersion:1,requestId:fixtureRequestId,turnstileToken:'synthetic-guest-'+crypto.randomUUID()});
+  const body=await response.json(),metrics=JSON.parse(response.headers.get('x-probe-metrics')??'null');assert(metrics&&metrics.schemaValid);phase.metrics.push(metrics);
+  return {status:response.status,code:body.code,metrics,elapsedMs:performance.now()-started,cookie:response.headers.get('set-cookie')?.split(';')[0],physicalRequests:1};
+ }
+ const operation=path==='/canvas'?'canvas-feed':path==='/courses'?'ed-courses':'ed-lessons';
+ const result=await readNativeGuestSource({send,pipeline,operation,requestId:fixtureRequestId,courseId:path==='/lessons'?'12':null,fields:path==='/canvas'?{feedUrl:'https://canvas.uw.edu/feeds/calendars/synthetic.ics'}:{token:'synthetic-ed-secret',...(path==='/lessons'?{courseId:'12'}:{})},readPath:path,approvePath:'/approve',serverDeadlineProbe});
+ phase.metrics.push(...result.calls.map(x=>x.metrics));
+ const metrics={...sumMetrics(result.calls.map(x=>x.metrics)),schemaValid:result.calls.every(x=>x.metrics.schemaValid===true)};
+ const value=result.value;
+ return {status:result.status,code:result.code,errorStage:result.errorStage,count:value?.assignments?.length??value?.courses?.length??value?.lessons?.length,partial:value?.report?.partial,metrics,elapsedMs:performance.now()-started,outputBytes:value?Buffer.byteLength(JSON.stringify(value)):0,physicalRequests:result.physicalRequests,httpStatuses:result.calls.map(x=>x.status),projection:'node-simulated-client'};
 }
 async function session(phase, options = {}) {
   const result = await invoke(phase, '/session', options);
@@ -153,6 +156,8 @@ try {
     bundle: true, write: false, format: 'esm', platform: 'browser', external: ['node:*', 'cloudflare:workers'], logLevel: 'silent', plugins: [emptyServerOnly]})).outputFiles[0].text;
   const scripts = {app: await bundle(guestWorkerEntry), fixture: await bundle(fixtureWorkerEntry)};
   const schemas=await import('data:text/javascript;base64,'+Buffer.from(await bundle("export * from './src/lib/guest/sources/contracts';")).toString('base64'));
+  pipeline=await import('data:text/javascript;base64,'+Buffer.from(await bundle("export * from './src/lib/guest/sources/contracts';export * from './src/lib/guest/sources/wire';export {parseGuestSourceBytes} from './src/lib/guest/sources/parse';export {readBoundedBytes} from './src/lib/http/bounded-body';")).toString('base64'));
+  report.clientProjection={kind:'node-simulated-client',rawAndApprovalResponses:'actual physical HTTP; normalized result locally derived',browserLifecycleProof:false};
 
   currentCase='compiled:build';
   const compiled=(await build({entryPoints:[join(root,'dist/server/index.js')],bundle:true,write:false,format:'esm',platform:'browser',external:['node:*','cloudflare:*'],logLevel:'silent'})).outputFiles[0].text;
@@ -168,31 +173,34 @@ try {
   if(originMetrics)compiledPhase.metrics.push(originMetrics);
   let compiledCookie;
   for(const [path,fields,member] of [
-    ['/api/guest/session',{turnstileToken:'synthetic-guest-'+crypto.randomUUID()},null],
-    ['/api/guest/sources/canvas/feed',{feedUrl:'https://canvas.uw.edu/feeds/calendars/synthetic.ics'},'assignments'],
-    ['/api/guest/sources/ed/courses',{token:'synthetic-ed-secret'},'courses'],
-    ['/api/guest/sources/ed/lessons',{token:'synthetic-ed-secret',courseId:'12'},'lessons'],
+   ['/api/guest/session',{turnstileToken:'synthetic-guest-'+crypto.randomUUID()},null],
+   ['/api/guest/sources/canvas/feed',{feedUrl:'https://canvas.uw.edu/feeds/calendars/synthetic.ics'},'assignments'],
+   ['/api/guest/sources/ed/courses',{token:'synthetic-ed-secret'},'courses'],
+   ['/api/guest/sources/ed/lessons',{token:'synthetic-ed-secret',courseId:'12'},'lessons'],
   ]){
-    currentCase='compiled:'+path;
-    const networkBefore=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
-    const response=await compiledPhase.mf.dispatchFetch('https://guest.invalid'+path,{method:'POST',headers:{'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://guest.invalid',...(compiledCookie?{cookie:compiledCookie}:{})},body:JSON.stringify({schemaVersion:1,requestId:fixtureRequestId,...fields})});
-    const raw=await response.text(),metrics=JSON.parse(response.headers.get('x-probe-metrics')??'null');
-    check(currentCase+' registered and composed',response.status===200&&metrics!==null,{status:response.status});
-    // Compiled runtime fetch does not necessarily use globalThis.fetch. Measure
-    // actual requests at the sealed destination, separately from driver controls.
-    const networkAfter=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
-    const providerRequests=networkAfter.providerRequests-networkBefore.providerRequests;
-    const challengeRequests=networkAfter.challengeRequests-networkBefore.challengeRequests;
-    metrics.requests=providerRequests+challengeRequests;
-    check(currentCase+' exact sealed destination requests',providerRequests===(member?1:0)&&challengeRequests===(member?0:1),{providerRequests,challengeRequests,measurement:'sealed fixture counters; driver stats excluded'});
-    const payload=JSON.parse(raw);compiledPhase.metrics.push(metrics);
-    const schema=member==='assignments'?schemas.guestCanvasFeedResponseSchema:member==='courses'?schemas.guestEdCoursesResponseSchema:member==='lessons'?schemas.guestEdLessonsResponseSchema:schemas.guestSessionResponseSchema;
-    check(currentCase+' actual response schema',schema.safeParse(payload).success);
-    check(currentCase+' public result',payload.ok===true&&payload.schemaVersion===1&&payload.requestId===fixtureRequestId&&(!member||payload[member]?.length===1));
-    check(currentCase+' no account dependency',metrics.accountStatements===0&&metrics.protectedWriteStatements===0&&metrics.requests===1,{metrics});
-    if(!member){compiledCookie=response.headers.get('set-cookie')?.split(';')[0];assert(compiledCookie?.startsWith('__Host-kairos-guest-sync='));}
-    check(currentCase+' does not echo secrets',!raw.includes('synthetic-ed-secret')&&!raw.includes('synthetic.ics')&&!raw.includes(compiledCookie));
+   currentCase='compiled:'+path;const networkBefore=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+   const headers={'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://guest.invalid',...(compiledCookie?{cookie:compiledCookie}:{})};
+   const send=(p,body,signal)=>compiledPhase.mf.dispatchFetch('https://guest.invalid'+p,{method:'POST',headers:{...headers,'x-driver-worker':p.endsWith('/approve')?'1':'0'},body:JSON.stringify(body),signal});
+   let payload,calls;
+   if(!member){const response=await send(path,{schemaVersion:1,requestId:fixtureRequestId,...fields});payload=await response.json();const metrics=JSON.parse(response.headers.get('x-probe-metrics')??'null');assert(response.status===200&&metrics);calls=[{status:response.status,metrics}];const parts=(response.headers.get('set-cookie')??'').split(';').map(x=>x.trim());assert(parts[0].startsWith('__Host-kairos-guest-sync='));compiledCookie=parts[0];}
+   else{const operation=member==='assignments'?'canvas-feed':member==='courses'?'ed-courses':'ed-lessons';const read=await readNativeGuestSource({send,pipeline,operation,requestId:fixtureRequestId,courseId:fields.courseId??null,fields,readPath:path,approvePath:'/api/guest/sources/approve'});assert.equal(read.status,200);assert.equal(read.errorStage,undefined);assert.equal(read.calls.length,2);payload=read.value;calls=read.calls;}
+   const metrics=sumMetrics(calls.map(x=>x.metrics));compiledPhase.metrics.push(...calls.map(x=>x.metrics));
+   check(currentCase+' registered and composed',calls.every(x=>x.status===200),{physicalCalls:calls.length});
+   const networkAfter=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();const providerRequests=networkAfter.providerRequests-networkBefore.providerRequests,challengeRequests=networkAfter.challengeRequests-networkBefore.challengeRequests;
+   check(currentCase+' only expected anonymous admission SQL',metrics.accountStatements===0&&metrics.protectedWriteStatements===0&&metrics.admissionWriteStatements===(member?4:1),{metrics});
+   check(currentCase+' actual fixed upstream request',providerRequests===(member?1:0)&&challengeRequests===(member?0:1),{providerRequests,challengeRequests});
+   check(currentCase+' validated source result',payload.ok===true&&payload.schemaVersion===1&&payload.requestId===fixtureRequestId&&(!member||payload[member]?.length===1));
+   const schema=member==='assignments'?schemas.guestCanvasFeedResponseSchema:member==='courses'?schemas.guestEdCoursesResponseSchema:member==='lessons'?schemas.guestEdLessonsResponseSchema:schemas.guestSessionResponseSchema;
+   check(currentCase+(member?' client projection schema':' actual session response schema'),schema.safeParse(payload).success);
+   const serialized=JSON.stringify(payload);
+   check(currentCase+' normalized projection does not echo source credentials or cookie',!serialized.includes('synthetic-ed-secret')&&!serialized.includes('synthetic.ics')&&!serialized.includes(compiledCookie));
   }
+  currentCase='compiled:legacy-wire-rejected';
+  const legacyBefore=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+  const legacy=await compiledPhase.mf.dispatchFetch('https://guest.invalid/api/guest/sources/canvas/feed',{method:'POST',headers:{'content-type':'application/json','x-driver-network':'192.0.2.1','x-driver-host':'guest.invalid','x-driver-origin':'https://guest.invalid',cookie:compiledCookie},body:JSON.stringify({schemaVersion:1,requestId:fixtureRequestId,feedUrl:'https://canvas.uw.edu/feeds/calendars/synthetic.ics'})});
+  const legacyMetrics=JSON.parse(legacy.headers.get('x-probe-metrics')??'null');compiledPhase.metrics.push(legacyMetrics);
+  const legacyAfter=await (await compiledPhase.fixture.fetch('http://fixture.invalid/stats')).json();
+  check('compiled legacy heavy wire rejects before D1 or provider work',legacy.status===400&&legacyMetrics.statements===0&&legacyAfter.providerRequests===legacyBefore.providerRequests);
   await finishPhase(compiledPhase);
 
   const transport = await startPhase('transport', scripts);
@@ -206,17 +214,17 @@ try {
     ['/canvas', 'valid', 200, undefined, 1, 1], ['/canvas', 'redirect', 200, undefined, 6, 1],
     ['/canvas', 'escaped', 422, 'INVALID_FEED_URL', 1], ['/canvas', 'redirect-loop', 422, 'NETWORK_ERROR', 6],
     ['/canvas', 'empty', 200, undefined, 1, 0], ['/canvas', 'partial', 200, undefined, 1, 1],
-    ['/canvas', 'no-events', 422, 'EMPTY_FEED', 1],
-    ['/canvas', 'overflow', 422, 'SOURCE_RESULT_TOO_LARGE', 1], ['/canvas', 'utf8', 422, 'INVALID_ICAL', 1],
+    ['/canvas', 'no-events', 200, 'EMPTY_FEED', 1],
+    ['/canvas', 'overflow', 422, 'SOURCE_RESULT_TOO_LARGE', 1], ['/canvas', 'utf8', 200, 'INVALID_ICAL', 1],
     ['/courses', 'valid', 200, undefined, 1, 1], ['/lessons', 'valid', 200, undefined, 1, 1],
     ['/courses', 'escaped', 422, 'ED_UPSTREAM_ERROR', 1], ['/courses', 'empty', 200, undefined, 1, 0],
     ['/lessons', 'empty', 200, undefined, 1, 0], ['/lessons', 'overflow', 422, 'SOURCE_RESULT_TOO_LARGE', 1],
-    ['/lessons', 'utf8', 422, 'ED_PARSE_ERROR', 1], ['/canvas', 'stalled', 422, 'NETWORK_ERROR', 1],
+    ['/lessons', 'utf8', 200, 'ED_PARSE_ERROR', 1], ['/canvas', 'stalled', 422, 'NETWORK_ERROR', 1],
   ];
   for (const [path, mode, status, code, requests, count] of cases) {
     currentCase = path + ':' + mode;
     await configure(transport, mode);
-    const result = await invoke(transport, path, {cookie});
+    const result = await invoke(transport, path, {cookie,serverDeadlineProbe:mode==='stalled'});
     check(currentCase, result.status === status && result.code === code && result.metrics.requests === requests
       && (count === undefined || result.count === count) && (mode !== 'partial' || result.partial === true)
       && (mode !== 'overflow' || result.metrics.bodyWithoutLength > 0)
@@ -260,10 +268,10 @@ try {
   // Distributed networks exercise the real default bootstrap budget, not a tuned cap.
   const sessions = await Promise.all(Array.from({length: 64}, async (_, i) => ({cookie: await session(capacity, {network: `198.51.100.${i + 1}`, worker: i % 2}), network: `198.51.100.${i + 1}`, worker: i % 2})));
   check(currentCase, sessions.length === 64, {concurrency: 64, bootstrapCount: 64, d1: sumMetrics(capacity.metrics)});
-  currentCase = 'independent services share global sixty-read ceiling';
+  currentCase = 'concurrent raw burst saturates shared global pool before approval';
   const reads = await Promise.all(sessions.map(options => invoke(capacity, '/canvas', options)));
-  check(currentCase, reads.filter(r => r.status === 200).length === 60 && reads.filter(r => r.status === 429).length === 4,
-    {concurrency: 64, admitted: reads.filter(r => r.status === 200).length, denied: reads.filter(r => r.status === 429).length,
+  check(currentCase, reads.filter(r=>r.httpStatuses?.[0]===200).length===60 && reads.filter(r=>r.httpStatuses?.[0]===429).length===4 && reads.every(r=>r.status===429),
+    {concurrency:64,rawRelaysAdmitted:reads.filter(r=>r.httpStatuses?.[0]===200).length,rawRelaysDenied:reads.filter(r=>r.httpStatuses?.[0]===429).length,approvalsDenied:reads.filter(r=>r.errorStage==='approval').length,completedSources:reads.filter(r=>r.status===200).length,qualification:'Concurrent raw admissions can fill the shared pool before any approval; no client data is accepted from approval denial.',
       admittedD1: sumMetrics(reads.filter(r => r.status === 200).map(r => r.metrics)), deniedD1: sumMetrics(reads.filter(r => r.status === 429).map(r => r.metrics))});
   currentCase = 'global denial retains prior network and session charges';
   const beforeDenial = await capacity.db.prepare('SELECT COUNT(*) AS n FROM abuse_rate_events').all();
@@ -279,6 +287,13 @@ try {
     && bootstraps.at(-1).status === 429 && bootstraps.at(-1).metrics.requests === 0,
     {accepted: 9, denied: 1, acceptedD1: sumMetrics(bootstraps.slice(0, 9).map(r => r.metrics)), deniedD1: bootstraps.at(-1).metrics});
   await finishPhase(capacity);
+
+  const paired = await startPhase('sequential-paired-global-ceiling',scripts);
+  await configure(paired,'empty');
+  const pairedResults=[];
+  for(let i=0;i<31;i++){const options={network:'203.0.113.'+(i+1),worker:i%2};const cookie=await session(paired,options);pairedResults.push(await invoke(paired,'/canvas',{...options,cookie}));}
+  check('thirty paired source reads share sixty global claims',pairedResults.slice(0,30).every(r=>r.status===200&&r.physicalRequests===2)&&pairedResults.at(-1).status===429,{completed:pairedResults.filter(r=>r.status===200).length,denied:pairedResults.filter(r=>r.status===429).length});
+  await finishPhase(paired);
 
   assert.equal(report.externalRequests, 0);
   assert(report.results.every(result => result.ok === true));
