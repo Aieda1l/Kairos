@@ -1,6 +1,6 @@
 # Guest source processing on Workers Free
 
-Implementation candidate: runtime `0a2e7a8af076380052cded94b940f1566341f113`, with diagnostic tooling and CI integration in the same feature branch. The user approved the [design](../superpowers/specs/2026-11-12-guest-free-processing-design.md) and retained Workers Free. Hosted feasibility, production deployment and guest activation remain open; the production guest flag stays false.
+Merged candidate: runtime `0a2e7a8af076380052cded94b940f1566341f113`, integrated by [PR 62](https://github.com/Aieda1l/Kairos/pull/62) as main `3471ce8` with passing required CI. The user approved the [design](../superpowers/specs/2026-11-12-guest-free-processing-design.md) and retained Workers Free. The [v8 hosted measurement](guest-hosted-run-2026-11-14-v8.md) passed all 22 requests but reports 15.475 ms CPU P50 and 172.652 ms P99, so Free headroom remains open. Production deployment and guest activation remain separate; the production guest flag stays false.
 
 Canvas and Ed source reads now relay at most 2 MiB of provider bytes to a dedicated foreground browser worker. It produces the existing normalized v1 data, then the client obtains a signed-receipt approval before accepting the result. Source HTTP requests use v2; old source requests fail cheaply. Account interfaces, saved guest data, backups, source limits and sync fences retain their existing behavior.
 
@@ -29,4 +29,4 @@ node scripts/verify-workerd-guest-sources.mjs
 
 The Node diagnostic client uses the actual parser from verified retained source and is labelled separately from browser execution. Its normalized output is client-derived; HTTP records describe the actual raw response and approval response independently.
 
-Next gates: normal CI and ECC review before merge, then a fresh reviewed finite 22-request isolated hosted packet with owned-resource cleanup. Historical v2/v3 packets remain consumed and cleaned. A new package needs separate operator authorization; implementation approval authorizes no cloud calls, deployment, billing change, maintenance enablement, real-provider traffic or activation.
+Implementation CI/ECC and merge are complete. The separately approved v8 hosted packet is consumed and cleaned; its observed CPU leaves headroom unresolved. Next assess the local profiles and compare complete guest journeys before selecting an optimization. Later hosted retention/cadence, real-provider acceptance and the frozen production deployment/activation review remain open. Any additional cloud action needs its own bounded authorization; no billing change or activation follows from this measurement.
