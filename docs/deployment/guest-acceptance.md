@@ -18,7 +18,7 @@ The latest [isolated diagnostic v8](guest-hosted-run-2026-11-14-v8.md) completed
 
 **Workers Free CPU headroom remains open** against the published 10 ms allowance. Counts match the fixed workload, but sampling interval and ingestion completeness are unknown; no per-route, cold/warm or causal comparison with the earlier 13-request v3 follows. Gross D1 rows include setup and observation, not exact workload billing. Both Workers, both databases, the temporary hostname association and synthetic-secret files were removed; production remained unchanged and healthy.
 
-The user retains **Workers Free**. The [browser parsing implementation](guest-free-processing.md) is merged in PR 62 with passing required CI; further work now targets the remaining server overhead. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Production guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
 
 ## Historical integrated release status — November 4, 2026
 
@@ -205,12 +205,18 @@ drop them or infer a release approval from implementation review.
    production guest false and log/trace persistence off. Record source, build,
    dependency, config and schema hashes, isolation checks and health results.
    Provision/upload only through a separately authorized operator action.
-3. Measure supported hosted sampled CPU/isolate-memory distributions and failures for
+3. Apply the [accepted CPU-risk disposition](guest-free-release-decision.md) while
+   progressing controlled functional checks: monitor available CPU/outcome/error-count
+   analytics, actual `exceededCpu`/1102 failures and sync outcomes. Another CPU
+   optimization benchmark or proof that all samples stay below 10 ms is not required
+   to progress these checks; CPU headroom remains unproved. Preserve the existing
+   hosted memory and deployed-D1 requirements. Use supported observations for
    admitted near-cap success, parse failure, redirect, bootstrap/challenge failure,
    capability/origin rejection, session/network/global denial and six concurrent
    near-cap reads. Per-request CPU/D1 attribution and peak allocation stay null
    with reasons under the selected metrics/logs-off contract. Reconcile those older
-   stronger requirements explicitly in the operating/release decision; do not
+   stronger requirements explicitly in the operating/release decision; the CPU-risk
+   disposition does not waive other resource/privacy gates. Do not
    invent values or silently waive applicable safety. Measure usable D1 billed
    reads/writes and statements, earlier denial charges, bootstrap churn and daily
    projections, separating setup/fixture/observer/cleanup from workload costs.
@@ -227,7 +233,8 @@ drop them or infer a release approval from implementation review.
 5. Compare admitted, denied, bootstrap and cleanup costs with verified plan
    allowances and actual baseline usage. Budgets (per 600 seconds: bootstrap/
    network ten, reads/session 30, reads/network 60, reads/global 60) are
-   **provisional**. If capacity fails, keep guest false and measure proposed lower
+   **provisional**. If request/D1/memory capacity or actual functional checks fail,
+   keep guest false and investigate targeted changes, including proposed lower
    admission/concurrency budgets, smaller bounded requests/outputs or parser work
    reduction while retaining all three sources. A budget/workload revision needs
    review and new evidence; Workers Paid is an explicit operator choice, never
@@ -253,7 +260,8 @@ drop them or infer a release approval from implementation review.
 | --- | --- |
 | Controller task, whole-branch and scoped fix reviews | **ACCEPTED behind disabled flag** |
 | Exact integrated-source Linux CI | **PASS** — exact-main run 782 above |
-| Hosted CPU / shared-isolate memory / deployed D1 billing capacity | **OPEN** - v2 functional baseline passed; CPU headroom unresolved |
+| Hosted CPU | **RISK ACCEPTED for controlled release checks** — headroom unproved; actual CPU-error monitoring; no deployment/activation approval |
+| Shared-isolate memory / deployed D1 billing capacity | **OPEN** — CPU-risk disposition does not establish capacity |
 | Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
 | Real Canvas, Gradescope, Ed operator acceptance and ingress review | **OPEN** |
 | Exact production candidate checks and final deployment/activation approval | **OPEN** |

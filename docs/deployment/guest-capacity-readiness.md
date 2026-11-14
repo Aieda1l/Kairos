@@ -17,7 +17,7 @@ The latest [isolated diagnostic v8](guest-hosted-run-2026-11-14-v8.md) completed
 
 **Workers Free CPU headroom remains open** against the published 10 ms allowance. Counts match the fixed workload, but sampling interval and ingestion completeness are unknown; no per-route, cold/warm or causal comparison with the earlier 13-request v3 follows. Gross D1 rows include setup and observation, not exact workload billing. Both Workers, both databases, the temporary hostname association and synthetic-secret files were removed; production remained unchanged and healthy.
 
-The user retains **Workers Free**. The [browser parsing implementation](guest-free-processing.md) is merged in PR 62 with passing required CI; further work now targets the remaining server overhead. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Production guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
 
 ## Reproduce local evidence
 
@@ -183,7 +183,7 @@ not a claim that the local fixtures meet Free capacity.
 | Local native transport/admission/compiled routes | **PASS, local** | Main `0a44c6a` CI run 782: 81 checks plus full browser graph; older receipts below remain historical; no hosted capacity inference |
 | Implementation task, whole-branch and scoped fix reviews | **ACCEPTED** | All eight findings addressed; this does not approve public activation |
 | Exact integrated-source Linux CI | **PASS** | Exact-main run 782 linked above; 2,197 unit and 143 browser cases, full graph successful |
-| Hosted Worker CPU | **MEASURED / OPEN** | Supported sampled CPU/failure observations for near-cap success, parse failure, redirect, denial and bootstrap; explicit disposition of unsupported per-request attribution |
+| Hosted Worker CPU | **RISK ACCEPTED for controlled release checks; headroom unproved** | [Accepted CPU-risk disposition](guest-free-release-decision.md) with actual CPU/error-count and sync-outcome monitoring; no mandatory further microoptimization or all-samples-under-10-ms proof; deployment/activation approval remains separate |
 | Shared-isolate memory | **OBSERVED / OPEN** | Supported isolate-memory distributions/failures under bounded concurrency; peak allocation stays null with reason and requires explicit release disposition |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |
 | Cleanup capacity | **OPEN** | Local bounded drain/preservation probe passes; hosted cadence, deletion/index cost, sustained backlog/recovery still need evidence |
@@ -203,6 +203,8 @@ Bootstrap admission is per network, with no global bootstrap cap; the global
 source-read budget cannot bound distributed bootstrap churn or cleanup backlog.
 
 No hosted measurements, live provider checks or maintenance activation are part
-of the S4/A2/A3 evidence. If hosted measurements exceed a limit, resolve the workload
-or operating-plan decision before activation; do not silently raise guest budgets
+of the S4/A2/A3 evidence. The [current CPU-risk disposition](guest-free-release-decision.md)
+permits controlled release checks without claiming CPU headroom. Actual CPU-limit or
+functional failures require targeted investigation and a release decision; request,
+D1, memory and privacy/retention gates remain. Do not silently raise guest budgets
 or reinterpret local measurements as a passing hosted gate.
