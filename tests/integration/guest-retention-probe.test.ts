@@ -10,12 +10,12 @@ afterEach(() => database.close());
 const zero = {rateEvents: 0, runs: 0, oauthRequests: 0, bridgeRequests: 0};
 type Maintain = typeof maintainAbuseState;
 
-async function run(maintain: Maintain = maintainAbuseState, outboundAttempts = 0) {
+async function run(maintain: Maintain = maintainAbuseState, outboundAttempts = 0, db = database.db) {
   const receipts: unknown[] = [];
   const diagnostics: string[] = [];
   let disposed = false;
   const exitCode = await runGuestRetentionValidation({
-    open: async () => ({db: database.db, dispose: async () => { disposed = true; },
+    open: async () => ({db, dispose: async () => { disposed = true; },
       outboundAttempts: async () => outboundAttempts}),
     maintain,
     writeReceipt: async (receipt: unknown) => {
@@ -26,6 +26,29 @@ async function run(maintain: Maintain = maintainAbuseState, outboundAttempts = 0
   });
   return {exitCode, receipts, diagnostics, disposed};
 }
+
+it('skips only reserved _cf_KV while preserving an unrecognized _cf application table', async () => {
+  database.sqlite.exec('CREATE TABLE "_cf_KV" (id TEXT); CREATE TABLE "_cf_custom_sentinel" (value TEXT); INSERT INTO "_cf_custom_sentinel" VALUES (\'preserve-me\')');
+  const visible = database.sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' ORDER BY name").all() as {name: string}[];
+  expect(visible.map(row => row.name)).toContain('_cf_KV');
+  let attemptedReservedSelect = false;
+  const db = {
+    prepare: (sql: string) => {
+      if (sql === 'SELECT * FROM "_cf_KV"') { attemptedReservedSelect = true; throw new Error('reserved platform table cannot be selected'); }
+      return database.db.prepare(sql);
+    },
+    batch: database.db.batch.bind(database.db),
+    exec: database.db.exec.bind(database.db),
+  };
+  const result = await run(maintainAbuseState, 0, db);
+  expect(attemptedReservedSelect).toBe(false);
+  expect(result).toMatchObject({exitCode: 0, diagnostics: [], disposed: true});
+  expect(result.receipts).toHaveLength(1);
+  const snapshots = (result.receipts[0] as {snapshots: Record<string, unknown>}).snapshots;
+  expect(Object.keys(snapshots)).not.toContain('_cf_KV');
+  expect(Object.keys(snapshots)).toContain('_cf_custom_sentinel');
+  expect(database.sqlite.prepare('SELECT value FROM "_cf_custom_sentinel"').get()).toEqual({value: 'preserve-me'});
+});
 
 it('drains the real helper in independently bounded batches and emits only count/hash evidence', async () => {
   const result = await run();

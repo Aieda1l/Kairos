@@ -13,8 +13,8 @@ const names = ['rateEvents', 'runs', 'oauthRequests', 'bridgeRequests'];
 const emptyCounts = () => Object.fromEntries(names.map(name => [name, 0]));
 
 async function snapshot(db) {
-  // D1 reserves these internals; all application tables (including controls) are checked.
-  const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' ORDER BY name").all();
+  // D1 reserves these exact tables; all application tables (including controls) are checked.
+  const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_METADATA' AND name <> '_cf_KV' ORDER BY name").all();
   assert.equal(tables.success, true);
   return Object.fromEntries(await Promise.all(tables.results.map(async ({name}) => {
     const result = await db.prepare(`SELECT * FROM ${quote(name)}`).all();
