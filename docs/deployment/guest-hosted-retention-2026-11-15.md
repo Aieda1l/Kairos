@@ -7,6 +7,8 @@ probe-only reserved-table inventory correction. All 22 application-table
 snapshots matched expected contents after each invocation. See the
 [native probe](guest-retention-validation.md).
 
+The passing run used only D1 management and query calls for the disposable test.
+
 ## Deletion and preservation
 
 | Invocation | Rate events | Runs | OAuth requests | Bridge requests |
@@ -49,7 +51,7 @@ unmeasured by this run.
 
 | Attempt | Date (UTC) | D1 API calls | Result |
 | --- | --- | ---: | --- |
-| First | November 14 | 290 | The first snapshot read returned HTTP 400 with D1 code 7500 before dry run. The failed SQL template was unavailable. A separate regression reproduced the probe's omission of the reserved `_cf_KV` exclusion. |
+| First | November 14 | 290 | An inventory observation returned HTTP 400 with D1 code 7500 before dry run. The failed SQL template was unavailable. A separate regression reproduced the probe's omission of the reserved `_cf_KV` exclusion. |
 | Second | November 15 | 174 | A local journal failure interrupted seeding before snapshots or apply. The original filesystem error code was unavailable. The executor reported cleanup unconfirmed, and the independent lookup confirmed deletion. |
 | Third | November 15 | 448 | Passed after adding bounded local journal retries and avoiding reads of the live journal. The run needed zero journal retries. |
 
