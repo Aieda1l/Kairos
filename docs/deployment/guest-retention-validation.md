@@ -24,7 +24,7 @@ also rejects a run that crosses the future fixture boundary. Every dry-run/apply
 compares complete application-table contents with exact expected snapshots.
 Expected deletions come from the declared fixture set, independently of reported
 counts. Actual SQL absence checks verify the expired backlog drained. Internal
-`sqlite_*` and D1-reserved `_cf_METADATA` tables are excluded.
+`sqlite_*` and the D1-reserved `_cf_METADATA` and `_cf_KV` tables are excluded.
 
 The rate backlog drains with a maximum of four cleanup invocations and a final
 idempotent apply. Every helper result must report an integer between 0 and 100
@@ -83,8 +83,10 @@ sanitized errors/disposal. Owned-file ESLint and `tsc --noEmit` exited 0.
 
 ## Release limits
 
-This establishes bounded logical cleanup on disposable native local D1. It does
-not establish a hosted maintenance cadence, sustained capacity, physical retention
+The local probe establishes bounded logical cleanup on disposable native D1.
+The [November 15 hosted check](guest-hosted-retention-2026-11-15.md) separately
+verified bounded logical deletion, preservation and D1 API row counts on an
+isolated synthetic database. The local run does not establish a hosted maintenance cadence, sustained capacity, physical retention
 deadline, backup/recovery-history erasure, hosted CPU/shared-isolate memory,
 deployed D1 billing or deletion from a live database. Recorded local elapsed times
 are not hosted CPU measurements. Other cleanup tables contain small eligible

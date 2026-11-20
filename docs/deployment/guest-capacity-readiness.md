@@ -11,13 +11,15 @@ receipt identities, local suite results, CI source/graph coverage and remaining
 review/live gates. This page preserves the earlier S4 measurements below; their
 precommit status is not retroactively changed by later passing integrated checks.
 
-## Current hosted status — November 14, 2026
+## Current hosted status — November 15, 2026
 
 The latest [isolated diagnostic v8](guest-hosted-run-2026-11-14-v8.md) completed **22/22 physical requests and 13 logical flows** with the browser-parser/receipt-approval candidate. All 21 protected table digests were unchanged, with 37 anonymous and ten fixture admissions. App script/status CPU samples report **15.475 ms P50 and 172.652 ms P99**; observed V8 P99 is **35.268 MiB**, not peak allocation.
 
 **Workers Free CPU headroom remains open** against the published 10 ms allowance. Counts match the fixed workload, but sampling interval and ingestion completeness are unknown; no per-route, cold/warm or causal comparison with the earlier 13-request v3 follows. Gross D1 rows include setup and observation, not exact workload billing. Both Workers, both databases, the temporary hostname association and synthetic-secret files were removed; production remained unchanged and healthy.
 
-The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Recurring production maintenance and retention bounds, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+
+The November 15 hosted retention check drained 206 expired rate events in three bounded applies, verified preservation across 22 application tables and confirmed deletion of all three disposable test databases. The three applies reported 1,350 rows read and 210 rows written. See the [hosted retention report](guest-hosted-retention-2026-11-15.md).
 
 ## Reproduce local evidence
 
@@ -43,7 +45,7 @@ raw provider errors.
 
 PR 53 merged as `0a44c6a`. Its required PR CI and automatic [exact-main CI run 782](https://github.com/Aieda1l/Kairos/actions/runs/41777091070) passed, including 2,197 unit tests, all 143 browser cases, builds and 81 sealed native guest checks. The ECC integration correction `be6b762` changes Canvas structural parsing and malformed-result accounting; its focused 98-test suite and independent fix review passed, followed by the new integrated CI. The [acceptance ledger](guest-acceptance.md) records exact identities and the native receipt's dirty-source qualification. Older local receipts below remain tied to their measured source and do not transfer to the correction.
 
-The [disposable local retention probe](guest-retention-validation.md) now checks actual deletion and preservation with the real helper and migrations. It does not establish hosted cost, a sustainable cadence, maximum retention or recovery-history erasure. That local probe adds no deployed CPU/memory/D1 or live-provider evidence; the separate v2 observations above do not establish sustainable retention. Guest activation remains off.
+The [disposable local retention probe](guest-retention-validation.md) checks deletion and preservation with the real helper and migrations. The November 15 hosted report adds D1 API observations for the same synthetic backlog.
 
 The historical offline [hosted diagnostic package](guest-hosted-test-package.md) has two Workers/two disposable D1 templates, explicit package/identity/approval gates, private fixtures, atomic counters and a bounded driver. Local H2 verification passed 36 focused tests and the formal native proof: 13 complete requests, ten fixture admissions, 28 new anonymous rows, all 21 protected tables unchanged, and zero outbound/asset sink calls. These are local proofs, distinct from both the first stopped hosted upload/setup and the subsequently passing v2 functional baseline. The native ingress, self-signed loopback connector and proof instrumentation remain separate from upload files. No real-provider guest acceptance was established.
 
@@ -186,8 +188,8 @@ not a claim that the local fixtures meet Free capacity.
 | Hosted Worker CPU | **RISK ACCEPTED for controlled release checks; headroom unproved** | [Accepted CPU-risk disposition](guest-free-release-decision.md) with actual CPU/error-count and sync-outcome monitoring; no mandatory further microoptimization or all-samples-under-10-ms proof; deployment/activation approval remains separate |
 | Shared-isolate memory | **OBSERVED / OPEN** | Supported isolate-memory distributions/failures under bounded concurrency; peak allocation stays null with reason and requires explicit release disposition |
 | Denial/bootstrap capacity | **OPEN** | Deployed D1 statements and billed rows under distributed bootstrap and denied traffic; upstream cap alone is insufficient |
-| Cleanup capacity | **OPEN** | Local bounded drain/preservation probe passes; hosted cadence, deletion/index cost, sustained backlog/recovery still need evidence |
-| Physical retention | **OPEN** | Verified physical deletion mechanism/cadence and retention bounds; `purge_after_ms` alone does not prove deletion |
+| Hosted cleanup mechanism | **PASS, isolated D1** | Bounded deletion, full-table preservation and observed D1 API rows for a synthetic backlog. See the [hosted retention report](guest-hosted-retention-2026-11-15.md). |
+| Production cleanup capacity and retention | **OPEN** | Recurring operation, sustained backlog and outage recovery, and a supportable retention bound |
 | Operator live acceptance | **OPEN** | Separately authorized Canvas, Gradescope and Ed acceptance, ingress configuration and operational review |
 
 Physical expiry is only eligibility: the existing
