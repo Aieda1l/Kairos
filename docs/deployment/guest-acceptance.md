@@ -12,13 +12,15 @@ retain the full Canvas, Gradescope and Ed first-release scope. Calendar writes,
 cold-start offline/PWA, cross-device sync and account transfer remain deferred.
 Hosted M7 acceptance remains governed by [current readiness](readiness-milestone-7.md).
 
-## Current release status — November 14, 2026
+## Current release status — November 15, 2026
 
 The latest [isolated diagnostic v8](guest-hosted-run-2026-11-14-v8.md) completed **22/22 physical requests and 13 logical flows** with the browser-parser/receipt-approval candidate. All 21 protected table digests were unchanged, with 37 anonymous and ten fixture admissions. App script/status CPU samples report **15.475 ms P50 and 172.652 ms P99**; observed V8 P99 is **35.268 MiB**, not peak allocation.
 
 **Workers Free CPU headroom remains open** against the published 10 ms allowance. Counts match the fixed workload, but sampling interval and ingestion completeness are unknown; no per-route, cold/warm or causal comparison with the earlier 13-request v3 follows. Gross D1 rows include setup and observation, not exact workload billing. Both Workers, both databases, the temporary hostname association and synthetic-secret files were removed; production remained unchanged and healthy.
 
-The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Hosted retention/cadence, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+The user retains **Workers Free** and accepted the [CPU-risk release decision](guest-free-release-decision.md): keep the merged [browser parsing implementation](guest-free-processing.md), stop speculative microoptimizations, and progress controlled functional release checks with actual CPU-error monitoring. An all-requests-below-10-ms proof is no longer a prerequisite for those checks; CPU headroom remains unproved. Recurring production maintenance and retention bounds, live-provider guest acceptance and the reviewed deployment/activation decision remain open. Configured guest defaults stay false. Completion after closing Kairos remains deferred. The v8 packet is consumed and cleaned; no additional cloud action or release follows from this result.
+
+The November 15 hosted retention check verified bounded logical deletion and protected-data preservation in isolated synthetic D1. Three applies drained 206 expired rate events, and all three disposable test databases were confirmed deleted. See the [hosted retention report](guest-hosted-retention-2026-11-15.md).
 
 ## Historical integrated release status — November 4, 2026
 
@@ -221,15 +223,14 @@ drop them or infer a release approval from implementation review.
    reads/writes and statements, earlier denial charges, bootstrap churn and daily
    projections, separating setup/fixture/observer/cleanup from workload costs.
    Retain sanitized count/metric receipts; exclude credential/body/error logs.
-4. In disposable D1, test the existing bounded cleanup with expired anonymous
-   rows, dry-run then explicit apply, and verify physical absence while preserving
-   unexpired/control/protected records. Measure deletion/index cost, backlog,
-   outage catch-up and a sustainable cadence. Publish a maximum retention bound
-   including scheduler failures and recovery. Admission eligibility is one hour;
-   existing hourly workflow/batch 100 is gated configuration, not proof of active
-   or sufficient deletion. Account for distributed bootstrap churn as well as
-   source reads: bootstrap has no global cap. Activation
-   of maintenance requires a separate reviewed operator decision.
+4. Use the disposable D1 deletion, preservation and row observations to assess
+   production cleanup. Confirm recurring operation, bound backlog and outage
+   recovery, and establish a sustainable cadence before publishing a retention
+   promise. Rate events become eligible one hour after admission. The hourly
+   workflow is gated and deletes at most 100 rate events per apply. Account for
+   distributed bootstrap churn, which has no global cap, as well as source
+   reads. Maintenance activation requires a separate reviewed operator decision.
+   See the [hosted retention report](guest-hosted-retention-2026-11-15.md).
 5. Compare admitted, denied, bootstrap and cleanup costs with verified plan
    allowances and actual baseline usage. Budgets (per 600 seconds: bootstrap/
    network ten, reads/session 30, reads/network 60, reads/global 60) are
@@ -262,7 +263,8 @@ drop them or infer a release approval from implementation review.
 | Exact integrated-source Linux CI | **PASS** — exact-main run 782 above |
 | Hosted CPU | **RISK ACCEPTED for controlled release checks** — headroom unproved; actual CPU-error monitoring; no deployment/activation approval |
 | Shared-isolate memory / deployed D1 billing capacity | **OPEN** — CPU-risk disposition does not establish capacity |
-| Cleanup capacity, physical retention bound and live deletion evidence | **OPEN** |
+| Hosted cleanup mechanism and row counters | **PASS, isolated D1** |
+| Production maintenance cadence, sustained cleanup capacity and retention bound | **OPEN** |
 | Real Canvas, Gradescope, Ed operator acceptance and ingress review | **OPEN** |
 | Exact production candidate checks and final deployment/activation approval | **OPEN** |
 

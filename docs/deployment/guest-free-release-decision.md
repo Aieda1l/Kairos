@@ -26,15 +26,22 @@ Kairos already separates a bounded raw source relay, parsing in a foreground bro
 
 Further splitting is a possible targeted response to demonstrated failures, not a selected change. Each extra request repeats framework, authentication/capability and admission checks and consumes request, D1 and shared global budgets. A successful source read already uses two global claims, so the [sixty-claim pool permits at most thirty complete reads per 600 seconds](guest-free-processing.md). Splitting could reduce variable work per invocation while increasing total work and reducing useful throughput. Any redesign must retain the existing deadlines, privacy, receipt validation and stale-result fences. No claim is made here about Service Binding CPU accounting.
 
-## Fresh local retention evidence
+## November 14 local retention evidence
 
 Before these documentation edits, `npm run verify:guest-retention` passed locally on clean main `cd23d75873b4309084e2434080095f078ff46170`, with receipt `source.dirty:false`. The native disposable-D1 probe drained 205 expired anonymous rows to zero in three apply invocations and made zero outbound requests. It exercises deletion and preservation checks, not production maintenance.
 
 Ignored local receipt: `artifacts/guest-retention/2026-11-14T19-41-32-603Z-db7d8084-d470-4e4c-a9cb-0904c06671c8-native/receipt.json`; SHA-256 `b86743ff1ded5a682117685d88142c8ab50806b0c15b39fb0c233a5135cce08b`. This is local-only evidence, not a published CI artifact. It does not establish hosted cadence, a physical-retention bound, recovery-history deletion or deployed D1 billing capacity. See the [retention validation boundary](guest-retention-validation.md).
 
+## November 15 hosted retention evidence
+
+The isolated D1 check verified bounded logical deletion and preserved protected
+data across 22 application tables. Three applies drained 206 expired rate events
+and reported 1,350 rows read and 210 rows written. The report records both prior
+failures and all three test database deletions. See the [hosted retention report](guest-hosted-retention-2026-11-15.md).
+
 ## Next release checks and approvals
 
-1. Prepare the hosted retention/cadence check: verify physical deletion, protected/unexpired preservation, deletion/index cost, backlog catch-up and failure/recovery bounds. Establish a sustainable cadence and published retention promise before treating the privacy gate as closed. Executing hosted checks or activating maintenance requires its own reviewed operator authorization.
+1. Establish recurring production maintenance and a sustainable cadence. Use the hosted row observations to evaluate sustained workload, backlog and outage recovery before publishing a retention promise. Maintenance activation requires separate reviewed operator authorization.
 2. Separately authorize operator acceptance with real Canvas, Gradescope and Ed accounts and browser/session lifecycle checks. Include partial source results, Firefox/provider-session behavior, memory-only reload, remembering/forgetting, disconnect/reset/import, capability expiry, account separation and report-transition interaction. Use sanitized stage/count results and monitor actual CPU outcomes and functional failures. Fixture success cannot substitute for this acceptance.
 3. Freeze the concrete production candidate and retain exact-source CI, build/config/schema compatibility, operational/privacy and resource evidence, rollback target and reviewed approval packet. The CPU-risk decision accompanies that packet without turning unproved headroom into a PASS. Request explicit final deployment/activation approval; keep guest defaults false until the separately approved change. Broader M7 acceptance remains separate.
 
