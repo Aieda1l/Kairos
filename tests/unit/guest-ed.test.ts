@@ -37,6 +37,17 @@ describe("bounded guest Ed readers",()=>{
     expect(result).toMatchObject({ok:true,schemaVersion:1,requestId,checkedAt,courseId:"12"});
     expect(result.lessons[0]).toEqual({source:"ed",externalId:"1",courseId:"12",title:"Lesson 1",releaseAt:null,dueAt:checkedAt,lateDueAt:null,status:"pending",sourceStatusText:"unattempted",gradeScore:null,gradeMax:null,gradeDisplay:null,sourceUrl:null,sourceUpdatedAt:null});
   });
+  it("normalizes explicit lesson timestamps to UTC in the Ed reader",async()=>{
+    const payload=edLessons(1,{
+      available_at:"2026-10-25T09:30:00+00:00",
+      effective_due_at:"2026-10-25T23:45:00-08:00",
+      updated_at:"2026-10-25 09:30:00+0530",
+    });
+    const result=await readGuestEdLessons({...input,courseId:"12"},sourceContext(async()=>Response.json(payload)));
+    expect(result.lessons[0]).toMatchObject({
+      releaseAt:"2026-10-25T09:30:00.000Z",dueAt:"2026-10-26T07:45:00.000Z",sourceUpdatedAt:"2026-10-25T04:00:00.000Z",
+    });
+  });
   it("accepts exact course and visible lesson limits",async()=>{
     expect((await readGuestEdCourses(input,sourceContext(async()=>Response.json(edCourses(500))))).courses).toHaveLength(500);
     expect((await readGuestEdLessons({...input,courseId:"12"},sourceContext(async()=>Response.json(edLessons(1000))))).lessons).toHaveLength(1000);
