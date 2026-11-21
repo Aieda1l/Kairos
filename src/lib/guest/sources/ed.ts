@@ -1,5 +1,5 @@
 import "server-only";
-import {normalizeSourceAssignment} from "@/lib/assignments/normalize";
+import {normalizeGuestEdLesson} from "./ed-lesson";
 import {BoundedBodyError,readBoundedUtf8} from "@/lib/http/bounded-body";
 import {EdSourceError} from "@/lib/sources/ed/errors";
 import {parseEdCourses,parseEdLessons} from "@/lib/sources/ed/parser";
@@ -76,11 +76,7 @@ export async function readGuestEdLessons(input:GuestEdLessonsRequest,context:Gue
       const parsed=parseEdLessons(payload,{id:"",sourceConnectionId:"",externalCourseId:input.courseId,shortName:null,fullName:"Ed",term:null,year:null,enabled:true,firstSeenAt:context.checkedAt,lastSeenAt:context.checkedAt});
       scope.check();
       if(parsed.length>GUEST_ED_MAX_VISIBLE_LESSONS)throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");
-      const lessons=parsed.map(row=>{
-        const {courseName,...normalized}=normalizeSourceAssignment("ed",row);
-        void courseName;
-        return {...normalized,source:"ed" as const,courseId:input.courseId,sourceUrl:null};
-      });
+      const lessons=parsed.map(row=>normalizeGuestEdLesson(row,input.courseId));
       const result={ok:true as const,schemaVersion:1 as const,requestId:context.requestId,checkedAt:context.checkedAt,courseId:input.courseId,lessons};
       const validated=validateGuestEdLessonsResponse(result);
       if(!validated.success&&validated.reason==="oversize")throw new GuestSourceError("SOURCE_RESULT_TOO_LARGE");

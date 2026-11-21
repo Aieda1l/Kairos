@@ -1,4 +1,5 @@
 import {GuestSourceError} from './errors';
+import {normalizeGuestEdLesson} from './ed-lesson';
 import {GuestDataError} from '../errors';
 import type {GuestSourceParseInput} from './wire';
 import {validateGuestCanvasFeedResponse,validateGuestEdCoursesResponse,validateGuestEdLessonsResponse,type GuestCanvasFeedResponse,type GuestEdCoursesResponse,type GuestEdLessonsResponse} from './contracts';
@@ -68,7 +69,7 @@ export async function parseGuestSourceBytes(input:GuestSourceParseInput,options:
   if(Array.isArray(rows)){if(rows.length>GUEST_ED_MAX_RAW_LESSONS)throw new GuestSourceError('SOURCE_RESULT_TOO_LARGE');for(const row of rows){check();for(const k of ['id','course_id','module_id'])numericId(record(row)?.[k]);}}
   const parsed=parseEdLessons(payload,{id:'',sourceConnectionId:'',externalCourseId:data.courseId,shortName:null,fullName:'Ed',term:null,year:null,enabled:true,firstSeenAt:data.checkedAt,lastSeenAt:data.checkedAt});check();
   if(parsed.length>GUEST_ED_MAX_VISIBLE_LESSONS)throw new GuestSourceError('SOURCE_RESULT_TOO_LARGE');
-  const lessons=parsed.map(row=>{check();const {courseName,...n}=normalizeSourceAssignment('ed',row);void courseName;return {...n,source:'ed' as const,courseId:data.courseId,sourceUrl:null};});
+  const lessons=parsed.map(row=>{check();return normalizeGuestEdLesson(row,data.courseId);});
   const result=validateGuestEdLessonsResponse({...fields,courseId:data.courseId,lessons});check();
   if(!result.success)throw new GuestSourceError(result.reason==='oversize'?'SOURCE_RESULT_TOO_LARGE':'ED_PARSE_ERROR');
   return result.data;

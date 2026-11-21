@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {parseGuestSourceBytes} from "@/lib/guest/sources/parse";
 import {GuestSourceError} from '@/lib/guest/sources/errors';
 import {cases,bytesForCase,requestId,checkedAt} from "../helpers/guest-parser-cases.mjs";
+import {edLessons} from '../helpers/guest-source-fixtures';
 import golden from "../helpers/guest-parser-golden.json";
 afterEach(()=>vi.restoreAllMocks());
 
@@ -12,6 +13,28 @@ describe("portable guest parser frozen hosted results",()=>{
   let actual:unknown;
   try{const result=await parseGuestSourceBytes({operation:item.operation,requestId,checkedAt,bytes,...(item.operation==='ed-lessons'?{courseId:item.courseId}:{})} as never);actual=item.digestOnly?{sha256:createHash('sha256').update(JSON.stringify(result)).digest('hex'),count:('assignments'in result?result.assignments:'courses'in result?result.courses:result.lessons).length}:result;}catch(error){actual={error:(error as {code?:string}).code};}
   expect(actual).toEqual((golden as Record<string,unknown>)[item.name]);
+ });
+ it('converts explicit Ed offsets to UTC before validating the lesson response',async()=>{
+  const payload=edLessons(1,{
+   effective_available_at:'2026-10-25T09:30:00+00:00',
+   due_at:'2026-10-25T23:45:00-08:00',
+   updated_at:'2026-10-25 09:30:00+0530',
+  });
+  const bytes=new TextEncoder().encode(JSON.stringify(payload)).buffer;
+  await expect(parseGuestSourceBytes({operation:'ed-lessons',courseId:'12',requestId,checkedAt,bytes})).resolves.toMatchObject({
+   lessons:[{releaseAt:'2026-10-25T09:30:00.000Z',dueAt:'2026-10-26T07:45:00.000Z',sourceUpdatedAt:'2026-10-25T04:00:00.000Z'}],
+  });
+ });
+ it('preserves existing UTC precision and nullable Ed timestamps',async()=>{
+  const payload=edLessons(1,{available_at:'2026-10-25T09:30:00.123456Z',due_at:null});
+  const bytes=new TextEncoder().encode(JSON.stringify(payload)).buffer;
+  await expect(parseGuestSourceBytes({operation:'ed-lessons',courseId:'12',requestId,checkedAt,bytes})).resolves.toMatchObject({
+   lessons:[{releaseAt:'2026-10-25T09:30:00.123456Z',dueAt:null,sourceUpdatedAt:null}],
+  });
+ });
+ it.each(['2026-10-25T09:30:00','2026-02-30 09:30:00+0000','2026-10-25T09:30:00+24:00','yesterday'])('rejects invalid Ed timestamp %s',async due_at=>{
+  const bytes=new TextEncoder().encode(JSON.stringify(edLessons(1,{due_at}))).buffer;
+  await expect(parseGuestSourceBytes({operation:'ed-lessons',courseId:'12',requestId,checkedAt,bytes})).rejects.toMatchObject({code:'ED_PARSE_ERROR'});
  });
  it('rejects an aborted job before parsing',async()=>{
   const c=new AbortController();c.abort();
