@@ -56,6 +56,16 @@ The checker reads only aggregate scheduled invocation buckets for that Worker. I
 
 Keep the disposable Worker available until the live check has observed a healthy tick and a fixed synthetic failure, and the operator confirms delivery of the scheduled failure notification. Disarm the pilot and remove disposable resources after evidence is recorded. Production scheduling, retention and notification cadence need separate review.
 
+### Cloudflare watchdog pilot
+
+The first scheduled GitHub pilot missed its observation window. A separate disposable Worker then delivered one scheduled message to the verified Kairos support inbox. The watchdog pilot combines the metrics checker with that verified transport.
+
+`scripts/maintenance-cron-watchdog-worker.mjs` requires both pilot activation flags and a finite observation window. Give it a dedicated disposable state database, the account-scoped Analytics Read token as a Worker secret, and an email binding restricted to the verified destination. Keep it off public routes with stored logs disabled. This pilot has no assignment or account data bindings.
+
+A validated observation counts failed and missing due invocations separately. The scheduled pilot can send one message with the counts and UTC window. The database claim is written before sending so overlapping invocations cannot resend it. An uncertain send is recorded for operator review. The recipient confirms actual arrival separately from the provider's acknowledgment. An unavailable metrics response has its own code and cannot become a missing-invocation alert.
+
+Run `node scripts/verify-workerd-cron-watchdog.mjs` for the local scheduled-worker check with simulated email and a disposable database. Verify live metrics, receipt and removal against disposable resources before considering a production schedule. A monitor running on Cloudflare still needs an independent signal to detect an outage that stops both Cron triggers.
+
 ## Daily capacity review
 
 Review Cloudflare **Workers & Pages → kairos-production → Metrics** for requests, CPU distributions, error/invocation outcomes, and subrequests. Review **D1 → production database → Metrics/Analytics** for rows read/written and storage. Use the dashboard's actual daily UTC windows and account-wide totals. Record sanitized aggregate measurements and timestamp; never export user tables for capacity measurement.

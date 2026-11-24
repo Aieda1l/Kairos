@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { checkMaintenanceCron } from '../../scripts/check-maintenance-cron.mjs';
+import { observeMaintenanceCron } from '../../scripts/lib/maintenance-cron-observation.mjs';
 
 const nowMs = Date.parse('2026-11-24T09:45:00.000Z');
 const env = {
@@ -27,7 +28,7 @@ it('queries only due slots and sends authorization only to the analytics endpoin
   expect(fetchImpl).toHaveBeenCalledTimes(1);
   const [url, request] = fetchImpl.mock.calls[0];
   expect(url).toBe('https://api.cloudflare.com/client/v4/graphql');
-  expect(request).toMatchObject({ method: 'POST', redirect: 'error', cache: 'no-store' });
+  expect(request).toMatchObject({ method: 'POST', redirect: 'manual', cache: 'no-store' });
   expect(new Headers(request?.headers).get('authorization')).toBe('Bearer '+env.CLOUDFLARE_CRON_ANALYTICS_TOKEN);
   const body = JSON.parse(String(request?.body));
   expect(body.query).toContain('eventType: "cron"');
@@ -46,6 +47,14 @@ it('distinguishes an observed failure from an overdue tick', async () => {
   expect(await checkMaintenanceCron({ env, nowMs, fetchImpl: unhealthy })).toMatchObject({ code: 'CRON_FAILED' });
   const missing = () => Promise.resolve(watch([sample('2026-11-24T09:31:00Z')]));
   expect(await checkMaintenanceCron({ env, nowMs, fetchImpl: missing })).toMatchObject({ code: 'CRON_OVERDUE' });
+});
+
+it('rejects analytics redirects before following them', async () => {
+  const fetchImpl = vi.fn<typeof fetch>(async () => new Response(null, {
+    status: 307, headers: { location: 'https://wrong-host.invalid/' },
+  }));
+  expect(await checkMaintenanceCron({ env, nowMs, fetchImpl })).toMatchObject({ code: 'CRON_METRICS_UNAVAILABLE' });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
 });
 
 it.each([403, 500])('returns a fixed result on analytics HTTP %i', async (status) => {
@@ -75,4 +84,18 @@ it('stops querying once a bounded verification window has expired', async () => 
   const result = await checkMaintenanceCron({ env, nowMs: nowMs + 12 * 60 * 60_000, fetchImpl });
   expect(result).toEqual({ code: 'CRON_WINDOW_EXPIRED' });
   expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('reports counts for failure and missing in the same settled window', async () => {
+  const fetchImpl = async () => watch([sample('2026-11-24T09:31:00Z', 'scriptThrewException')]);
+  const legacy = {
+    code: 'CRON_FAILED',
+    dueTicks: 2,
+    fromUtc: '2026-11-24T09:30:00.000Z',
+    throughUtc: '2026-11-24T09:31:00.000Z',
+  };
+  expect(await observeMaintenanceCron({ env, nowMs, fetchImpl })).toEqual({
+    ...legacy, failedTicks: 1, missingTicks: 1,
+  });
+  expect(await checkMaintenanceCron({ env, nowMs, fetchImpl })).toEqual(legacy);
 });

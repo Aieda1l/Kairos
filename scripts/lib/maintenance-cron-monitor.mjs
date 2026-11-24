@@ -14,7 +14,11 @@ function isDimensionLabel(value) {
   return typeof value === 'string' && value.length > 0 && value === value.trim();
 }
 
-export function classifyCronMetrics(payload, {
+export function classifyCronMetrics(payload, options) {
+  return { code: summarizeCronMetrics(payload, options).code };
+}
+
+export function summarizeCronMetrics(payload, {
   worker, expectedTicks, nowMs, graceMs, limit,
 } = {}) {
   if (!isDimensionLabel(worker)
@@ -57,9 +61,18 @@ export function classifyCronMetrics(payload, {
     successes.set(tick, status === 'success' && invocationErrors === 0);
   }
 
-  const settledTicks = [...ticks].filter((tick) => nowMs - tick >= graceMs);
-  if (settledTicks.length === 0) return { code: 'CRON_NOT_DUE' };
-  if (settledTicks.some((tick) => successes.get(tick) === false)) return { code: 'CRON_FAILED' };
-  if (settledTicks.some((tick) => !successes.has(tick))) return { code: 'CRON_OVERDUE' };
-  return { code: 'CRON_OK' };
+  let settledTicks = 0;
+  let failedTicks = 0;
+  let missingTicks = 0;
+  for (const tick of ticks) {
+    if (nowMs - tick < graceMs) continue;
+    settledTicks++;
+    if (successes.get(tick) === false) failedTicks++;
+    if (!successes.has(tick)) missingTicks++;
+  }
+  if (settledTicks === 0) return { code: 'CRON_NOT_DUE' };
+  const counts = { failedTicks, missingTicks };
+  if (failedTicks > 0) return { code: 'CRON_FAILED', ...counts };
+  if (missingTicks > 0) return { code: 'CRON_OVERDUE', ...counts };
+  return { code: 'CRON_OK', ...counts };
 }
