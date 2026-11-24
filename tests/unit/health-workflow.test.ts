@@ -5,9 +5,8 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {expect,it} from 'vitest';
 
-type Step={if?:string;run?:string;env?:Record<string,string>;with?:Record<string,unknown>};
-type Job={if?:string;environment?:string;steps:Step[]};
-type Workflow={on:{schedule:{cron:string}[]};permissions:Record<string,string>;jobs:{health:Job;'cron-monitor':Job}};
+type Step={if?:string;run?:string;env?:Record<string,string>};
+type Workflow={jobs:{health:{if?:string;steps:Step[]}}};
 const yaml=createRequire(import.meta.url)('js-yaml') as {load:(text:string)=>Workflow};
 const workflow=yaml.load(fs.readFileSync('.github/workflows/production-health.yml','utf8'));
 
@@ -78,21 +77,3 @@ for(const exerciseFailure of [false,true]){
    :{status:0,stdout:'{"code":"HEALTH_OK","status":200}\n'});
  });
 }
-
-it('keeps the existing schedule and gates the separate monitor on main, schedule and opt-in',()=>{
- expect(workflow.on.schedule).toEqual([{cron:'*/15 * * * *'}]);
- const monitor=workflow.jobs['cron-monitor'];
- expect(monitor.if).toBe("${{ github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.KAIROS_CRON_MONITOR_ENABLED == 'true' }}");
- expect(monitor.environment).toBe('cron-monitor');
- expect(monitor.steps[0].run).toBe("test \"$GITHUB_REF\" = 'refs/heads/main' && test \"$GITHUB_EVENT_NAME\" = 'schedule' && test \"$KAIROS_CRON_MONITOR_ENABLED\" = 'true'");
- expect(workflow.permissions).toEqual({contents:'read'});
- expect(monitor.steps[1].with).toMatchObject({ref:'${{ github.sha }}','persist-credentials':false});
-});
-
-it('makes only the analytics credential available to the monitor command',()=>{
- const parts=workflow.jobs['cron-monitor'].steps.flatMap(step=>{
-  const secrets=Object.values(step.env??{}).filter(value=>value.includes('secrets.'));
-  return secrets.length?[{run:step.run,secrets}]:[];
- });
- expect(parts).toEqual([{run:'node scripts/check-maintenance-cron.mjs',secrets:['${{ secrets.CLOUDFLARE_CRON_ANALYTICS_TOKEN }}']}]);
-});

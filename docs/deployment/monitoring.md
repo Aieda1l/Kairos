@@ -40,7 +40,7 @@ The operator confirmed on2026-10-13 that **both alerts/email notifications work*
 
 ## Scheduled cleanup monitor pilot
 
-The scheduled cleanup monitor starts disabled. It runs as a separate job in the existing production-health workflow on scheduled `main` runs when the repository variable `KAIROS_CRON_MONITOR_ENABLED` is exactly `true`. Enable it for a disposable target after reviewing the configuration and the notification route. Keep the existing production-maintenance schedule and its approval policy in place during the pilot.
+The scheduled cleanup monitor starts disabled. The dedicated `maintenance-cron-monitor.yml` workflow runs on scheduled or manually dispatched `main` runs when the repository variable `KAIROS_CRON_MONITOR_ENABLED` is exactly `true`. A manual run can verify the query and credential. A scheduled run tests unattended delivery. Enable it for a disposable target after reviewing the configuration and the notification route. Keep the existing public health and production maintenance workflows in place during the pilot.
 
 The `cron-monitor` GitHub environment uses a custom deployment-branch policy restricted to the `main` branch. It uses an account-restricted Cloudflare token with only **Account Analytics Read** as its `CLOUDFLARE_CRON_ANALYTICS_TOKEN` secret. Set these configuration values in the environment.
 

@@ -1,0 +1,42 @@
+name: Kairos Scheduled Cleanup Monitor
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-maintenance-cron-monitor
+  cancel-in-progress: false
+
+jobs:
+  cron-monitor:
+    if: ${{ github.ref == 'refs/heads/main' && vars.KAIROS_CRON_MONITOR_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: cron-monitor
+    steps:
+      - name: Require exact main and explicit monitor activation
+        shell: bash
+        env:
+          KAIROS_CRON_MONITOR_ENABLED: ${{ vars.KAIROS_CRON_MONITOR_ENABLED }}
+        run: test "$GITHUB_REF" = 'refs/heads/main' && test "$KAIROS_CRON_MONITOR_ENABLED" = 'true'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check scheduled cleanup metrics
+        env:
+          CLOUDFLARE_CRON_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_CRON_ANALYTICS_TOKEN }}
+          CLOUDFLARE_CRON_ANALYTICS_ACCOUNT_ID: ${{ vars.CLOUDFLARE_CRON_ANALYTICS_ACCOUNT_ID }}
+          KAIROS_CRON_MONITOR_WORKER: ${{ vars.KAIROS_CRON_MONITOR_WORKER }}
+          KAIROS_CRON_MONITOR_FIRST_TICK_UTC: ${{ vars.KAIROS_CRON_MONITOR_FIRST_TICK_UTC }}
+          KAIROS_CRON_MONITOR_LAST_TICK_UTC: ${{ vars.KAIROS_CRON_MONITOR_LAST_TICK_UTC }}
+          KAIROS_CRON_MONITOR_INTERVAL_MINUTES: ${{ vars.KAIROS_CRON_MONITOR_INTERVAL_MINUTES }}
+        run: node scripts/check-maintenance-cron.mjs
