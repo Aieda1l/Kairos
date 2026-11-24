@@ -38,6 +38,24 @@ After this workflow is available, run it manually with `exercise_failure=true`. 
 
 The operator confirmed on2026-10-13 that **both alerts/email notifications work**. Cloudflare and GitHub notification delivery/configuration are operator-confirmed working. This does not establish activation or delivery from the new unpublished health workflow; its post-release exercise remains a separate check.
 
+## Scheduled cleanup monitor pilot
+
+The scheduled cleanup monitor starts disabled. The dedicated `maintenance-cron-monitor.yml` workflow runs on scheduled or manually dispatched `main` runs when the repository variable `KAIROS_CRON_MONITOR_ENABLED` is exactly `true`. A manual run can verify the query and credential. A scheduled run tests unattended delivery. Enable it for a disposable target after reviewing the configuration and the notification route. Keep the existing public health and production maintenance workflows in place during the pilot.
+
+The `cron-monitor` GitHub environment uses a custom deployment-branch policy restricted to the `main` branch. It uses an account-restricted Cloudflare token with only **Account Analytics Read** as its `CLOUDFLARE_CRON_ANALYTICS_TOKEN` secret. Set these configuration values in the environment.
+
+| Variable | Value |
+| --- | --- |
+| `CLOUDFLARE_CRON_ANALYTICS_ACCOUNT_ID` | Kairos Cloudflare account ID |
+| `KAIROS_CRON_MONITOR_WORKER` | Exact name of the isolated scheduled Worker |
+| `KAIROS_CRON_MONITOR_FIRST_TICK_UTC` | First expected tick, aligned to the UTC minute |
+| `KAIROS_CRON_MONITOR_LAST_TICK_UTC` | Last expected tick for the bounded pilot, on the same cadence |
+| `KAIROS_CRON_MONITOR_INTERVAL_MINUTES` | Interval in minutes that evenly divides an hour and matches the Worker schedule |
+
+The checker reads only aggregate scheduled invocation buckets for that Worker. It allows ten minutes for metrics ingestion and looks back at most twelve hours. A failure, missing due bucket, ambiguous result, or unavailable metrics makes the job fail with a fixed code. A bounded window older than the lookback stops querying and reports `CRON_WINDOW_EXPIRED`. The adaptive dataset describes the minute of invocation. A delayed invocation that crosses into another minute may produce a missing or ambiguous result. Repeated workflow runs can report a failure while the affected minute is in the lookback. GitHub may delay or drop a scheduled job.
+
+Keep the disposable Worker available until the live check has observed a healthy tick and a fixed synthetic failure, and the operator confirms delivery of the scheduled failure notification. Disarm the pilot and remove disposable resources after evidence is recorded. Production scheduling, retention and notification cadence need separate review.
+
 ## Daily capacity review
 
 Review Cloudflare **Workers & Pages → kairos-production → Metrics** for requests, CPU distributions, error/invocation outcomes, and subrequests. Review **D1 → production database → Metrics/Analytics** for rows read/written and storage. Use the dashboard's actual daily UTC windows and account-wide totals. Record sanitized aggregate measurements and timestamp; never export user tables for capacity measurement.
