@@ -66,6 +66,18 @@ A validated observation counts failed and missing due invocations separately. Th
 
 Run `node scripts/verify-workerd-cron-watchdog.mjs` for the local scheduled-worker check with simulated email and a disposable database. Verify live metrics, receipt and removal against disposable resources before considering a production schedule. A monitor running on Cloudflare still needs an independent signal to detect an outage that stops both Cron triggers.
 
+### Production cleanup scheduler candidate
+
+The production-capable entry points are `scripts/maintenance-cron-cleanup-worker.mjs` and `scripts/maintenance-cron-production-watchdog-worker.mjs`. The proposed schedules are minute 17 for hourly cleanup and minutes 4, 19, 34 and 49 for the watchdog. The integration probe exercises the code with disposable D1, a controlled clock, fixture analytics and simulated mail.
+
+The cleanup Worker uses the existing bounded helper with batch size 100. `KAIROS_CRON_CLEANUP_MODE` defaults to off. `dry-run` selects eligible rows and `apply` requires a second, durable admission gate in `OPERATIONS`. The Worker records one claimed UTC tick and settles that receipt with aggregate counts. If the apply outcome is uncertain, the running receipt requires reconciliation before the next apply.
+
+The watchdog defaults to off through `KAIROS_CRON_PRODUCTION_WATCHDOG_ENABLED`. Grant it the operations database, the restricted analytics token and a native email binding for the verified recipient. It uses the gate’s first eligible hour, a ten-minute ingestion grace, and a bounded lookback. Isolated hourly windows correlate the expected minute with up to five minutes of late invocation data. Duplicate or conflicting telemetry produces a distinct unavailable result. A successful invocation requires a matching completed sweep to serve as recovery evidence.
+
+The watchdog opens one alert per incident on a confirmed failure or after two distinct polls see the same overdue tick. A newer verified success closes the incident. The first observation after a gap can report a newly observed failure with a later recovery. The stored watermark prevents repeat mail. During rollback, closing the durable gate blocks additional cleanup and mail claims. Check for admitted work and settle it before reopening the previous runner.
+
+Run `node scripts/verify-workerd-production-cron.mjs` for the native proof. The production cutover needs separate approval. Disable and drain GitHub applies before arming Cloudflare, and restore GitHub only after closing and settling Cloudflare apply. Keep guest activation as its own capacity and release decision.
+
 ## Daily capacity review
 
 Review Cloudflare **Workers & Pages → kairos-production → Metrics** for requests, CPU distributions, error/invocation outcomes, and subrequests. Review **D1 → production database → Metrics/Analytics** for rows read/written and storage. Use the dashboard's actual daily UTC windows and account-wide totals. Record sanitized aggregate measurements and timestamp; never export user tables for capacity measurement.

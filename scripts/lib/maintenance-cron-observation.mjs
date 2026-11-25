@@ -1,4 +1,6 @@
-import { summarizeCronMetrics, parseUtcMinute } from './maintenance-cron-monitor.mjs';
+import {
+  hourlyInvocationLagMinutes, parseUtcMinute, summarizeCronMetrics, summarizeHourlyCronMetrics,
+} from './maintenance-cron-monitor.mjs';
 
 const analyticsUrl = 'https://api.cloudflare.com/client/v4/graphql';
 const minuteMs = 60_000;
@@ -53,9 +55,20 @@ async function boundedJson(response) {
   }
 }
 
-export async function observeMaintenanceCron({ env, nowMs = Date.now(), fetchImpl = fetch }) {
+export function observeMaintenanceCron(options) {
+  return observeCron(options, false);
+}
+
+export function observeHourlyMaintenanceCron(options) {
+  return observeCron(options, true);
+}
+
+async function observeCron({ env, nowMs = Date.now(), fetchImpl = fetch }, hourly) {
   const config = configuration(env);
-  if (!config || !Number.isSafeInteger(nowMs) || !Number.isFinite(new Date(nowMs).getTime())) return { code: 'CRON_MONITOR_CONFIG_INVALID' };
+  if (!config || !Number.isSafeInteger(nowMs) || !Number.isFinite(new Date(nowMs).getTime())
+    || (hourly && (env.KAIROS_CRON_MONITOR_INTERVAL_MINUTES !== '60' || new Date(config.first).getUTCMinutes() !== 17))) {
+    return { code: 'CRON_MONITOR_CONFIG_INVALID' };
+  }
   const { account, token, worker, period, first, last } = config;
   if (last < nowMs - lookbackMs) return { code: 'CRON_WINDOW_EXPIRED' };
   const newestIndex = Math.floor((Math.min(last, nowMs - graceMs) - first) / period);
@@ -64,7 +77,9 @@ export async function observeMaintenanceCron({ env, nowMs = Date.now(), fetchImp
   const expectedTicks = Array.from({ length: newestIndex - oldestIndex + 1 }, (_, offset) => first + (oldestIndex + offset) * period);
   const fromUtc = new Date(expectedTicks[0]).toISOString();
   const throughUtc = new Date(expectedTicks.at(-1)).toISOString();
-  const until = new Date(expectedTicks.at(-1) + minuteMs).toISOString();
+  // Adaptive buckets use the invocation minute, which can follow the scheduled minute.
+  const queriedMinutes = hourly ? hourlyInvocationLagMinutes + 1 : 1;
+  const until = new Date(expectedTicks.at(-1) + queriedMinutes * minuteMs).toISOString();
   const limit = expectedTicks.length * 2 + 1;
   const audit = { dueTicks: expectedTicks.length, fromUtc, throughUtc };
   try {
@@ -77,7 +92,8 @@ export async function observeMaintenanceCron({ env, nowMs = Date.now(), fetchImp
       void response.body?.cancel().catch(() => {});
       return { code: 'CRON_METRICS_UNAVAILABLE', ...audit };
     }
-    const result = summarizeCronMetrics(await boundedJson(response), { worker, expectedTicks, nowMs, graceMs, limit });
+    const summarize = hourly ? summarizeHourlyCronMetrics : summarizeCronMetrics;
+    const result = summarize(await boundedJson(response), { worker, expectedTicks, nowMs, graceMs, limit });
     return { ...result, ...audit };
   } catch {
     return { code: 'CRON_METRICS_UNAVAILABLE', ...audit };

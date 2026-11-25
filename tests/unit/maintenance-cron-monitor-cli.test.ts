@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { checkMaintenanceCron } from '../../scripts/check-maintenance-cron.mjs';
-import { observeMaintenanceCron } from '../../scripts/lib/maintenance-cron-observation.mjs';
+import { observeHourlyMaintenanceCron, observeMaintenanceCron } from '../../scripts/lib/maintenance-cron-observation.mjs';
 
 const nowMs = Date.parse('2026-11-24T09:45:00.000Z');
 const env = {
@@ -98,4 +98,73 @@ it('reports counts for failure and missing in the same settled window', async ()
     ...legacy, failedTicks: 1, missingTicks: 1,
   });
   expect(await checkMaintenanceCron({ env, nowMs, fetchImpl })).toEqual(legacy);
+});
+
+const hourlyEnv = {
+  ...env,
+  KAIROS_CRON_MONITOR_FIRST_TICK_UTC: '2026-11-23T21:17:00Z',
+  KAIROS_CRON_MONITOR_LAST_TICK_UTC: '2026-11-24T10:17:00Z',
+  KAIROS_CRON_MONITOR_INTERVAL_MINUTES: '60',
+};
+const hourlyNow = Date.parse('2026-11-24T09:27:00Z');
+
+it('observes the settled hourly ticks in a bounded query, including a five-minute late invocation', async () => {
+  const fixture = [
+    sample('2026-11-23T21:17:00Z'),
+    sample('2026-11-23T22:18:00Z'),
+    sample('2026-11-23T23:17:00Z', 'scriptThrewException'),
+    sample('2026-11-24T09:22:00Z'),
+    sample('2026-11-24T09:23:00Z'),
+  ];
+  const fetchImpl = vi.fn<typeof fetch>(async (_url, request) => {
+    const { variables: { from, until } } = JSON.parse(String(request?.body));
+    return watch(fixture.filter(({ dimensions }) => {
+      const minute = Date.parse(dimensions.datetimeMinute);
+      return minute >= Date.parse(from) && minute < Date.parse(until);
+    }));
+  });
+  const result = await observeHourlyMaintenanceCron({ env: hourlyEnv, nowMs: hourlyNow, fetchImpl });
+  const { variables } = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+  expect(variables).toMatchObject({
+    from: '2026-11-23T22:17:00.000Z',
+    until: '2026-11-24T09:23:00.000Z',
+  });
+  expect(result).toMatchObject({ code: 'CRON_FAILED', dueTicks: 12, failedTicks: 1, missingTicks: 9 });
+  expect(result.ticks).toHaveLength(12);
+  expect(result.ticks?.slice(0, 3)).toEqual([
+    { tickMs: Date.parse('2026-11-23T22:17:00Z'), status: 'success' },
+    { tickMs: Date.parse('2026-11-23T23:17:00Z'), status: 'failure' },
+    { tickMs: Date.parse('2026-11-24T00:17:00Z'), status: 'missing' },
+  ]);
+  expect(result.ticks?.at(-1)).toEqual({
+    tickMs: Date.parse('2026-11-24T09:17:00Z'), status: 'success',
+  });
+});
+
+it.each([
+  ['duplicate minute groups', [sample('2026-11-24T09:17:00Z'), sample('2026-11-24T09:17:00Z')]],
+  ['conflicting groups across minutes', [sample('2026-11-24T09:17:00Z'), sample('2026-11-24T09:20:00Z', 'scriptThrewException')]],
+  ['a group outside a tick window', [sample('2026-11-24T08:23:00Z')]],
+  ['a non-minute timestamp', [sample('2026-11-24T09:17:01Z')]],
+])('reports unavailable for %s', async (_description, rows) => {
+  const fetchImpl = async () => watch(rows);
+  expect(await observeHourlyMaintenanceCron({ env: hourlyEnv, nowMs: hourlyNow, fetchImpl })).toEqual({
+    code: 'CRON_METRICS_UNAVAILABLE',
+    dueTicks: 12,
+    fromUtc: '2026-11-23T22:17:00.000Z',
+    throughUtc: '2026-11-24T09:17:00.000Z',
+  });
+});
+
+it.each([
+  { KAIROS_CRON_MONITOR_INTERVAL_MINUTES: '30' },
+  { KAIROS_CRON_MONITOR_FIRST_TICK_UTC: '2026-11-23T21:18:00Z', KAIROS_CRON_MONITOR_LAST_TICK_UTC: '' },
+  { KAIROS_CRON_MONITOR_LAST_TICK_UTC: '2026-11-24T10:18:00Z' },
+])('rejects a production schedule outside the hourly cadence %j', async (overrides) => {
+  const fetchImpl = vi.fn<typeof fetch>();
+  const result = await observeHourlyMaintenanceCron({
+    env: { ...hourlyEnv, ...overrides }, nowMs: hourlyNow, fetchImpl,
+  });
+  expect(result).toEqual({ code: 'CRON_MONITOR_CONFIG_INVALID' });
+  expect(fetchImpl).not.toHaveBeenCalled();
 });

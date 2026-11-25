@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { classifyCronMetrics } from '../../scripts/lib/maintenance-cron-monitor.mjs';
+import { classifyCronMetrics, summarizeCronMetrics } from '../../scripts/lib/maintenance-cron-monitor.mjs';
 
 const worker = 'kairos-maintenance';
 const firstMinute = '2026-11-24T04:00:00Z';
@@ -30,12 +30,15 @@ function metrics(rows: unknown[], errors: unknown = []) {
 }
 
 it('requires a clean success for every settled tick', () => {
-  const result = classifyCronMetrics(metrics([
+  const payload = metrics([
     row(nextMinute),
     row(firstMinute, { eventType: 'fetch' }),
     row(firstMinute),
-  ], null), options);
-  expect(result).toEqual({ code: 'CRON_OK' });
+  ], null);
+  expect(classifyCronMetrics(payload, options)).toEqual({ code: 'CRON_OK' });
+  expect(summarizeCronMetrics(payload, options)).toEqual({
+    code: 'CRON_OK', failedTicks: 0, missingTicks: 0,
+  });
 });
 
 it('holds a missing slot until the end of its grace period', () => {

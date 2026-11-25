@@ -1,4 +1,4 @@
-import type { CronMetricSummary } from './maintenance-cron-monitor.mjs';
+import type { CronMetricSummary, HourlyCronTick } from './maintenance-cron-monitor.mjs';
 
 export type CronObservationResult = (
   | CronMetricSummary
@@ -9,8 +9,13 @@ export type CronObservationResult = (
   throughUtc?: string;
 };
 
-export function observeMaintenanceCron(options: {
+interface CronObservationOptions {
   env: Record<string, string | undefined>;
   nowMs?: number;
   fetchImpl?: typeof fetch;
-}): Promise<CronObservationResult>;
+}
+
+export type HourlyCronObservationResult = CronObservationResult & { ticks?: HourlyCronTick[] };
+
+export function observeMaintenanceCron(options: CronObservationOptions): Promise<CronObservationResult>;
+export function observeHourlyMaintenanceCron(options: CronObservationOptions): Promise<HourlyCronObservationResult>;
