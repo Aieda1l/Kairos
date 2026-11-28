@@ -52,6 +52,8 @@ jobs:
       - run: npm run db:verify
       - name: Verify independent workerd admission and ownership
         run: npm run verify:workerd:abuse
+      - name: Verify scheduled cleanup rollback and watchdog recovery
+        run: node scripts/verify-workerd-production-cron.mjs
       - name: Verify calendar settlement survives request completion
         run: node scripts/verify-workerd-calendar-lifetime.mjs
       - name: Verify Turnstile with native workerd fetch
